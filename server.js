@@ -5,8 +5,11 @@ app.use(express.json());
 
 const VERIFY_TOKEN = "iconic_token";
 
-// ضع التوكن هنا
-const ACCESS_TOKEN = "EAAKCtnC52dMBRMmRWs7s9WAHYjWQkIvSbcAqDQA1YU824mBa4f57pvlrARmfZBWPupZCnT9PsgzqI5GynoZCKVsOFDSVl600lFP10JhmumHqTIzZBXY0aKDBwOEGm7wCb7dQcVrOZBpnJeHZCxqDQs6ZAc8cmeLS4RtRcHfTat0PwkqXD6thy0ZB3ZC7og9qLJM2WZCIs8HnkMyIalEi2TRXHyhom2aenW0OWPfqG5dSfKqReVgx1O995VKIMtXL3F371ZAhuTq5o81N6QWXdbIW9hhLJzBns8mKp5AzJuVKQZDZD";
+// ضع التوكن الحقيقي هنا
+const ACCESS_TOKEN = "EAAKCtnC52dMBRFwGfmsZBQv9qJtUWSemfoTT54qfZAjc6KUl478QHkj630FPAZC7njJ8cBPqxWMXkigqZA2JufHViyeTuyKRZC5UcLoI2PYX1EoUj5UhIKOHMZCsy6W4lZB6TbB6J4nKzFDiTlWFItkihF69mas8hFCZB7v7NdLb46e4ZAsSv20f9s5zB4JihhexrfBcha2DQnu1qsEr6HYNdGxBaFB5XUs3UYC2jWVsdO1rCESHCLIxYBAgc1JWNtrX3M2UdZCnGZAQoiq0BFRoXb3JsMZCvBwNsym1h44jhgZDZD";
+
+// رقم الهاتف ID (موجود عندك)
+const PHONE_NUMBER_ID = "1067476329783257";
 
 // تحقق من Webhook
 app.get('/webhook', (req, res) => {
@@ -22,7 +25,7 @@ app.get('/webhook', (req, res) => {
   }
 });
 
-// استقبال الرسائل والرد تلقائي
+// استقبال الرسائل والرد
 app.post('/webhook', async (req, res) => {
   console.log("📩 رسالة جديدة:");
   console.log(JSON.stringify(req.body, null, 2));
@@ -38,31 +41,37 @@ app.post('/webhook', async (req, res) => {
 
       console.log("📨 رسالة من:", from);
 
-      // إرسال رد تلقائي
-      await fetch(
-        "https://graph.facebook.com/v18.0/1067476329783257/messages",
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${ACCESS_TOKEN}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            to: from,
-            type: "text",
-            text: {
-              body: "أهلًا بك في Iconic Hair Care 👋\nكيف يمكننا مساعدتك؟"
-            }
-          })
+      const url = `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`;
+
+      const payload = {
+        messaging_product: "whatsapp",
+        to: from,
+        type: "text",
+        text: {
+          body: "أهلًا بك في Iconic Hair Care 👋\nتم استلام رسالتك."
         }
-      );
+      };
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${ACCESS_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      console.log("Response from Meta:");
+      console.log(data);
     }
 
     res.sendStatus(200);
 
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error sending reply:");
+    console.error(error);
     res.sendStatus(500);
   }
 });
