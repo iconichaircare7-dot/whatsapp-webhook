@@ -4,17 +4,14 @@ const fetch = require('node-fetch');
 const app = express();
 app.use(express.json());
 
-const VERIFY_TOKEN = "iconic_token";
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
 /* ضع التوكن الخاص بك هنا */
-const ACCESS_TOKEN = "EAAKCtnC52dMBRERF6M7EyKFGGc382gNL17JMGMkvekF0LxuYbgWrR5TUtnlU3tCFU7WjYpKMDROpVmzHg799TKr2cz1lwZAdwCRbGy6iJUon7I4o5YPvqXrWhoP3ypqMZCOcyd3FkzZBF5MSUtEnFn1TGPvhp6leyZCHl9kPe4ZCCudrifr9pX2A9b0as0z9wox5eDpwaoh4USifolk0LyC337KknNLTKF2ZBIYH3Q1XB20qCFwzcE9DZAE84MXofHEKOBNZC9gDLQaZAZAFnZAkVoCn43I8eEZCxep2eLN4xgZDZD";
-
+const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 /* رقم الهاتف ID */
-const PHONE_NUMBER_ID = "1067476329783257";
-
+const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 /* رقم الموظف */
-const STAFF_NUMBER = "971503382303";
-
+const STAFF_NUMBER = process.env.STAFF_NUMBER;
 /* تحقق من Webhook */
 
 app.get('/webhook', (req, res) => {
