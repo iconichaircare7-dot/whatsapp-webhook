@@ -79,31 +79,18 @@ app.post('/webhook', async (req, res) => {
 
       }
 
-      /* حجز استشارة */
+    /* حجز استشارة */
 
-      else if (
-        text === "1" ||
-        text.includes("consultation") ||
-        text.includes("book") ||
-        text.includes("حجز")
-      ) {
+else if (text === "1") {
 
-        replyText =
-          "لحجز استشارة، يرجى إرسال البيانات التالية:\n\n" +
-          "الاسم الكامل:\n" +
-          "رقم الهاتف:\n" +
-          "الخدمة المطلوبة:\n" +
-          "الفرع:\n" +
-          "التاريخ والوقت المناسب:\n\n" +
-          "--------------------------------\n\n" +
-          "To book a consultation, please provide the following details:\n\n" +
-          "Full Name:\n" +
-          "Phone Number:\n" +
-          "Service Required:\n" +
-          "Preferred Branch:\n" +
-          "Preferred Date and Time:";
+  replyText =
+    "تم استلام طلبك لحجز استشارة.\n\n" +
+    "سيقوم أحد موظفينا بالتواصل معك قريباً لتأكيد الموعد.\n\n" +
+    "--------------------------------\n\n" +
+    "Your consultation request has been received.\n" +
+    "Our team will contact you shortly.";
 
-      }
+}
 
       /* التحدث مع موظف */
 
