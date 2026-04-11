@@ -12,6 +12,7 @@ const ACCESS_TOKEN = "EAAKCtnC52dMBRET8Xi1zxwwXAnsRFFGlpmaViKnYZCSGrZAia5l4XZBp7
 
 /* رقم الهاتف ID */
 const PHONE_NUMBER_ID = "1067476329783257";
+const STAFF_NUMBER = "971503382303";
 
 /* تحقق من Webhook */
 
@@ -79,8 +80,6 @@ app.post('/webhook', async (req, res) => {
 
       }
 
-    /* حجز استشارة */
-
 else if (text === "1") {
 
   replyText =
@@ -89,6 +88,28 @@ else if (text === "1") {
     "--------------------------------\n\n" +
     "Your consultation request has been received.\n" +
     "Our team will contact you shortly.";
+
+  const staffPayload = {
+    messaging_product: "whatsapp",
+    to: STAFF_NUMBER,
+    type: "text",
+    text: {
+      body:
+        "طلب استشارة جديد\n\n" +
+        "رقم العميل:\n" +
+        from + "\n\n" +
+        "يرجى التواصل مع العميل لتأكيد الموعد."
+    }
+  };
+
+  await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${ACCESS_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(staffPayload)
+  });
 
 }
 
@@ -101,6 +122,28 @@ else if (text === "6") {
     "سيتم التواصل معك قريباً.\n\n" +
     "--------------------------------\n\n" +
     "Your request has been forwarded to our staff.";
+
+  const staffPayload = {
+    messaging_product: "whatsapp",
+    to: STAFF_NUMBER,
+    type: "text",
+    text: {
+      body:
+        "طلب تواصل مباشر مع موظف\n\n" +
+        "رقم العميل:\n" +
+        from + "\n\n" +
+        "يرغب العميل بالتحدث مع موظف."
+    }
+  };
+
+  await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${ACCESS_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(staffPayload)
+  });
 
 }
 
