@@ -92,22 +92,17 @@ else if (text === "1") {
 
 }
 
-      /* التحدث مع موظف */
+     /* التحدث مع موظف */
 
-      else if (
-        text === "6" ||
-        text.includes("staff") ||
-        text.includes("موظف")
-      ) {
+else if (text === "6") {
 
-        replyText =
-          "تم تحويل طلبك إلى الموظف.\n\n" +
-          "سيقوم أحد أعضاء الفريق بالتواصل معك قريباً.\n\n" +
-          "--------------------------------\n\n" +
-          "Your request has been forwarded to our staff.\n\n" +
-          "A team member will contact you shortly.";
+  replyText =
+    "تم تحويل طلبك إلى موظف.\n\n" +
+    "سيتم التواصل معك قريباً.\n\n" +
+    "--------------------------------\n\n" +
+    "Your request has been forwarded to our staff.";
 
-      }
+}
 
       /* المواقع */
 
