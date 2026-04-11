@@ -10,6 +10,9 @@ const ACCESS_TOKEN = "EAAKCtnC52dMBRERF6M7EyKFGGc382gNL17JMGMkvekF0LxuYbgWrR5TUt
 const PHONE_NUMBER_ID = "1067476329783257";
 const STAFF_NUMBER = "971503382303";
 
+/* منع تكرار الرسائل */
+const processedMessages = new Set();
+
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -35,6 +38,18 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(200);
     }
 
+    const messageId = message.id;
+    if (processedMessages.has(messageId)) {
+      console.log("Duplicate message ignored:", messageId);
+      return res.sendStatus(200);
+    }
+
+    processedMessages.add(messageId);
+
+    setTimeout(() => {
+      processedMessages.delete(messageId);
+    }, 5 * 60 * 1000);
+
     const from = message.from;
     const text = (message.text?.body || "").toLowerCase().trim();
     const url = `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`;
@@ -55,24 +70,57 @@ app.post('/webhook', async (req, res) => {
         "Our working hours are:\n" +
         "10:00 AM to 7:00 PM\n\n" +
         "Your message has been received and we will respond during working hours.";
-    } else if (text === "1") {
+    }
+
+    else if (text === "1") {
       replyText =
         "تم استلام طلبك لحجز استشارة.\n\n" +
         "سيقوم أحد موظفينا بالتواصل معك قريباً لتأكيد الموعد.\n\n" +
         "------------------------------\n\n" +
         "Your consultation request has been received.\n" +
         "Our team will contact you shortly.";
-    } else if (text === "6") {
+    }
+
+    else if (text === "2") {
       replyText =
-        "تم تحويل طلبك إلى موظف.\n\n" +
-        "سيتم التواصل معك قريباً.\n\n" +
+        "خدمات تركيب الشعر لدينا تشمل حلولاً مخصصة بمظهر طبيعي ونتيجة مناسبة لحالتك.\n\n" +
+        "إذا رغبت بالمتابعة:\n" +
+        "1 - حجز استشارة\n" +
+        "6 - التحدث مع موظف\n\n" +
         "------------------------------\n\n" +
-        "Your request has been forwarded to our staff.";
-    } else if (
-      text === "5" ||
-      text.includes("location") ||
-      text.includes("موقع")
-    ) {
+        "Our hair replacement services include customized solutions with a natural look based on your needs.\n\n" +
+        "If you would like to proceed:\n" +
+        "1 - Book Consultation\n" +
+        "6 - Talk to Staff";
+    }
+
+    else if (text === "3") {
+      replyText =
+        "نوفر حلول شعر مستعار للنساء بتصاميم مختلفة ومظهر طبيعي.\n\n" +
+        "إذا رغبت بالمتابعة:\n" +
+        "1 - حجز استشارة\n" +
+        "6 - التحدث مع موظف\n\n" +
+        "------------------------------\n\n" +
+        "We provide women wig solutions in different styles with a natural look.\n\n" +
+        "If you would like to proceed:\n" +
+        "1 - Book Consultation\n" +
+        "6 - Talk to Staff";
+    }
+
+    else if (text === "4") {
+      replyText =
+        "نوفر خدمات الصيانة والتنظيف والعناية الدورية للحفاظ على أفضل نتيجة.\n\n" +
+        "إذا رغبت بالمتابعة:\n" +
+        "1 - حجز استشارة\n" +
+        "6 - التحدث مع موظف\n\n" +
+        "------------------------------\n\n" +
+        "We provide maintenance, cleaning, and regular care services to maintain the best result.\n\n" +
+        "If you would like to proceed:\n" +
+        "1 - Book Consultation\n" +
+        "6 - Talk to Staff";
+    }
+
+    else if (text === "5" || text.includes("location") || text.includes("موقع")) {
       replyText =
         "فروعنا:\n\n" +
         "دبي:\n" +
@@ -85,7 +133,17 @@ app.post('/webhook', async (req, res) => {
         "https://maps.google.com/?q=Iconic+Hair+Care+Dubai\n\n" +
         "Abu Dhabi:\n" +
         "https://maps.google.com/?q=Iconic+Hair+Care+Abu+Dhabi";
-    } else if (
+    }
+
+    else if (text === "6") {
+      replyText =
+        "تم تحويل طلبك إلى موظف.\n\n" +
+        "سيتم التواصل معك قريباً.\n\n" +
+        "------------------------------\n\n" +
+        "Your request has been forwarded to our staff.";
+    }
+
+    else if (
       text.includes("price") ||
       text.includes("prices") ||
       text.includes("cost") ||
@@ -103,7 +161,9 @@ app.post('/webhook', async (req, res) => {
         "We can guide you better after understanding your needs.\n\n" +
         "1 - Book Consultation\n" +
         "6 - Talk to Staff";
-    } else if (
+    }
+
+    else if (
       text.includes("hair replacement") ||
       text.includes("hair system") ||
       text.includes("patch") ||
@@ -119,7 +179,9 @@ app.post('/webhook', async (req, res) => {
         "Our hair replacement services are designed to provide a natural look based on your needs.\n\n" +
         "1 - Book Consultation\n" +
         "6 - Talk to Staff";
-    } else if (
+    }
+
+    else if (
       text.includes("wig") ||
       text.includes("wigs") ||
       text.includes("شعر مستعار") ||
@@ -134,7 +196,9 @@ app.post('/webhook', async (req, res) => {
         "We provide women wig solutions in different styles with a natural look.\n\n" +
         "1 - Book Consultation\n" +
         "6 - Talk to Staff";
-    } else if (
+    }
+
+    else if (
       text.includes("maintenance") ||
       text.includes("cleaning") ||
       text.includes("صيانة") ||
@@ -148,7 +212,9 @@ app.post('/webhook', async (req, res) => {
         "We provide maintenance, cleaning, and regular care services.\n\n" +
         "1 - Book Consultation\n" +
         "6 - Talk to Staff";
-    } else {
+    }
+
+    else {
       replyText =
         "مرحباً بك في مركز Iconic Hair Care.\n\n" +
         "نحن متخصصون في تركيب الشعر، الشعر المستعار، والعناية المتقدمة بالشعر للرجال والنساء.\n\n" +
@@ -199,31 +265,30 @@ app.post('/webhook', async (req, res) => {
 
     if (text === "1" || text === "6") {
       try {
-     const staffBody =
-  text === "1"
-    ? "طلب استشارة جديد\n\n" +
-      "رقم العميل:\n" +
-      from +
-      "\n\n" +
-      "يرجى التواصل مع العميل لتأكيد الموعد.\n\n" +
-      "--------------------------------\n\n" +
-      "New Consultation Request\n\n" +
-      "Customer Number:\n" +
-      from +
-      "\n\n" +
-      "Please contact the client to confirm the appointment."
-
-    : "طلب تواصل مباشر مع موظف\n\n" +
-      "رقم العميل:\n" +
-      from +
-      "\n\n" +
-      "يرغب العميل بالتحدث مع موظف.\n\n" +
-      "--------------------------------\n\n" +
-      "Direct Staff Request\n\n" +
-      "Customer Number:\n" +
-      from +
-      "\n\n" +
-      "The client would like to speak with a staff member.";
+        const staffBody =
+          text === "1"
+            ? "طلب استشارة جديد\n\n" +
+              "رقم العميل:\n" +
+              from +
+              "\n\n" +
+              "يرجى التواصل مع العميل لتأكيد الموعد.\n\n" +
+              "--------------------------------\n\n" +
+              "New Consultation Request\n\n" +
+              "Customer Number:\n" +
+              from +
+              "\n\n" +
+              "Please contact the client to confirm the appointment."
+            : "طلب تواصل مباشر مع موظف\n\n" +
+              "رقم العميل:\n" +
+              from +
+              "\n\n" +
+              "يرغب العميل بالتحدث مع موظف.\n\n" +
+              "--------------------------------\n\n" +
+              "Direct Staff Request\n\n" +
+              "Customer Number:\n" +
+              from +
+              "\n\n" +
+              "The client would like to speak with a staff member.";
 
         const staffPayload = {
           messaging_product: "whatsapp",
