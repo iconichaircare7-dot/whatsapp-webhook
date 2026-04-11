@@ -199,14 +199,31 @@ app.post('/webhook', async (req, res) => {
 
     if (text === "1" || text === "6") {
       try {
-        const staffBody =
-          text === "1"
-            ? "طلب استشارة جديد\n\nرقم العميل:\n" +
-              from +
-              "\n\nيرجى التواصل مع العميل لتأكيد الموعد."
-            : "طلب تواصل مباشر مع موظف\n\nرقم العميل:\n" +
-              from +
-              "\n\nيرغب العميل بالتحدث مع موظف.";
+     const staffBody =
+  text === "1"
+    ? "طلب استشارة جديد\n\n" +
+      "رقم العميل:\n" +
+      from +
+      "\n\n" +
+      "يرجى التواصل مع العميل لتأكيد الموعد.\n\n" +
+      "--------------------------------\n\n" +
+      "New Consultation Request\n\n" +
+      "Customer Number:\n" +
+      from +
+      "\n\n" +
+      "Please contact the client to confirm the appointment."
+
+    : "طلب تواصل مباشر مع موظف\n\n" +
+      "رقم العميل:\n" +
+      from +
+      "\n\n" +
+      "يرغب العميل بالتحدث مع موظف.\n\n" +
+      "--------------------------------\n\n" +
+      "Direct Staff Request\n\n" +
+      "Customer Number:\n" +
+      from +
+      "\n\n" +
+      "The client would like to speak with a staff member.";
 
         const staffPayload = {
           messaging_product: "whatsapp",
