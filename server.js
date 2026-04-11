@@ -1,12 +1,16 @@
 const express = require('express');
+const fetch = require('node-fetch');
+
 const app = express();
 
 app.use(express.json());
 
 const VERIFY_TOKEN = "iconic_token";
 
+/* ضع التوكن الخاص بك هنا */
 const ACCESS_TOKEN = "EAAKCtnC52dMBRET8Xi1zxwwXAnsRFFGlpmaViKnYZCSGrZAia5l4XZBp74fCAvZBbrhxDxwQfU7rZARP4mUBx8g0VSZB9jy2Ff8ACSwD9xTcrV81zdQp8f1AZALlEZACWSgwgx3wI7o3YJ4zUS4MXhZBReoANS1OWjpUyAOhPHiDT4uD6CFf15VD8HqPWMWZBzMvGkW4PO2RZB97beJYYK6NInecwuZCBoNKiMoIAYv0QdswAkRPEwT2ZA0DEcvSxnV2UVHj65mI8qFi5M1uITCo2TrsZArgpG0QIZA5j2TC46vWlwZD";
 
+/* رقم الهاتف ID */
 const PHONE_NUMBER_ID = "1067476329783257";
 
 /* تحقق من Webhook */
@@ -20,7 +24,6 @@ app.get('/webhook', (req, res) => {
   if (mode && token === VERIFY_TOKEN) {
 
     console.log("Webhook verified!");
-
     return res.status(200).send(challenge);
 
   } else {
@@ -49,11 +52,12 @@ app.post('/webhook', async (req, res) => {
 
       const from = message.from;
 
+      console.log("📨 رسالة من:", from);
+
       const text =
         message.text?.body?.toLowerCase() || "";
 
       const now = new Date();
-
       const hour = now.getHours();
 
       let replyText = "";
@@ -63,26 +67,35 @@ app.post('/webhook', async (req, res) => {
       if (hour < 10 || hour >= 19) {
 
         replyText =
+          "شكراً لتواصلك مع Iconic Hair Care.\n\n" +
+          "ساعات العمل:\n" +
+          "10:00 صباحاً إلى 7:00 مساءً\n\n" +
+          "تم استلام رسالتك وسيتم الرد عليك خلال ساعات العمل.\n\n" +
+          "--------------------------------\n\n" +
           "Thank you for contacting Iconic Hair Care.\n\n" +
           "Our working hours are:\n" +
           "10:00 AM to 7:00 PM\n\n" +
-          "Your message has been received.\n" +
-          "Our team will respond during working hours.";
+          "Your message has been received and we will respond during working hours.";
 
       }
 
       /* حجز استشارة */
 
       else if (
-
         text === "1" ||
         text.includes("consultation") ||
         text.includes("book") ||
         text.includes("حجز")
-
       ) {
 
         replyText =
+          "لحجز استشارة، يرجى إرسال البيانات التالية:\n\n" +
+          "الاسم الكامل:\n" +
+          "رقم الهاتف:\n" +
+          "الخدمة المطلوبة:\n" +
+          "الفرع:\n" +
+          "التاريخ والوقت المناسب:\n\n" +
+          "--------------------------------\n\n" +
           "To book a consultation, please provide the following details:\n\n" +
           "Full Name:\n" +
           "Phone Number:\n" +
@@ -95,14 +108,15 @@ app.post('/webhook', async (req, res) => {
       /* التحدث مع موظف */
 
       else if (
-
         text === "6" ||
         text.includes("staff") ||
         text.includes("موظف")
-
       ) {
 
         replyText =
+          "تم تحويل طلبك إلى الموظف.\n\n" +
+          "سيقوم أحد أعضاء الفريق بالتواصل معك قريباً.\n\n" +
+          "--------------------------------\n\n" +
           "Your request has been forwarded to our staff.\n\n" +
           "A team member will contact you shortly.";
 
@@ -111,14 +125,18 @@ app.post('/webhook', async (req, res) => {
       /* المواقع */
 
       else if (
-
         text === "5" ||
         text.includes("location") ||
         text.includes("موقع")
-
       ) {
 
         replyText =
+          "فروعنا:\n\n" +
+          "دبي:\n" +
+          "https://maps.google.com/?q=Iconic+Hair+Care+Dubai\n\n" +
+          "أبوظبي:\n" +
+          "https://maps.google.com/?q=Iconic+Hair+Care+Abu+Dhabi\n\n" +
+          "--------------------------------\n\n" +
           "Our branches:\n\n" +
           "Dubai:\n" +
           "https://maps.google.com/?q=Iconic+Hair+Care+Dubai\n\n" +
@@ -127,13 +145,47 @@ app.post('/webhook', async (req, res) => {
 
       }
 
+      /* إذا أرسل العميل بيانات */
+
+      else if (
+        text.includes("name") ||
+        text.includes("phone") ||
+        text.includes("service") ||
+        text.includes("date") ||
+        text.includes("time") ||
+        text.includes("اسم") ||
+        text.includes("رقم") ||
+        text.includes("موعد")
+      ) {
+
+        replyText =
+          "تم استلام طلبك بنجاح.\n\n" +
+          "سيقوم فريقنا بالتواصل معك قريباً لتأكيد الموعد.\n\n" +
+          "--------------------------------\n\n" +
+          "Your consultation request has been received successfully.\n\n" +
+          "Our team will contact you shortly to confirm your appointment.";
+
+      }
+
       /* الرد الافتراضي */
 
       else {
 
         replyText =
-          "Welcome to Iconic Hair Care\n\n" +
-          "Thank you for contacting Iconic Hair Care Center.\n" +
+          "مرحباً بك في مركز Iconic Hair Care.\n\n" +
+          "نحن متخصصون في تركيب الشعر، الشعر المستعار، والعناية المتقدمة بالشعر للرجال والنساء.\n\n" +
+          "فروعنا:\n" +
+          "دبي\n" +
+          "أبوظبي\n\n" +
+          "يرجى كتابة استفسارك أو اختيار أحد الخيارات التالية:\n\n" +
+          "1 - حجز استشارة\n" +
+          "2 - خدمات تركيب الشعر\n" +
+          "3 - الشعر المستعار للنساء\n" +
+          "4 - الصيانة والتنظيف\n" +
+          "5 - المواقع وساعات العمل\n" +
+          "6 - التحدث مع موظف\n\n" +
+          "--------------------------------\n\n" +
+          "Welcome to Iconic Hair Care.\n\n" +
           "We specialize in advanced hair replacement solutions, custom wigs, and professional hair care services for men and women.\n\n" +
           "Our branches:\n" +
           "Dubai\n" +
@@ -160,33 +212,21 @@ app.post('/webhook', async (req, res) => {
         type: "text",
 
         text: {
-
           body: replyText
-
         }
 
       };
 
       const response = await fetch(
-
         url,
-
         {
-
           method: "POST",
-
           headers: {
-
             "Authorization": `Bearer ${ACCESS_TOKEN}`,
-
             "Content-Type": "application/json"
-
           },
-
           body: JSON.stringify(payload)
-
         }
-
       );
 
       const data = await response.json();
