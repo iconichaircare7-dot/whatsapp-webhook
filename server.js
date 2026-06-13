@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-41-appointment-reminder-header-image-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-42-temporary-whatsapp-automation-pause";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -78,6 +78,21 @@ const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const DUBAI_PHONE_NUMBER_ID = process.env.DUBAI_PHONE_NUMBER_ID || PHONE_NUMBER_ID || "1100042333191350";
 const ABU_DHABI_PHONE_NUMBER_ID = process.env.ABU_DHABI_PHONE_NUMBER_ID || "1000146433192239";
+
+// V31.5.8.60.3.9.42 - Temporary WhatsApp Automation Pause:
+// Default is ON so Dubai + Abu Dhabi landline WhatsApp automation stops immediately after deploy.
+// This keeps Meta webhook verification/status ACK working, but blocks customer auto-replies, typing,
+// menus, flows, booking replies, and smart bot routing for inbound messages.
+// To resume later in Render ENV, set WHATSAPP_AUTOMATION_PAUSED=false and redeploy.
+const WHATSAPP_AUTOMATION_PAUSED = !["false", "0", "no", "off"].includes(
+  (process.env.WHATSAPP_AUTOMATION_PAUSED || "true").toString().trim().toLowerCase()
+);
+const WHATSAPP_AUTOMATION_PAUSED_DUBAI = ["true", "1", "yes", "on"].includes(
+  (process.env.WHATSAPP_AUTOMATION_PAUSED_DUBAI || "false").toString().trim().toLowerCase()
+);
+const WHATSAPP_AUTOMATION_PAUSED_ABU_DHABI = ["true", "1", "yes", "on"].includes(
+  (process.env.WHATSAPP_AUTOMATION_PAUSED_ABU_DHABI || "false").toString().trim().toLowerCase()
+);
 const STAFF_NUMBER = process.env.STAFF_NUMBER;
 // Smart Booking staff notification fallbacks.
 // Render ENV still has priority, but these keep branch notifications working if an ENV is accidentally missing.
@@ -377,6 +392,51 @@ function isAbuDhabiLine(phoneNumberId, displayPhoneNumber = "") {
     displayDigits.endsWith("97125622778") ||
     displayDigits.endsWith("25622778")
   );
+}
+
+function shouldPauseWhatsAppAutomationForLine(phoneNumberId, displayPhoneNumber = "") {
+  if (WHATSAPP_AUTOMATION_PAUSED) {
+    return true;
+  }
+
+  if (isAbuDhabiLine(phoneNumberId, displayPhoneNumber)) {
+    return WHATSAPP_AUTOMATION_PAUSED_ABU_DHABI;
+  }
+
+  return WHATSAPP_AUTOMATION_PAUSED_DUBAI;
+}
+
+function buildPausedAutomationInboxBody(message = {}, profileName = "", originalText = "") {
+  const cleanName = cleanCustomerName(profileName);
+  const prefix = cleanName ? `${cleanName}: ` : "";
+  const cleanText = (originalText || getIncomingMessageText(message) || "").toString().trim();
+  const messageType = (message?.type || "message").toString().trim() || "message";
+
+  if (cleanText) {
+    return `${prefix}${cleanText}`;
+  }
+
+  if (messageType === "image") {
+    return `${prefix}Image received while WhatsApp automation is paused`;
+  }
+
+  if (messageType === "audio") {
+    return `${prefix}Audio message received while WhatsApp automation is paused`;
+  }
+
+  if (messageType === "video") {
+    return `${prefix}Video received while WhatsApp automation is paused`;
+  }
+
+  if (messageType === "document") {
+    return `${prefix}Document received while WhatsApp automation is paused`;
+  }
+
+  if (messageType === "interactive" || messageType === "button") {
+    return `${prefix}Customer interaction received while WhatsApp automation is paused`;
+  }
+
+  return `${prefix}Customer message received while WhatsApp automation is paused`;
 }
 
 function getIncomingPhoneNumberId(value) {
@@ -23151,6 +23211,38 @@ app.post("/webhook", async (req, res) => {
     const lineConfig = getLineConfig(incomingPhoneNumberId, value?.metadata?.display_phone_number || "");
     const profileName = getWhatsAppCustomerName(value?.contacts?.[0]);
     const suppressedInternalText = getIncomingMessageText(message);
+    const whatsappAutomationPausedForLine = shouldPauseWhatsAppAutomationForLine(
+      incomingPhoneNumberId,
+      value?.metadata?.display_phone_number || ""
+    );
+
+    if (whatsappAutomationPausedForLine) {
+      conversationPhoneNumberId[from] = incomingPhoneNumberId;
+
+      console.log("[WhatsApp Automation Paused] inbound message acknowledged without auto reply", {
+        from,
+        branch: lineConfig.branch,
+        phoneNumberId: incomingPhoneNumberId,
+        displayPhoneNumber: value?.metadata?.display_phone_number || "",
+        messageType: message?.type || "",
+        text: suppressedInternalText || ""
+      });
+
+      addInboxMessage(
+        from,
+        "customer",
+        buildPausedAutomationInboxBody(message, profileName, suppressedInternalText),
+        "Automation Paused",
+        incomingPhoneNumberId,
+        {
+          customerName: profileName,
+          messageType: "Customer Message - Automation Paused",
+          statusOverride: "Automation Paused"
+        }
+      );
+
+      return res.sendStatus(200);
+    }
 
     // V31.5.8.60.3.7.11:
     // Internal staff/test numbers must be suppressed from Team Inbox live notifications,
