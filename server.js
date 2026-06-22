@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-42-temporary-whatsapp-automation-pause";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-45-history-stable-media-only";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -409,19 +409,38 @@ function shouldPauseWhatsAppAutomationForLine(phoneNumberId, displayPhoneNumber 
 function buildPausedAutomationInboxBody(message = {}, profileName = "", originalText = "") {
   const cleanName = cleanCustomerName(profileName);
   const prefix = cleanName ? `${cleanName}: ` : "";
-  const cleanText = (originalText || getIncomingMessageText(message) || "").toString().trim();
   const messageType = (message?.type || "message").toString().trim() || "message";
 
-  if (cleanText) {
-    return `${prefix}${cleanText}`;
-  }
-
+  // IMPORTANT:
+  // WHATSAPP_AUTOMATION_PAUSED must stop outgoing bot replies only.
+  // It must NOT downgrade inbound customer media into text placeholders.
+  // Team Inbox can render WhatsApp media only when the saved body starts with
+  // [[ICONIC_INLINE_IMAGE]] / [[ICONIC_INLINE_AUDIO]], so do not prefix media
+  // rows with the customer name.
   if (messageType === "image") {
+    const imageBody = buildIncomingCustomerImageBody(message);
+
+    if (imageBody) {
+      return imageBody;
+    }
+
     return `${prefix}Image received while WhatsApp automation is paused`;
   }
 
   if (messageType === "audio") {
+    const audioBody = buildIncomingCustomerAudioBody(message);
+
+    if (audioBody) {
+      return audioBody;
+    }
+
     return `${prefix}Audio message received while WhatsApp automation is paused`;
+  }
+
+  const cleanText = (originalText || getIncomingMessageText(message) || "").toString().trim();
+
+  if (cleanText) {
+    return `${prefix}${cleanText}`;
   }
 
   if (messageType === "video") {
