@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-43-paused-media-plus-fast-inbox";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-44-paused-media-fast-inbox-safe-history";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -22570,6 +22570,55 @@ function mergeBrowserMessages(primaryMessages, fallbackMessages) {
   });
 }
 
+// V31.5.8.60.3.9.44 - Safe Team Inbox History Guard:
+// This protects the visible conversation history from being wiped in the browser
+// if /api/messages temporarily returns an empty or partial response while Render,
+// Google Sheet, or the Apps Script endpoint is slow. It is UI-side protection only;
+// Google Sheet remains the source of truth.
+function loadInboxHistoryCache() {
+  try {
+    const cached = JSON.parse(localStorage.getItem("iconic_team_inbox_history_cache_v1") || "[]");
+    return Array.isArray(cached) ? cached : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function saveInboxHistoryCache(messages) {
+  try {
+    if (!Array.isArray(messages) || !messages.length) return;
+
+    // Keep enough history for practical Team Inbox use without making localStorage heavy.
+    const safeMessages = messages.slice(0, 1500);
+    localStorage.setItem("iconic_team_inbox_history_cache_v1", JSON.stringify(safeMessages));
+  } catch (error) {
+    // localStorage may be full or disabled. Do not block Team Inbox rendering.
+    console.log("Inbox history cache save skipped", error);
+  }
+}
+
+function getSafeMessagesForRender(apiMessages) {
+  const nextMessages = Array.isArray(apiMessages) ? apiMessages : [];
+  const cachedMessages = loadInboxHistoryCache();
+  const browserMessages = mergeBrowserMessages(allMessages || [], cachedMessages || []);
+
+  // Critical guard: never wipe the opened Team Inbox just because one API call
+  // came back empty while we still have browser/cached history.
+  if (!nextMessages.length && browserMessages.length) {
+    return browserMessages;
+  }
+
+  // If the API returns a shorter/partial list, merge it with browser cache so
+  // old conversation history stays visible while new messages still appear.
+  const mergedMessages = mergeBrowserMessages(nextMessages, browserMessages);
+
+  if (mergedMessages.length) {
+    saveInboxHistoryCache(mergedMessages);
+  }
+
+  return mergedMessages;
+}
+
 // V31.5.8.60.3.9.43 - Fast Team Inbox Send UI:
 // Staff text replies appear in the opened chat immediately, while the real
 // WhatsApp send + Google Sheet save continue safely in the background.
@@ -22651,15 +22700,18 @@ function markOptimisticStaffMessageFailed(clientId, errorText) {
 
 async function loadMessages() {
   try {
+    // Show cached history immediately on first page open, then let /api/messages refresh it.
+    if (!allMessages.length) {
+      const cachedMessages = loadInboxHistoryCache();
+      if (cachedMessages.length) {
+        allMessages = cachedMessages;
+        renderAll();
+      }
+    }
+
     const res = await fetch("/api/messages");
     const data = await res.json();
-    const nextMessages = data.messages || [];
-    const nextMessageCount = nextMessages.length;
-    const currentMessageCount = (allMessages || []).length;
-    const shouldPreserveBrowserHistory = nextMessageCount > 0 && currentMessageCount > nextMessageCount;
-    const safeMessages = shouldPreserveBrowserHistory
-      ? mergeBrowserMessages(nextMessages, allMessages)
-      : nextMessages;
+    const safeMessages = getSafeMessagesForRender(data.messages || []);
 
     processLiveInboxNotifications(safeMessages);
     allMessages = safeMessages;
@@ -22667,6 +22719,14 @@ async function loadMessages() {
     applyConversationStates(data.conversationStates || []);
     renderAll();
   } catch (error) {
+    const cachedMessages = loadInboxHistoryCache();
+
+    if (cachedMessages.length) {
+      allMessages = mergeBrowserMessages(allMessages || [], cachedMessages);
+      renderAll();
+      return;
+    }
+
     conversationList.innerHTML = '<div class="empty">Failed to load messages.</div>';
   }
 }
