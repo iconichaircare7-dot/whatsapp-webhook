@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-44-paused-media-fast-inbox-safe-history";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-42-temporary-whatsapp-automation-pause";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -409,38 +409,19 @@ function shouldPauseWhatsAppAutomationForLine(phoneNumberId, displayPhoneNumber 
 function buildPausedAutomationInboxBody(message = {}, profileName = "", originalText = "") {
   const cleanName = cleanCustomerName(profileName);
   const prefix = cleanName ? `${cleanName}: ` : "";
+  const cleanText = (originalText || getIncomingMessageText(message) || "").toString().trim();
   const messageType = (message?.type || "message").toString().trim() || "message";
 
-  // IMPORTANT:
-  // WHATSAPP_AUTOMATION_PAUSED must stop outgoing bot replies only.
-  // It must NOT downgrade inbound customer media into text placeholders.
-  // Team Inbox can render WhatsApp media only when the saved body starts with
-  // [[ICONIC_INLINE_IMAGE]] / [[ICONIC_INLINE_AUDIO]], so do not prefix media
-  // rows with the customer name.
+  if (cleanText) {
+    return `${prefix}${cleanText}`;
+  }
+
   if (messageType === "image") {
-    const imageBody = buildIncomingCustomerImageBody(message);
-
-    if (imageBody) {
-      return imageBody;
-    }
-
     return `${prefix}Image received while WhatsApp automation is paused`;
   }
 
   if (messageType === "audio") {
-    const audioBody = buildIncomingCustomerAudioBody(message);
-
-    if (audioBody) {
-      return audioBody;
-    }
-
     return `${prefix}Audio message received while WhatsApp automation is paused`;
-  }
-
-  const cleanText = (originalText || getIncomingMessageText(message) || "").toString().trim();
-
-  if (cleanText) {
-    return `${prefix}${cleanText}`;
   }
 
   if (messageType === "video") {
@@ -22570,148 +22551,17 @@ function mergeBrowserMessages(primaryMessages, fallbackMessages) {
   });
 }
 
-// V31.5.8.60.3.9.44 - Safe Team Inbox History Guard:
-// This protects the visible conversation history from being wiped in the browser
-// if /api/messages temporarily returns an empty or partial response while Render,
-// Google Sheet, or the Apps Script endpoint is slow. It is UI-side protection only;
-// Google Sheet remains the source of truth.
-function loadInboxHistoryCache() {
-  try {
-    const cached = JSON.parse(localStorage.getItem("iconic_team_inbox_history_cache_v1") || "[]");
-    return Array.isArray(cached) ? cached : [];
-  } catch (error) {
-    return [];
-  }
-}
-
-function saveInboxHistoryCache(messages) {
-  try {
-    if (!Array.isArray(messages) || !messages.length) return;
-
-    // Keep enough history for practical Team Inbox use without making localStorage heavy.
-    const safeMessages = messages.slice(0, 1500);
-    localStorage.setItem("iconic_team_inbox_history_cache_v1", JSON.stringify(safeMessages));
-  } catch (error) {
-    // localStorage may be full or disabled. Do not block Team Inbox rendering.
-    console.log("Inbox history cache save skipped", error);
-  }
-}
-
-function getSafeMessagesForRender(apiMessages) {
-  const nextMessages = Array.isArray(apiMessages) ? apiMessages : [];
-  const cachedMessages = loadInboxHistoryCache();
-  const browserMessages = mergeBrowserMessages(allMessages || [], cachedMessages || []);
-
-  // Critical guard: never wipe the opened Team Inbox just because one API call
-  // came back empty while we still have browser/cached history.
-  if (!nextMessages.length && browserMessages.length) {
-    return browserMessages;
-  }
-
-  // If the API returns a shorter/partial list, merge it with browser cache so
-  // old conversation history stays visible while new messages still appear.
-  const mergedMessages = mergeBrowserMessages(nextMessages, browserMessages);
-
-  if (mergedMessages.length) {
-    saveInboxHistoryCache(mergedMessages);
-  }
-
-  return mergedMessages;
-}
-
-// V31.5.8.60.3.9.43 - Fast Team Inbox Send UI:
-// Staff text replies appear in the opened chat immediately, while the real
-// WhatsApp send + Google Sheet save continue safely in the background.
-function createOptimisticClientId() {
-  return "optimistic_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
-}
-
-function getClientDubaiTimeString() {
-  return new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" });
-}
-
-function getOptimisticBranchForLine(phoneNumberId, currentConversation) {
-  if (currentConversation && currentConversation.branch) return currentConversation.branch;
-
-  const id = (phoneNumberId || "").toString();
-  if (id === "1000146433192239") return "Abu Dhabi";
-
-  return "Dubai";
-}
-
-function addOptimisticStaffMessage(to, body, phoneNumberId) {
-  const currentConversation = getCurrentConversationForState();
-  const finalPhoneNumberId = phoneNumberId || (currentConversation && currentConversation.phoneNumberId) || "";
-  const branch = getOptimisticBranchForLine(finalPhoneNumberId, currentConversation);
-  const clientId = createOptimisticClientId();
-
-  const optimisticMessage = {
-    time: getClientDubaiTimeString(),
-    phone: to,
-    customerName: currentConversation ? (currentConversation.customerName || "") : "",
-    branch,
-    sender: "staff",
-    body,
-    status: "Sending...",
-    messageType: "Human Reply - Sending",
-    phoneNumberId: finalPhoneNumberId,
-    optimistic: true,
-    optimisticClientId: clientId
-  };
-
-  allMessages = mergeBrowserMessages([optimisticMessage], allMessages);
-  selectedPhone = to;
-  selectedPhoneNumberId = finalPhoneNumberId;
-  selectedConversationKey = selectedConversationKey || conversationKey(to, finalPhoneNumberId, branch);
-  markConversationRead(selectedConversationKey);
-  renderAll();
-
-  return clientId;
-}
-
-function removeOptimisticStaffMessage(clientId, shouldRender) {
-  if (!clientId) return;
-
-  const beforeCount = allMessages.length;
-  allMessages = allMessages.filter(function(message) {
-    return message.optimisticClientId !== clientId;
-  });
-
-  if (shouldRender !== false && allMessages.length !== beforeCount) {
-    renderAll();
-  }
-}
-
-function markOptimisticStaffMessageFailed(clientId, errorText) {
-  let changed = false;
-  allMessages = allMessages.map(function(message) {
-    if (message.optimisticClientId !== clientId) return message;
-
-    changed = true;
-    return Object.assign({}, message, {
-      status: "Failed / Not delivered",
-      messageType: "Failed / Not delivered",
-      body: (message.body || "") + "\n\n⚠️ Failed / Not delivered: " + (errorText || "Send failed")
-    });
-  });
-
-  if (changed) renderAll();
-}
-
 async function loadMessages() {
   try {
-    // Show cached history immediately on first page open, then let /api/messages refresh it.
-    if (!allMessages.length) {
-      const cachedMessages = loadInboxHistoryCache();
-      if (cachedMessages.length) {
-        allMessages = cachedMessages;
-        renderAll();
-      }
-    }
-
     const res = await fetch("/api/messages");
     const data = await res.json();
-    const safeMessages = getSafeMessagesForRender(data.messages || []);
+    const nextMessages = data.messages || [];
+    const nextMessageCount = nextMessages.length;
+    const currentMessageCount = (allMessages || []).length;
+    const shouldPreserveBrowserHistory = nextMessageCount > 0 && currentMessageCount > nextMessageCount;
+    const safeMessages = shouldPreserveBrowserHistory
+      ? mergeBrowserMessages(nextMessages, allMessages)
+      : nextMessages;
 
     processLiveInboxNotifications(safeMessages);
     allMessages = safeMessages;
@@ -22719,14 +22569,6 @@ async function loadMessages() {
     applyConversationStates(data.conversationStates || []);
     renderAll();
   } catch (error) {
-    const cachedMessages = loadInboxHistoryCache();
-
-    if (cachedMessages.length) {
-      allMessages = mergeBrowserMessages(allMessages || [], cachedMessages);
-      renderAll();
-      return;
-    }
-
     conversationList.innerHTML = '<div class="empty">Failed to load messages.</div>';
   }
 }
@@ -22741,11 +22583,7 @@ async function sendReply() {
     return;
   }
 
-  // V31.5.8.60.3.9.43:
-  // Show the staff reply immediately inside Team Inbox. The actual WhatsApp
-  // delivery still happens through /api/send, so no webhook/Sheet logic changes.
-  const optimisticClientId = addOptimisticStaffMessage(to, body, phoneNumberId);
-  resultBox.textContent = "Sending in background...";
+  resultBox.textContent = "Sending...";
 
   try {
     const res = await fetch("/api/send", {
@@ -22762,18 +22600,13 @@ async function sendReply() {
       selectedPhone = to;
       selectedConversationKey = selectedConversationKey || conversationKey(to, phoneNumberId, "");
       markConversationRead(selectedConversationKey);
-      removeOptimisticStaffMessage(optimisticClientId, false);
       loadMessages();
     } else {
-      const errorText = data.error || "فشل الإرسال / لم تصل للعميل.";
-      resultBox.textContent = errorText;
-      markOptimisticStaffMessageFailed(optimisticClientId, errorText);
+      resultBox.textContent = data.error || "فشل الإرسال / لم تصل للعميل.";
       loadMessages();
     }
   } catch (error) {
-    const errorText = "Failed: network or server error.";
-    resultBox.textContent = errorText;
-    markOptimisticStaffMessageFailed(optimisticClientId, errorText);
+    resultBox.textContent = "Failed: network or server error.";
   }
 }
 
