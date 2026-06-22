@@ -11,7 +11,7 @@ const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "12mb" }));
 
-const BOT_VERSION = "iconic-meta-dm-v1-instagram-review-inbox-booking-text-fix";
+const BOT_VERSION = "iconic-meta-dm-v1-instagram-replies-paused-env-switch";
 const FACEBOOK_GRAPH_VERSION = (process.env.FACEBOOK_GRAPH_VERSION || "v18.0").toString().trim();
 const INSTAGRAM_GRAPH_VERSION = (process.env.INSTAGRAM_GRAPH_VERSION || "v25.0").toString().trim();
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
@@ -40,6 +40,10 @@ const INSTAGRAM_BUSINESS_ACCOUNT_ID = (
   process.env.IG_BUSINESS_ACCOUNT_ID ||
   ""
 ).toString().trim();
+
+const INSTAGRAM_BOT_REPLIES_ENABLED = (
+  process.env.INSTAGRAM_BOT_REPLIES_ENABLED || "false"
+).toString().toLowerCase() === "true";
 
 const BOT_HEADER_IMAGE_URL = (
   process.env.BOT_HEADER_IMAGE_URL ||
@@ -2080,6 +2084,27 @@ function getChannelConfig(channel) {
 }
 
 async function sendMetaMessage(channel, recipientId, message) {
+  if (channel === "instagram" && !INSTAGRAM_BOT_REPLIES_ENABLED) {
+    debugLog("[Instagram Bot Reply Skipped]", {
+      channel,
+      recipientId,
+      reason: "instagram_bot_replies_disabled",
+      messageTextPreview: previewText(message?.text || ""),
+      quickReplies: summarizeQuickReplies(message?.quick_replies || []),
+      attachmentType: message?.attachment?.type || ""
+    });
+
+    rememberInstagramReviewOutgoing({
+      channel,
+      recipientId,
+      message,
+      status: "skipped_replies_disabled",
+      result: { reason: "instagram_bot_replies_disabled" }
+    });
+
+    return { ok: false, skipped: true, reason: "instagram_bot_replies_disabled" };
+  }
+
   const config = getChannelConfig(channel);
 
   if (!config.accessToken || !config.senderId) {
@@ -2648,6 +2673,7 @@ app.get("/api/version", (req, res) => {
     version: BOT_VERSION,
     instagramConfigured: Boolean(INSTAGRAM_ACCESS_TOKEN && INSTAGRAM_BUSINESS_ACCOUNT_ID),
     messengerConfigured: Boolean(MESSENGER_PAGE_ACCESS_TOKEN && MESSENGER_PAGE_ID),
+    instagramBotRepliesEnabled: INSTAGRAM_BOT_REPLIES_ENABLED,
     staffNotifyEnabled: STAFF_NOTIFY_ENABLED,
     staffNotifyConfigured: Boolean(STAFF_WHATSAPP_TOKEN && (DUBAI_STAFF_NOTIFY_PHONE_NUMBER_ID || STAFF_WHATSAPP_PHONE_NUMBER_ID)),
     smartIntentLayer: {
