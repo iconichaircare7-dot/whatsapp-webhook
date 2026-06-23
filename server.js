@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-45-history-stable-media-only";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-46-history-protected-local-staff-echo";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -22592,6 +22592,71 @@ async function loadMessages() {
   }
 }
 
+// V31.5.8.60.3.9.46 - History Protected / Local Staff Echo Only:
+// IMPORTANT: This helper speeds up the visible staff reply in the currently opened chat
+// without touching /api/messages, loadMessages(), Google Sheet loading, conversation history
+// loading, or conversation list/history rendering. Team Inbox history is a protected zone.
+function createLocalStaffEchoId() {
+  return "local_staff_echo_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+}
+
+function shouldShowLocalStaffEchoInCurrentFilter() {
+  try {
+    const chatSenderFilter = statusToSenderFilter(statusFilter.value);
+    return !chatSenderFilter || chatSenderFilter === "staff";
+  } catch (error) {
+    return true;
+  }
+}
+
+function appendLocalStaffEcho(body = "") {
+  try {
+    if (!chatBody || !body || !shouldShowLocalStaffEchoInCurrentFilter()) {
+      return "";
+    }
+
+    const echoId = createLocalStaffEchoId();
+    const localTime = new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" });
+    const emptyNode = chatBody.querySelector(".empty");
+
+    if (emptyNode) {
+      emptyNode.remove();
+    }
+
+    if (!chatBody.querySelector(".chat-watermark")) {
+      chatBody.insertAdjacentHTML("afterbegin", '<div class="chat-watermark"><img src="/assets/iconic-chat-background-logo.png" alt="Iconic Hair Care watermark" /></div>');
+    }
+
+    chatBody.insertAdjacentHTML("beforeend",
+      '<div class="bubble-row staff local-staff-echo" data-local-echo-id="' + escapeHtml(echoId) + '">' +
+        '<div class="bubble staff">' +
+          '<div class="message-text">' + escapeHtml(body).replace(/\n/g, "<br>") + '</div>' +
+          '<div class="bubble-info">' +
+            '<span>Human Reply</span>' +
+            '<span>' + escapeHtml(localTime) + ' · <span class="local-echo-status">Sending...</span></span>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+
+    chatBody.scrollTop = chatBody.scrollHeight;
+    return echoId;
+  } catch (error) {
+    return "";
+  }
+}
+
+function updateLocalStaffEchoStatus(echoId = "", statusText = "") {
+  try {
+    if (!echoId || !statusText || !chatBody) return;
+    const safeEchoId = echoId.replace(/[^a-zA-Z0-9_\-]/g, "");
+    const statusNode = chatBody.querySelector('[data-local-echo-id="' + safeEchoId + '"] .local-echo-status');
+    if (statusNode) {
+      statusNode.textContent = statusText;
+    }
+  } catch (error) {}
+}
+
 async function sendReply() {
   const to = inputTo.value.trim();
   const body = inputBody.value.trim();
@@ -22603,6 +22668,7 @@ async function sendReply() {
   }
 
   resultBox.textContent = "Sending...";
+  const localEchoId = appendLocalStaffEcho(body);
 
   try {
     const res = await fetch("/api/send", {
@@ -22615,16 +22681,19 @@ async function sendReply() {
 
     if (data.ok) {
       resultBox.textContent = "Sent successfully.";
+      updateLocalStaffEchoStatus(localEchoId, "Sent");
       inputBody.value = "";
       selectedPhone = to;
       selectedConversationKey = selectedConversationKey || conversationKey(to, phoneNumberId, "");
       markConversationRead(selectedConversationKey);
       loadMessages();
     } else {
+      updateLocalStaffEchoStatus(localEchoId, "Failed");
       resultBox.textContent = data.error || "فشل الإرسال / لم تصل للعميل.";
       loadMessages();
     }
   } catch (error) {
+    updateLocalStaffEchoStatus(localEchoId, "Failed");
     resultBox.textContent = "Failed: network or server error.";
   }
 }
