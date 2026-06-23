@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-51-history-locked-fast-send-guard-cache";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-52-reply-composer-ui-polish";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -20231,6 +20231,461 @@ app.get("/inbox", protectInbox, (req, res) => {
     .right-reference-scroll {
       padding-bottom: 24px !important;
     }
+
+
+/* =========================================================
+   V31.5.8.60.3.9.52 - Reply Composer UI Polish
+   UI-only visual polish for the reply composer.
+   History, /api/messages, loadMessagesFromGoogleSheet, send guard,
+   WhatsApp media handling, and backend logic are intentionally untouched.
+   ========================================================= */
+.chat-composer-wrap {
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  max-height: 250px !important;
+  padding: 10px 14px 12px !important;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(120,184,62,.12), transparent 34%),
+    linear-gradient(180deg, rgba(255,255,255,.97), rgba(246,252,243,.98)) !important;
+  border-top: 1px solid rgba(198,220,190,.78) !important;
+  box-shadow: 0 -18px 36px rgba(15,23,42,.06) !important;
+  overflow: visible !important;
+}
+
+.chat-composer-wrap .composer-block {
+  border-radius: 22px !important;
+  border: 1px solid rgba(120,184,62,.28) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.98), rgba(250,254,248,.96)) !important;
+  box-shadow:
+    0 16px 36px rgba(15,23,42,.075),
+    inset 0 1px 0 rgba(255,255,255,.92) !important;
+  overflow: hidden !important;
+}
+
+.chat-composer-wrap .composer-tabs {
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 16px !important;
+  gap: 18px !important;
+  border-bottom: 1px solid rgba(221,234,216,.92) !important;
+  background: linear-gradient(180deg, #ffffff, #fbfef9) !important;
+}
+
+.chat-composer-wrap .composer-tab {
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 !important;
+  font-size: 11px !important;
+  font-weight: 950 !important;
+  letter-spacing: .1px !important;
+  color: #7a8b7e !important;
+  border-bottom: 2px solid transparent !important;
+}
+
+.chat-composer-wrap .composer-tab.active {
+  color: #166534 !important;
+  border-bottom-color: #78b83e !important;
+}
+
+.chat-composer-wrap .composer-message-label {
+  display: none !important;
+}
+
+.chat-composer-wrap textarea#body {
+  display: block !important;
+  width: calc(100% - 28px) !important;
+  height: 68px !important;
+  min-height: 68px !important;
+  max-height: 92px !important;
+  margin: 10px 14px 9px !important;
+  padding: 13px 15px !important;
+  resize: vertical !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(120,184,62,.34) !important;
+  background: #ffffff !important;
+  color: #17251b !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  line-height: 1.45 !important;
+  outline: none !important;
+  box-shadow: inset 0 1px 2px rgba(15,23,42,.035) !important;
+}
+
+.chat-composer-wrap textarea#body::placeholder {
+  color: #8da08f !important;
+  font-weight: 700 !important;
+}
+
+.chat-composer-wrap textarea#body:focus {
+  border-color: rgba(34,197,94,.62) !important;
+  box-shadow:
+    0 0 0 4px rgba(34,197,94,.10),
+    inset 0 1px 2px rgba(15,23,42,.025) !important;
+}
+
+.chat-composer-wrap .composer-bottom-row {
+  display: grid !important;
+  grid-template-columns: 104px minmax(0, 1fr) 54px !important;
+  grid-template-rows: 48px 24px !important;
+  grid-template-areas:
+    "icons media send"
+    "status status status" !important;
+  align-items: center !important;
+  gap: 8px 10px !important;
+  padding: 0 14px 7px !important;
+  margin: 0 !important;
+  overflow: visible !important;
+}
+
+.chat-composer-wrap .composer-icon-tools {
+  grid-area: icons !important;
+  height: 48px !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, 46px) !important;
+  align-items: center !important;
+  justify-content: start !important;
+  gap: 8px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.chat-composer-wrap .composer-icon-btn[title="Emoji"],
+.chat-composer-wrap .composer-icon-btn[title="Attach"] {
+  display: none !important;
+}
+
+.chat-composer-wrap .composer-image-picker,
+.chat-composer-wrap .composer-voice-picker {
+  width: 46px !important;
+  min-width: 46px !important;
+  height: 46px !important;
+  min-height: 46px !important;
+  border-radius: 16px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 1px solid rgba(120,184,62,.34) !important;
+  background: linear-gradient(135deg, #ffffff, #f2faee) !important;
+  color: #14532d !important;
+  box-shadow: 0 9px 18px rgba(15,23,42,.055) !important;
+  font-size: 21px !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease !important;
+}
+
+.chat-composer-wrap .composer-image-picker:hover,
+.chat-composer-wrap .composer-voice-picker:hover,
+.chat-composer-wrap .composer-image-picker.has-selected-image,
+.chat-composer-wrap .composer-voice-picker.has-selected-voice {
+  transform: translateY(-1px) !important;
+  border-color: rgba(34,197,94,.58) !important;
+  background: linear-gradient(135deg, #ecfdf5, #dff6d8) !important;
+  box-shadow: 0 12px 24px rgba(34,197,94,.14) !important;
+}
+
+.chat-composer-wrap .composer-tools {
+  grid-area: media !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.chat-composer-wrap .media-box {
+  width: 100% !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(122px, 1fr)) !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 4px !important;
+  margin: 0 !important;
+  border-radius: 17px !important;
+  border: 1px solid rgba(120,184,62,.26) !important;
+  background: linear-gradient(135deg, rgba(247,253,244,.96), rgba(255,255,255,.98)) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.92) !important;
+  overflow: hidden !important;
+}
+
+.chat-composer-wrap .media-box::before,
+.chat-composer-wrap .media-box::after,
+.chat-composer-wrap .media-hint,
+.chat-composer-wrap #imageCaption {
+  display: none !important;
+  content: none !important;
+}
+
+.chat-composer-wrap #imageFile,
+.chat-composer-wrap #audioFile,
+.chat-composer-wrap .voice-file-input,
+.chat-composer-wrap input[type="file"] {
+  position: absolute !important;
+  left: -99999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+.chat-composer-wrap .send-image-btn,
+.chat-composer-wrap .send-voice-btn {
+  width: 100% !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  padding: 0 12px !important;
+  border-radius: 14px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 7px !important;
+  border: 1px solid rgba(120,184,62,.32) !important;
+  background: #ffffff !important;
+  color: #17452b !important;
+  font-size: 12px !important;
+  font-weight: 950 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  box-shadow: 0 8px 16px rgba(15,23,42,.045) !important;
+  cursor: pointer !important;
+  transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease !important;
+}
+
+.chat-composer-wrap .send-image-btn::before {
+  content: "🖼" !important;
+  font-size: 15px !important;
+}
+
+.chat-composer-wrap .send-voice-btn::before {
+  content: "🎙" !important;
+  font-size: 15px !important;
+}
+
+.chat-composer-wrap .send-image-btn:hover,
+.chat-composer-wrap .send-voice-btn:hover {
+  transform: translateY(-1px) !important;
+  border-color: rgba(34,197,94,.52) !important;
+  background: #f5fbf1 !important;
+  box-shadow: 0 10px 20px rgba(34,197,94,.11) !important;
+}
+
+.chat-composer-wrap .composer-actions {
+  display: contents !important;
+}
+
+.chat-composer-wrap .send-btn {
+  grid-area: send !important;
+  justify-self: end !important;
+  align-self: center !important;
+  width: 50px !important;
+  min-width: 50px !important;
+  max-width: 50px !important;
+  height: 50px !important;
+  min-height: 50px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: linear-gradient(135deg, #0f8f4f, #25d366) !important;
+  color: #ffffff !important;
+  font-size: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 14px 28px rgba(37,211,102,.30) !important;
+  cursor: pointer !important;
+  transition: transform .14s ease, box-shadow .14s ease, filter .14s ease !important;
+}
+
+.chat-composer-wrap .send-btn::before {
+  content: "➤" !important;
+  font-size: 22px !important;
+  line-height: 1 !important;
+  color: #ffffff !important;
+  transform: translateX(2px) !important;
+}
+
+.chat-composer-wrap .send-btn::after {
+  content: none !important;
+  display: none !important;
+}
+
+.chat-composer-wrap .send-btn:hover {
+  transform: translateY(-1px) !important;
+  filter: brightness(.98) !important;
+  box-shadow: 0 18px 34px rgba(37,211,102,.34) !important;
+}
+
+.chat-composer-wrap .result {
+  grid-area: status !important;
+  justify-self: end !important;
+  align-self: center !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 22px !important;
+  min-height: 22px !important;
+  max-width: 340px !important;
+  padding: 0 10px !important;
+  border-radius: 999px !important;
+  border: 1px dashed rgba(120,184,62,.32) !important;
+  background: rgba(255,255,255,.88) !important;
+  color: #64748b !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.chat-composer-wrap .composer-reply-source {
+  display: grid !important;
+  grid-template-columns: auto minmax(220px, 310px) !important;
+  align-items: center !important;
+  justify-content: end !important;
+  gap: 8px !important;
+  min-height: 26px !important;
+  padding: 0 14px 9px !important;
+  margin: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.chat-composer-wrap .composer-reply-source label {
+  margin: 0 !important;
+  color: #64748b !important;
+  font-size: 10px !important;
+  font-weight: 950 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  white-space: nowrap !important;
+}
+
+.chat-composer-wrap .composer-reply-source label::before {
+  content: none !important;
+  display: none !important;
+}
+
+.chat-composer-wrap .composer-reply-source select {
+  height: 26px !important;
+  min-height: 26px !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(120,184,62,.30) !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  padding: 0 28px 0 12px !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.chat-composer-wrap .composer-quick-replies,
+.chat-composer-wrap .composer-mini-actions {
+  padding: 0 14px 12px !important;
+  margin: 0 !important;
+  gap: 7px !important;
+}
+
+@media (max-width: 1180px), (max-height: 760px) {
+  .chat-composer-wrap {
+    max-height: 224px !important;
+    padding: 8px 10px 10px !important;
+  }
+
+  .chat-composer-wrap textarea#body {
+    height: 54px !important;
+    min-height: 54px !important;
+    max-height: 70px !important;
+    margin: 8px 12px 7px !important;
+    width: calc(100% - 24px) !important;
+    padding: 10px 12px !important;
+  }
+
+  .chat-composer-wrap .composer-bottom-row {
+    grid-template-columns: 94px minmax(0, 1fr) 46px !important;
+    grid-template-rows: 44px 22px !important;
+    gap: 6px 8px !important;
+    padding: 0 12px 6px !important;
+  }
+
+  .chat-composer-wrap .composer-icon-tools {
+    grid-template-columns: repeat(2, 42px) !important;
+    height: 44px !important;
+    gap: 8px !important;
+  }
+
+  .chat-composer-wrap .composer-image-picker,
+  .chat-composer-wrap .composer-voice-picker {
+    width: 42px !important;
+    min-width: 42px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    font-size: 19px !important;
+  }
+
+  .chat-composer-wrap .media-box {
+    height: 44px !important;
+    min-height: 44px !important;
+    grid-template-columns: repeat(2, minmax(100px, 1fr)) !important;
+    padding: 3px !important;
+    gap: 6px !important;
+  }
+
+  .chat-composer-wrap .send-image-btn,
+  .chat-composer-wrap .send-voice-btn {
+    height: 36px !important;
+    min-height: 36px !important;
+    font-size: 11px !important;
+    padding: 0 8px !important;
+  }
+
+  .chat-composer-wrap .send-btn {
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+  }
+
+  .chat-composer-wrap .composer-reply-source {
+    grid-template-columns: auto minmax(180px, 280px) !important;
+    padding: 0 12px 7px !important;
+  }
+}
+
+@media (max-width: 980px) {
+  .chat-composer-wrap .composer-bottom-row {
+    grid-template-columns: 1fr 48px !important;
+    grid-template-rows: auto auto auto !important;
+    grid-template-areas:
+      "icons send"
+      "media media"
+      "status status" !important;
+  }
+
+  .chat-composer-wrap .composer-icon-tools {
+    width: auto !important;
+  }
+
+  .chat-composer-wrap .media-box {
+    width: 100% !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .chat-composer-wrap .result {
+    justify-self: stretch !important;
+    max-width: none !important;
+  }
+
+  .chat-composer-wrap .composer-reply-source {
+    grid-template-columns: 1fr !important;
+    justify-content: stretch !important;
+  }
+}
+
 </style>
 </head>
 <body>
