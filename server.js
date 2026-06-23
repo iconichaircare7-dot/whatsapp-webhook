@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-52-reply-composer-ui-polish";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-53-reply-composer-premium-redesign";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -20686,6 +20686,404 @@ app.get("/inbox", protectInbox, (req, res) => {
   }
 }
 
+
+
+/* =========================================================
+   V31.5.8.60.3.9.53 - Premium Reply Composer Redesign
+   UI-only redesign. History, /api/messages, loadMessagesFromGoogleSheet,
+   send guard, WhatsApp backend, and media handling are intentionally untouched.
+   ========================================================= */
+.chat-panel .chat-composer-wrap {
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  padding: 12px 16px 14px !important;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(120,184,62,.16), transparent 34%),
+    linear-gradient(180deg, rgba(255,255,255,.96), rgba(244,251,241,.98)) !important;
+  border-top: 1px solid rgba(188,216,177,.78) !important;
+  box-shadow: 0 -18px 38px rgba(15,23,42,.065) !important;
+  overflow: visible !important;
+}
+
+.chat-panel .chat-composer-wrap .premium-composer {
+  position: relative !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  padding: 12px !important;
+  border-radius: 24px !important;
+  border: 1px solid rgba(120,184,62,.34) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.99), rgba(248,253,246,.98)) !important;
+  box-shadow:
+    0 18px 40px rgba(15,23,42,.085),
+    inset 0 1px 0 rgba(255,255,255,.95) !important;
+  overflow: hidden !important;
+}
+
+.chat-panel .premium-composer::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  pointer-events: none !important;
+  background:
+    radial-gradient(circle at 94% 10%, rgba(37,211,102,.12), transparent 22%),
+    linear-gradient(90deg, rgba(120,184,62,.055), transparent 42%) !important;
+  opacity: 1 !important;
+}
+
+.chat-panel .premium-composer > * {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+.chat-panel .premium-composer .composer-topbar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  min-height: 34px !important;
+  padding: 0 2px !important;
+}
+
+.chat-panel .premium-composer .composer-tabs {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 4px !important;
+  margin: 0 !important;
+  border: 1px solid rgba(213,229,207,.9) !important;
+  border-radius: 999px !important;
+  background: rgba(255,255,255,.86) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9) !important;
+}
+
+.chat-panel .premium-composer .composer-tab {
+  height: 26px !important;
+  min-height: 26px !important;
+  padding: 0 13px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: #758576 !important;
+  font-size: 11px !important;
+  font-weight: 950 !important;
+  letter-spacing: .1px !important;
+  cursor: pointer !important;
+}
+
+.chat-panel .premium-composer .composer-tab.active {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #2f7d32, #78b83e) !important;
+  box-shadow: 0 8px 15px rgba(60,125,53,.20) !important;
+}
+
+.chat-panel .premium-composer .composer-reply-source {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin: 0 !important;
+  min-width: 0 !important;
+  max-width: 48% !important;
+  padding: 5px 7px 5px 11px !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(213,229,207,.95) !important;
+  background: rgba(255,255,255,.88) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9) !important;
+}
+
+.chat-panel .premium-composer .composer-reply-source label {
+  margin: 0 !important;
+  padding: 0 !important;
+  color: #6b7f6b !important;
+  font-size: 10px !important;
+  font-weight: 950 !important;
+  white-space: nowrap !important;
+  text-transform: uppercase !important;
+  letter-spacing: .28px !important;
+}
+
+.chat-panel .premium-composer .composer-reply-source select {
+  min-width: 210px !important;
+  max-width: 280px !important;
+  height: 28px !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  color: #213322 !important;
+  font-size: 11px !important;
+  font-weight: 950 !important;
+  padding: 0 4px !important;
+}
+
+.chat-panel .premium-composer .composer-message-label {
+  display: none !important;
+}
+
+.chat-panel .premium-composer textarea#body {
+  width: 100% !important;
+  height: 86px !important;
+  min-height: 86px !important;
+  max-height: 118px !important;
+  margin: 0 !important;
+  padding: 15px 16px !important;
+  border-radius: 18px !important;
+  border: 1px solid rgba(190,218,181,.95) !important;
+  background: rgba(255,255,255,.96) !important;
+  color: #17251b !important;
+  font-size: 13px !important;
+  font-weight: 750 !important;
+  line-height: 1.48 !important;
+  outline: 0 !important;
+  resize: vertical !important;
+  box-shadow: inset 0 1px 2px rgba(15,23,42,.035) !important;
+}
+
+.chat-panel .premium-composer textarea#body::placeholder {
+  color: #91a392 !important;
+  font-weight: 750 !important;
+}
+
+.chat-panel .premium-composer textarea#body:focus {
+  border-color: rgba(37,211,102,.58) !important;
+  box-shadow:
+    0 0 0 4px rgba(37,211,102,.105),
+    inset 0 1px 2px rgba(15,23,42,.025) !important;
+}
+
+.chat-panel .premium-composer .composer-bottom-row {
+  display: grid !important;
+  grid-template-columns: minmax(360px, 1fr) 150px !important;
+  align-items: stretch !important;
+  gap: 12px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: visible !important;
+}
+
+.chat-panel .premium-composer .composer-media-actions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(180px, 1fr)) !important;
+  gap: 10px !important;
+  align-items: stretch !important;
+  width: 100% !important;
+  min-height: 58px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.chat-panel .premium-composer .composer-media-actions::before,
+.chat-panel .premium-composer .composer-media-actions::after,
+.chat-panel .premium-composer .media-hint,
+.chat-panel .premium-composer #imageCaption,
+.chat-panel .premium-composer .composer-icon-tools,
+.chat-panel .premium-composer .composer-tools {
+  display: none !important;
+  content: none !important;
+}
+
+.chat-panel .premium-composer #imageFile,
+.chat-panel .premium-composer #audioFile,
+.chat-panel .premium-composer .voice-file-input,
+.chat-panel .premium-composer input[type="file"] {
+  position: absolute !important;
+  left: -99999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+.chat-panel .premium-composer .media-control {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 8px !important;
+  align-items: center !important;
+  min-height: 58px !important;
+  padding: 8px !important;
+  border-radius: 18px !important;
+  border: 1px solid rgba(206,226,199,.96) !important;
+  background: linear-gradient(180deg, rgba(255,255,255,.94), rgba(247,253,244,.95)) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 8px 18px rgba(15,23,42,.045) !important;
+}
+
+.chat-panel .premium-composer .media-pick-btn {
+  height: 42px !important;
+  min-height: 42px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  padding: 0 12px !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(120,184,62,.28) !important;
+  background: #ffffff !important;
+  color: #183b25 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  font-size: 12px !important;
+  font-weight: 950 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+  box-shadow: 0 6px 13px rgba(15,23,42,.035) !important;
+}
+
+.chat-panel .premium-composer .media-pick-btn .media-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 999px !important;
+  background: #ecfdf5 !important;
+  font-size: 14px !important;
+}
+
+.chat-panel .premium-composer .media-send-btn {
+  height: 42px !important;
+  min-height: 42px !important;
+  padding: 0 13px !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(120,184,62,.36) !important;
+  background: linear-gradient(135deg, #f8fff4, #ffffff) !important;
+  color: #166534 !important;
+  font-size: 11px !important;
+  font-weight: 950 !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+  box-shadow: 0 7px 14px rgba(15,23,42,.04) !important;
+}
+
+.chat-panel .premium-composer .media-pick-btn:hover,
+.chat-panel .premium-composer .media-send-btn:hover,
+.chat-panel .premium-composer .composer-image-picker.has-selected-image,
+.chat-panel .premium-composer .composer-voice-picker.has-selected-voice {
+  border-color: rgba(37,211,102,.55) !important;
+  background: linear-gradient(135deg, #ecfdf5, #ffffff) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 10px 20px rgba(37,211,102,.11) !important;
+}
+
+.chat-panel .premium-composer .composer-actions {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 56px !important;
+  align-items: center !important;
+  gap: 9px !important;
+  min-width: 0 !important;
+  padding: 8px !important;
+  border-radius: 18px !important;
+  border: 1px solid rgba(206,226,199,.96) !important;
+  background: linear-gradient(180deg, rgba(255,255,255,.94), rgba(247,253,244,.95)) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 8px 18px rgba(15,23,42,.045) !important;
+}
+
+.chat-panel .premium-composer .send-btn {
+  width: 56px !important;
+  min-width: 56px !important;
+  height: 56px !important;
+  min-height: 56px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 18px !important;
+  background: linear-gradient(135deg, #0f8f4f, #25d366) !important;
+  color: #fff !important;
+  font-size: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  box-shadow: 0 14px 27px rgba(37,211,102,.30) !important;
+}
+
+.chat-panel .premium-composer .send-btn::before {
+  content: "➤" !important;
+  color: #ffffff !important;
+  font-size: 23px !important;
+  transform: translateX(2px) !important;
+}
+
+.chat-panel .premium-composer .send-btn::after {
+  content: none !important;
+  display: none !important;
+}
+
+.chat-panel .premium-composer .send-btn:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 18px 34px rgba(37,211,102,.35) !important;
+}
+
+.chat-panel .premium-composer .result {
+  width: 100% !important;
+  max-width: none !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  padding: 0 11px !important;
+  border-radius: 13px !important;
+  border: 1px dashed rgba(120,184,62,.34) !important;
+  background: rgba(255,255,255,.88) !important;
+  color: #617166 !important;
+  font-size: 10px !important;
+  font-weight: 950 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  text-align: center !important;
+}
+
+.chat-panel .premium-composer .composer-mini-actions {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.chat-panel .premium-composer .composer-mini-actions .quick-btn {
+  min-height: 30px !important;
+  padding: 0 10px !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(211,228,204,.94) !important;
+  background: rgba(255,255,255,.82) !important;
+  color: #425444 !important;
+  font-size: 10px !important;
+  font-weight: 950 !important;
+  box-shadow: none !important;
+}
+
+.chat-panel .premium-composer .composer-note-wrap textarea {
+  width: 100% !important;
+  min-height: 100px !important;
+  border-radius: 18px !important;
+  border: 1px solid rgba(190,218,181,.95) !important;
+  background: #ffffff !important;
+}
+
+@media (max-width: 980px) {
+  .chat-panel .premium-composer .composer-topbar,
+  .chat-panel .premium-composer .composer-bottom-row {
+    grid-template-columns: 1fr !important;
+    display: grid !important;
+  }
+  .chat-panel .premium-composer .composer-reply-source {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  .chat-panel .premium-composer .composer-media-actions,
+  .chat-panel .premium-composer .composer-mini-actions {
+    grid-template-columns: 1fr !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -20905,66 +21303,74 @@ app.get("/inbox", protectInbox, (req, res) => {
         </div>
 
         <div class="chat-composer-wrap">
-            <div class="composer-block">
+          <div class="composer-block premium-composer">
+            <div class="composer-topbar">
               <div class="composer-tabs" role="tablist" aria-label="Composer mode">
                 <button type="button" class="composer-tab active" id="replyTabBtn" data-mode="reply" aria-selected="true">Reply</button>
                 <button type="button" class="composer-tab" id="noteTabBtn" data-mode="note" aria-selected="false">Note</button>
               </div>
 
-              <input id="to" type="hidden" />
-
-              <div id="replyComposerPane" class="composer-pane composer-pane-reply">
-                <label class="composer-message-label">Message</label>
-                <textarea id="body" rows="3" placeholder="Type your reply here..."></textarea>
-
-                <div class="composer-bottom-row">
-                  <div class="composer-icon-tools" aria-label="Composer tools">
-                    <button type="button" class="composer-icon-btn" title="Emoji">☺</button>
-                    <button type="button" class="composer-icon-btn" title="Attach">⌕</button>
-                    <label class="composer-icon-btn composer-image-picker" for="imageFile" title="Choose image" aria-label="Choose image">▧</label>
-                    <label class="composer-icon-btn composer-voice-picker" for="audioFile" title="Choose voice note" aria-label="Choose voice note">🎙️</label>
-                  </div>
-
-                  <div class="composer-tools">
-                    <div class="media-box">
-                      <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" />
-                      <input id="audioFile" class="voice-file-input" type="file" accept="audio/*,.m4a,.mp3,.ogg,.amr,.aac" capture="microphone" />
-                      <button type="button" class="send-image-btn" id="sendImageBtn" title="Send selected image">Image</button>
-                      <button type="button" class="send-voice-btn" id="sendVoiceBtn" title="Send selected voice note">Voice</button>
-                      <div class="media-hint">JPG, PNG, WEBP under 5MB. Voice: AAC, M4A, MP3, AMR, or OGG under 16MB.</div>
-                    </div>
-                  </div>
-
-                  <div class="composer-actions">
-                    <button type="button" class="send-btn" id="sendBtn" aria-label="Send WhatsApp Reply">➤</button>
-                    <div class="result" id="result">Ready.</div>
-                  </div>
-                </div>
-
-                <div class="composer-reply-source">
-                  <label for="phoneNumberId">Responding as:</label>
-                  <select id="phoneNumberId">
-                    <option value="">Auto — same received line</option>
-                    <option value="${DUBAI_PHONE_NUMBER_ID}">Iconic Hair Care Team (Dubai)</option>
-                    <option value="${ABU_DHABI_PHONE_NUMBER_ID}">Iconic Hair Care Team (Abu Dhabi)</option>
-                  </select>
-                </div>
-
-                <div class="quick-grid composer-mini-actions composer-quick-replies">
-                  <button type="button" class="quick-btn" data-text="مرحباً، معك فريق Iconic Hair Care. كيف فينا نساعدك؟&#10;&#10;Hello, this is the Iconic Hair Care team. How may we help you?">Greeting</button>
-                  <button type="button" class="quick-btn" data-text="شكراً لتواصلك معنا. تم استلام طلبك وسيقوم أحد أعضاء فريقنا بالرد عليك قريباً.&#10;&#10;Thank you for contacting us. Your request has been received and one of our team members will reply shortly.">Follow-up</button>
-                  <button type="button" class="quick-btn" data-text="يمكنك مشاركة اسمك والخدمة المطلوبة والفرع المناسب لك حتى نساعدك بشكل أدق.&#10;&#10;Please share your name, required service, and preferred branch so we can assist you better.">Need details</button>
-                  <button type="button" class="quick-btn" data-text="تم تحويل طلبك إلى الفريق المختص وسنتواصل معك بأقرب وقت ممكن.&#10;&#10;Your request has been transferred to the relevant team and we will contact you as soon as possible.">Team handoff</button>
-                </div>
-              </div>
-
-              <div id="noteComposerPane" class="composer-pane composer-pane-note is-hidden">
-                <div class="composer-note-wrap">
-                  <textarea id="customerInternalNote" placeholder="Private internal note for the team. Do not write anything that should be sent to the customer." disabled></textarea>
-                  <div class="internal-note-hint" id="customerInternalNoteStatus">Select a customer to add a note. V31.3 saves notes in this browser only.</div>
-                </div>
+              <div class="composer-reply-source">
+                <label for="phoneNumberId">Responding as</label>
+                <select id="phoneNumberId">
+                  <option value="">Auto — same received line</option>
+                  <option value="${DUBAI_PHONE_NUMBER_ID}">Iconic Hair Care Team (Dubai)</option>
+                  <option value="${ABU_DHABI_PHONE_NUMBER_ID}">Iconic Hair Care Team (Abu Dhabi)</option>
+                </select>
               </div>
             </div>
+
+            <input id="to" type="hidden" />
+
+            <div id="replyComposerPane" class="composer-pane composer-pane-reply">
+              <label class="composer-message-label" for="body">Message</label>
+              <textarea id="body" rows="3" placeholder="Type your reply here..."></textarea>
+
+              <div class="composer-bottom-row">
+                <div class="media-box composer-media-actions">
+                  <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" />
+                  <input id="audioFile" class="voice-file-input" type="file" accept="audio/*,.m4a,.mp3,.ogg,.amr,.aac" capture="microphone" />
+
+                  <div class="media-control image-control">
+                    <label class="composer-icon-btn composer-image-picker media-pick-btn" for="imageFile" title="Choose image" aria-label="Choose image">
+                      <span class="media-icon">🖼</span>
+                      <span class="media-text">Choose image</span>
+                    </label>
+                    <button type="button" class="send-image-btn media-send-btn" id="sendImageBtn" title="Send selected image">Send Image</button>
+                  </div>
+
+                  <div class="media-control voice-control">
+                    <label class="composer-icon-btn composer-voice-picker media-pick-btn" for="audioFile" title="Choose voice note" aria-label="Choose voice note">
+                      <span class="media-icon">🎙</span>
+                      <span class="media-text">Choose voice</span>
+                    </label>
+                    <button type="button" class="send-voice-btn media-send-btn" id="sendVoiceBtn" title="Send selected voice note">Send Voice</button>
+                  </div>
+
+                  <div class="media-hint">JPG, PNG, WEBP under 5MB. Voice: AAC, M4A, MP3, AMR, or OGG under 16MB.</div>
+                </div>
+
+                <div class="composer-actions">
+                  <div class="result" id="result">Ready.</div>
+                  <button type="button" class="send-btn" id="sendBtn" aria-label="Send WhatsApp Reply">➤</button>
+                </div>
+              </div>
+
+              <div class="quick-grid composer-mini-actions composer-quick-replies">
+                <button type="button" class="quick-btn" data-text="مرحباً، معك فريق Iconic Hair Care. كيف فينا نساعدك؟&#10;&#10;Hello, this is the Iconic Hair Care team. How may we help you?">Greeting</button>
+                <button type="button" class="quick-btn" data-text="شكراً لتواصلك معنا. تم استلام طلبك وسيقوم أحد أعضاء فريقنا بالرد عليك قريباً.&#10;&#10;Thank you for contacting us. Your request has been received and one of our team members will reply shortly.">Follow-up</button>
+                <button type="button" class="quick-btn" data-text="يمكنك مشاركة اسمك والخدمة المطلوبة والفرع المناسب لك حتى نساعدك بشكل أدق.&#10;&#10;Please share your name, required service, and preferred branch so we can assist you better.">Need details</button>
+                <button type="button" class="quick-btn" data-text="تم تحويل طلبك إلى الفريق المختص وسنتواصل معك بأقرب وقت ممكن.&#10;&#10;Your request has been transferred to the relevant team and we will contact you as soon as possible.">Team handoff</button>
+              </div>
+            </div>
+
+            <div id="noteComposerPane" class="composer-pane composer-pane-note is-hidden">
+              <div class="composer-note-wrap">
+                <textarea id="customerInternalNote" placeholder="Private internal note for the team. Do not write anything that should be sent to the customer." disabled></textarea>
+                <div class="internal-note-hint" id="customerInternalNoteStatus">Select a customer to add a note. V31.3 saves notes in this browser only.</div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
