@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-47-rollback-history-locked-media-only";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-48-history-locked-confirmed-staff-display";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -9698,6 +9698,25 @@ app.post("/api/send", protectInbox, async (req, res) => {
       messageType: "Human Reply - Sent",
       statusOverride: "Human Reply - Sent"
     });
+
+    // V31.5.8.60.3.9.48 - History Locked / Confirmed Staff Display:
+    // Return the exact staff message saved in server memory so the currently opened
+    // chat can display it immediately after WhatsApp confirms the send.
+    // This does NOT touch /api/messages, loadMessagesFromGoogleSheet(), or history loading.
+    const sentMessageForUi = (inboxMessages[0] && inboxMessages[0].phone === to && inboxMessages[0].sender === "staff")
+      ? inboxMessages[0]
+      : {
+          time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }),
+          phone: to,
+          customerName: "",
+          branch: getLineConfig(phoneNumberId).branch,
+          sender: "staff",
+          body,
+          status: "Human Reply - Sent",
+          messageType: "Human Reply - Sent",
+          phoneNumberId
+        };
+
     await saveConversationStateToGoogleSheetFromServer({
       phone: to,
       phoneNumberId,
@@ -9708,7 +9727,12 @@ app.post("/api/send", protectInbox, async (req, res) => {
       updatedBy: "Team Inbox Human Reply"
     });
 
-    return res.json({ ok: true, status: "sent_to_whatsapp", result: sendResult });
+    return res.json({
+      ok: true,
+      status: "sent_to_whatsapp",
+      result: sendResult,
+      message: sentMessageForUi
+    });
   } catch (error) {
     console.error("Inbox send failed:");
     console.error(error);
@@ -22592,6 +22616,40 @@ async function loadMessages() {
   }
 }
 
+// V31.5.8.60.3.9.48 - History Locked / Confirmed Staff Display:
+// Show the staff text reply as soon as /api/send confirms WhatsApp delivery.
+// This is not an optimistic/local echo. It only uses a server-confirmed message.
+// Protected zone: do not change /api/messages, loadMessages(), or history loading.
+function addConfirmedStaffMessageToBrowser(message) {
+  try {
+    if (!message || !message.phone || !message.body) return;
+
+    const incomingKey = browserMessageMergeKey(message);
+    const exists = (allMessages || []).some(function(existingMessage) {
+      return browserMessageMergeKey(existingMessage) === incomingKey;
+    });
+
+    if (!exists) {
+      allMessages = [message].concat(allMessages || []);
+    }
+
+    selectedPhone = message.phone || selectedPhone;
+    selectedPhoneNumberId = message.phoneNumberId || selectedPhoneNumberId || "";
+
+    if (!selectedConversationKey || selectedPhone === message.phone) {
+      selectedConversationKey = conversationKey(message.phone, message.phoneNumberId || selectedPhoneNumberId, message.branch || "");
+    }
+
+    if (selectedConversationKey) {
+      markConversationRead(selectedConversationKey);
+    }
+
+    renderAll();
+  } catch (error) {
+    console.log("Confirmed staff message display skipped:", error);
+  }
+}
+
 async function sendReply() {
   const to = inputTo.value.trim();
   const body = inputBody.value.trim();
@@ -22619,7 +22677,21 @@ async function sendReply() {
       selectedPhone = to;
       selectedConversationKey = selectedConversationKey || conversationKey(to, phoneNumberId, "");
       markConversationRead(selectedConversationKey);
-      loadMessages();
+      addConfirmedStaffMessageToBrowser(data.message || {
+        time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }),
+        phone: to,
+        customerName: "",
+        branch: "",
+        sender: "staff",
+        body,
+        status: "Human Reply - Sent",
+        messageType: "Human Reply - Sent",
+        phoneNumberId
+      });
+
+      // Background sync only. The confirmed message is already visible, and
+      // stable history merging will keep it if Google Sheet is a little late.
+      setTimeout(loadMessages, 2500);
     } else {
       resultBox.textContent = data.error || "فشل الإرسال / لم تصل للعميل.";
       loadMessages();
