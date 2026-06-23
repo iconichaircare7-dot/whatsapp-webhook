@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-49-history-locked-fast-send-response";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-50-history-locked-messages-no-overlap-fast-api";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -9295,40 +9295,54 @@ function mergeInboxHistory(sheetMessages = [], memoryMessages = []) {
   return sortMessagesNewestFirst(Array.from(mergedMap.values()));
 }
 
-const MESSAGES_API_SHEET_CACHE_TTL_MS = 5000;
+// V31.5.8.60.3.9.50 - History Locked / Messages API Fast Path:
+// The Network test showed /api/messages requests taking 20–36s and overlapping.
+// This patch keeps history logic intact, but prevents the Team Inbox UI from waiting
+// on slow Google Sheet reads on every poll. Google Sheet remains the persisted source;
+// stale cache + in-memory messages are returned quickly while a background refresh runs.
+const MESSAGES_API_SHEET_CACHE_TTL_MS = Number(process.env.MESSAGES_API_SHEET_CACHE_TTL_MS || 15000);
+const MESSAGES_API_SHEET_TIMEOUT_MS = Number(process.env.MESSAGES_API_SHEET_TIMEOUT_MS || 3500);
 let messagesApiSheetCache = null;
 let messagesApiSheetCacheAt = 0;
 let messagesApiSheetCachePromise = null;
 
+function getEmptyMessagesApiSheetData() {
+  return { messages: [], conversationStates: [], bookingRequests: [] };
+}
+
 function clearMessagesApiSheetCache(reason = "") {
-  messagesApiSheetCache = null;
+  // Do not wipe the last good cache. Mark it stale so /api/messages can still respond fast.
   messagesApiSheetCacheAt = 0;
   if (reason) {
-    console.log(`[Messages API Cache] cleared: ${reason}`);
+    console.log(`[Messages API Cache] marked stale: ${reason}`);
   }
 }
 
-async function loadMessagesFromGoogleSheetForMessagesApi() {
-  const now = Date.now();
+function timeoutAfter(ms, label = "timeout") {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(label)), Math.max(1000, Number(ms) || 3500));
+  });
+}
 
-  if (messagesApiSheetCache && (now - messagesApiSheetCacheAt) < MESSAGES_API_SHEET_CACHE_TTL_MS) {
-    return messagesApiSheetCache;
-  }
-
+function startMessagesApiSheetRefresh(reason = "") {
   if (messagesApiSheetCachePromise) {
     return messagesApiSheetCachePromise;
   }
 
+  if (reason) {
+    console.log(`[Messages API Cache] refresh started: ${reason}`);
+  }
+
   messagesApiSheetCachePromise = loadMessagesFromGoogleSheet()
     .then((sheetData) => {
-      messagesApiSheetCache = sheetData || { messages: [], conversationStates: [], bookingRequests: [] };
+      messagesApiSheetCache = sheetData || getEmptyMessagesApiSheetData();
       messagesApiSheetCacheAt = Date.now();
       return messagesApiSheetCache;
     })
     .catch((error) => {
-      console.log("Messages API cached Sheet load failed:");
+      console.log("Messages API background Sheet refresh failed:");
       console.log(error);
-      return messagesApiSheetCache || { messages: [], conversationStates: [], bookingRequests: [] };
+      return messagesApiSheetCache || getEmptyMessagesApiSheetData();
     })
     .finally(() => {
       messagesApiSheetCachePromise = null;
@@ -9337,7 +9351,39 @@ async function loadMessagesFromGoogleSheetForMessagesApi() {
   return messagesApiSheetCachePromise;
 }
 
+async function loadMessagesFromGoogleSheetForMessagesApi() {
+  const now = Date.now();
+  const hasCache = Boolean(messagesApiSheetCache);
+  const cacheAge = hasCache ? (now - messagesApiSheetCacheAt) : Infinity;
+
+  if (hasCache && cacheAge < MESSAGES_API_SHEET_CACHE_TTL_MS) {
+    return messagesApiSheetCache;
+  }
+
+  if (hasCache) {
+    // Return stale cache immediately and refresh in the background.
+    startMessagesApiSheetRefresh("stale-cache").catch(() => {});
+    return messagesApiSheetCache;
+  }
+
+  const refreshPromise = startMessagesApiSheetRefresh("cold-cache");
+
+  try {
+    return await Promise.race([
+      refreshPromise,
+      timeoutAfter(MESSAGES_API_SHEET_TIMEOUT_MS, "Messages API Sheet load timeout")
+    ]);
+  } catch (error) {
+    console.log("Messages API returned fast fallback while Sheet is still loading:");
+    console.log(error.message || error);
+    return messagesApiSheetCache || getEmptyMessagesApiSheetData();
+  }
+}
+
   app.get("/api/messages", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   const sheetData = await loadMessagesFromGoogleSheetForMessagesApi();
   const sheetMessages = sheetData.messages || [];
   const memoryMessages = inboxMessages || [];
@@ -9698,28 +9744,7 @@ app.post("/api/send", protectInbox, async (req, res) => {
       messageType: "Human Reply - Sent",
       statusOverride: "Human Reply - Sent"
     });
-
-    // V31.5.8.60.3.9.49 - History Locked / Fast Send Response:
-    // The staff message is already accepted by WhatsApp and saved to server memory.
-    // Return to the browser now so the open chat can display it immediately.
-    // Keep slower Google Sheet conversation-state saving in the background.
-    // Protected zone: this does NOT change /api/messages, loadMessagesFromGoogleSheet(),
-    // loadMessages(), conversation list building, or history rendering.
-    const sentMessageForUi = (inboxMessages[0] && inboxMessages[0].phone === to && inboxMessages[0].sender === "staff")
-      ? inboxMessages[0]
-      : {
-          time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }),
-          phone: to,
-          customerName: "",
-          branch: getLineConfig(phoneNumberId).branch,
-          sender: "staff",
-          body,
-          status: "Human Reply - Sent",
-          messageType: "Human Reply - Sent",
-          phoneNumberId
-        };
-
-    saveConversationStateToGoogleSheetFromServer({
+    await saveConversationStateToGoogleSheetFromServer({
       phone: to,
       phoneNumberId,
       branch: getLineConfig(phoneNumberId).branch,
@@ -9727,18 +9752,9 @@ app.post("/api/send", protectInbox, async (req, res) => {
       assignee: getBranchTeamAssignee(getLineConfig(phoneNumberId).branch),
       tags: ["Human Support", "Bot Paused"],
       updatedBy: "Team Inbox Human Reply"
-    }).catch((error) => {
-      console.log("Conversation state background save failed after staff reply:");
-      console.log(error);
     });
 
-    return res.json({
-      ok: true,
-      status: "sent_to_whatsapp",
-      result: sendResult,
-      message: sentMessageForUi,
-      fastResponse: true
-    });
+    return res.json({ ok: true, status: "sent_to_whatsapp", result: sendResult });
   } catch (error) {
     console.error("Inbox send failed:");
     console.error(error);
@@ -22600,57 +22616,45 @@ function mergeBrowserMessages(primaryMessages, fallbackMessages) {
   });
 }
 
+let messagesLoadInFlight = false;
+let messagesReloadQueued = false;
+
 async function loadMessages() {
+  if (messagesLoadInFlight) {
+    messagesReloadQueued = true;
+    return;
+  }
+
+  messagesLoadInFlight = true;
+
   try {
-    const res = await fetch("/api/messages");
+    const res = await fetch("/api/messages", { cache: "no-store" });
     const data = await res.json();
     const nextMessages = data.messages || [];
     const nextMessageCount = nextMessages.length;
     const currentMessageCount = (allMessages || []).length;
-    const shouldPreserveBrowserHistory = nextMessageCount > 0 && currentMessageCount > nextMessageCount;
+
+    // History guard: never replace a visible working inbox with an empty/partial response.
+    const shouldPreserveBrowserHistory = currentMessageCount > 0 && nextMessageCount < currentMessageCount;
     const safeMessages = shouldPreserveBrowserHistory
       ? mergeBrowserMessages(nextMessages, allMessages)
       : nextMessages;
 
     processLiveInboxNotifications(safeMessages);
     allMessages = safeMessages;
-    allBookingRequests = data.bookingRequests || [];
+    allBookingRequests = data.bookingRequests || allBookingRequests || [];
     applyConversationStates(data.conversationStates || []);
     renderAll();
   } catch (error) {
-    conversationList.innerHTML = '<div class="empty">Failed to load messages.</div>';
-  }
-}
+    console.log("Failed to load messages:", error);
+    // Do not clear the visible conversation list on temporary network/API delay.
+  } finally {
+    messagesLoadInFlight = false;
 
-// V31.5.8.60.3.9.49 - History Locked / Fast Send Response:
-// Add only the server-confirmed staff message into the currently loaded browser data.
-// This is NOT an optimistic echo. It runs only after /api/send returns ok=true.
-// Protected zone: do not change /api/messages, loadMessages(), or Google Sheet history loading.
-function addServerConfirmedStaffMessageToOpenChat(message) {
-  try {
-    if (!message || !message.phone || !message.body) return;
-
-    const key = browserMessageMergeKey(message);
-    const exists = (allMessages || []).some(function(existingMessage) {
-      return browserMessageMergeKey(existingMessage) === key;
-    });
-
-    if (!exists) {
-      allMessages = [message].concat(allMessages || []);
+    if (messagesReloadQueued) {
+      messagesReloadQueued = false;
+      setTimeout(loadMessages, 250);
     }
-
-    selectedPhone = message.phone || selectedPhone;
-    selectedPhoneNumberId = message.phoneNumberId || selectedPhoneNumberId || "";
-    selectedConversationKey = conversationKey(
-      message.phone,
-      message.phoneNumberId || selectedPhoneNumberId || "",
-      message.branch || ""
-    );
-
-    markConversationRead(selectedConversationKey);
-    renderAll();
-  } catch (error) {
-    console.log("Server-confirmed staff message display skipped:", error);
   }
 }
 
@@ -22678,21 +22682,10 @@ async function sendReply() {
     if (data.ok) {
       resultBox.textContent = "Sent successfully.";
       inputBody.value = "";
-      addServerConfirmedStaffMessageToOpenChat(data.message || {
-        time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }),
-        phone: to,
-        customerName: "",
-        branch: "",
-        sender: "staff",
-        body,
-        status: "Human Reply - Sent",
-        messageType: "Human Reply - Sent",
-        phoneNumberId
-      });
-
-      // Background sync only. The confirmed message is already visible from server memory.
-      // Keep this delayed so Google Sheet has time to finish saving without freezing the UI.
-      setTimeout(loadMessages, 3000);
+      selectedPhone = to;
+      selectedConversationKey = selectedConversationKey || conversationKey(to, phoneNumberId, "");
+      markConversationRead(selectedConversationKey);
+      loadMessages();
     } else {
       resultBox.textContent = data.error || "فشل الإرسال / لم تصل للعميل.";
       loadMessages();
