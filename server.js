@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-54-reply-composer-status-badges-ui";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-55-enter-to-send-reply-composer";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -20902,6 +20902,15 @@ app.get("/inbox", protectInbox, (req, res) => {
     0 0 0 4px rgba(37,211,102,.105),
     inset 0 1px 2px rgba(15,23,42,.025) !important;
 }
+.chat-panel .premium-composer .composer-keyboard-hint {
+  margin-top: 7px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #7a8b76;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
 
 .chat-panel .premium-composer .composer-bottom-row {
   display: grid !important;
@@ -21375,6 +21384,7 @@ app.get("/inbox", protectInbox, (req, res) => {
             <div id="replyComposerPane" class="composer-pane composer-pane-reply">
               <label class="composer-message-label" for="body">Message</label>
               <textarea id="body" rows="3" placeholder="Type your reply here..."></textarea>
+              <div class="composer-keyboard-hint">Press Enter to send · Shift + Enter for a new line</div>
 
               <div class="composer-bottom-row">
                 <div class="media-box composer-media-actions">
@@ -23826,6 +23836,30 @@ async function updateStatus(status) {
 }
 
 document.getElementById("sendBtn").addEventListener("click", sendReply);
+
+// V31.5.8.60.3.9.55 - Reply composer keyboard shortcut:
+// Enter sends the staff reply, while Shift+Enter keeps the normal new-line behavior.
+// UI-only change: does not touch history, /api/messages, Google Sheet loading, or send guard.
+if (inputBody) {
+  inputBody.addEventListener("keydown", function(event) {
+    const isEnter = event.key === "Enter";
+    const wantsNewLine = event.shiftKey;
+    const isModifiedShortcut = event.ctrlKey || event.altKey || event.metaKey;
+
+    if (!isEnter || wantsNewLine || isModifiedShortcut || event.isComposing || event.repeat) {
+      return;
+    }
+
+    const draft = (inputBody.value || "").trim();
+
+    if (!draft) {
+      return;
+    }
+
+    event.preventDefault();
+    sendReply();
+  });
+}
 document.getElementById("sendImageBtn").addEventListener("click", sendImage);
 document.getElementById("sendVoiceBtn").addEventListener("click", sendVoice);
 
