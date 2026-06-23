@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-53-reply-composer-premium-redesign";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-54-reply-composer-status-badges-ui";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -18730,6 +18730,56 @@ app.get("/inbox", protectInbox, (req, res) => {
       color: #0f8f4f !important;
     }
 
+    /* V31.5.8.60.3.9.54 - Safe visual status badge only.
+       This is UI-only. It does not change WhatsApp webhook/statuses, Google Sheet loading,
+       /api/messages, send guard, or conversation history logic. */
+    #chatBody .bubble-info,
+    .chat-body .bubble-info {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: flex-end !important;
+      gap: 8px !important;
+      flex-wrap: wrap !important;
+    }
+
+    #chatBody .bubble-info .sender-badge,
+    .chat-body .bubble-info .sender-badge {
+      margin-right: auto !important;
+    }
+
+    .message-status-badge {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 5px !important;
+      border-radius: 999px !important;
+      padding: 4px 8px !important;
+      font-size: 10.5px !important;
+      line-height: 1 !important;
+      font-weight: 950 !important;
+      letter-spacing: .018em !important;
+      white-space: nowrap !important;
+      border: 1px solid rgba(120,184,62,.28) !important;
+      background: linear-gradient(135deg, rgba(240,253,244,.94), rgba(220,252,231,.82)) !important;
+      color: #168044 !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.70) !important;
+    }
+
+    .message-status-badge .tick {
+      font-size: 12px !important;
+      font-weight: 950 !important;
+      color: #12a150 !important;
+    }
+
+    .message-status-badge.message-status-failed {
+      border-color: rgba(239,68,68,.25) !important;
+      background: linear-gradient(135deg, rgba(254,242,242,.95), rgba(255,228,230,.84)) !important;
+      color: #b91c1c !important;
+    }
+
+    .message-status-badge.message-status-failed .tick {
+      color: #b91c1c !important;
+    }
+
     #chatBody .bubble-row,
     .chat-body .bubble-row {
       margin-bottom: 15px !important;
@@ -22509,6 +22559,30 @@ function senderBadge(sender) {
   return '<span class="sender-badge sender-bot">Bot</span>';
 }
 
+function renderMessageStatusBadge(message) {
+  // V31.5.8.60.3.9.54:
+  // UI-only status badge for staff messages. This does not claim real WhatsApp
+  // delivered/read receipts. Real delivered/read needs WhatsApp status webhook
+  // message_id storage and should be a separate future phase.
+  if (!message || message.sender !== "staff") {
+    return "";
+  }
+
+  const statusText = [message.status || "", message.messageType || ""]
+    .join(" ")
+    .toLowerCase();
+
+  if (statusText.includes("failed") || statusText.includes("not delivered")) {
+    return '<span class="message-status-badge message-status-failed"><span class="tick">!</span> Failed</span>';
+  }
+
+  if (statusText.includes("sent") || statusText.includes("human reply") || statusText.includes("image reply") || statusText.includes("voice reply")) {
+    return '<span class="message-status-badge"><span class="tick">✓</span> Sent</span>';
+  }
+
+  return "";
+}
+
 function statusToSenderFilter(status) {
   if (status === "Customer Reply") return "customer";
   if (status === "Human Reply") return "staff";
@@ -23451,6 +23525,7 @@ function renderChat() {
         '<div class="bubble-info">' +
           '<span>' + senderBadge(m.sender || "") + '</span>' +
           '<span>' + escapeHtml(m.time || "") + '</span>' +
+          renderMessageStatusBadge(m) +
         '</div>' +
       '</div>' +
     '</div>';
