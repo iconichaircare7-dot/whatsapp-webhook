@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-48-history-locked-confirmed-staff-display";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-49-history-locked-fast-send-response";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -9699,10 +9699,12 @@ app.post("/api/send", protectInbox, async (req, res) => {
       statusOverride: "Human Reply - Sent"
     });
 
-    // V31.5.8.60.3.9.48 - History Locked / Confirmed Staff Display:
-    // Return the exact staff message saved in server memory so the currently opened
-    // chat can display it immediately after WhatsApp confirms the send.
-    // This does NOT touch /api/messages, loadMessagesFromGoogleSheet(), or history loading.
+    // V31.5.8.60.3.9.49 - History Locked / Fast Send Response:
+    // The staff message is already accepted by WhatsApp and saved to server memory.
+    // Return to the browser now so the open chat can display it immediately.
+    // Keep slower Google Sheet conversation-state saving in the background.
+    // Protected zone: this does NOT change /api/messages, loadMessagesFromGoogleSheet(),
+    // loadMessages(), conversation list building, or history rendering.
     const sentMessageForUi = (inboxMessages[0] && inboxMessages[0].phone === to && inboxMessages[0].sender === "staff")
       ? inboxMessages[0]
       : {
@@ -9717,7 +9719,7 @@ app.post("/api/send", protectInbox, async (req, res) => {
           phoneNumberId
         };
 
-    await saveConversationStateToGoogleSheetFromServer({
+    saveConversationStateToGoogleSheetFromServer({
       phone: to,
       phoneNumberId,
       branch: getLineConfig(phoneNumberId).branch,
@@ -9725,13 +9727,17 @@ app.post("/api/send", protectInbox, async (req, res) => {
       assignee: getBranchTeamAssignee(getLineConfig(phoneNumberId).branch),
       tags: ["Human Support", "Bot Paused"],
       updatedBy: "Team Inbox Human Reply"
+    }).catch((error) => {
+      console.log("Conversation state background save failed after staff reply:");
+      console.log(error);
     });
 
     return res.json({
       ok: true,
       status: "sent_to_whatsapp",
       result: sendResult,
-      message: sentMessageForUi
+      message: sentMessageForUi,
+      fastResponse: true
     });
   } catch (error) {
     console.error("Inbox send failed:");
@@ -22616,17 +22622,17 @@ async function loadMessages() {
   }
 }
 
-// V31.5.8.60.3.9.48 - History Locked / Confirmed Staff Display:
-// Show the staff text reply as soon as /api/send confirms WhatsApp delivery.
-// This is not an optimistic/local echo. It only uses a server-confirmed message.
-// Protected zone: do not change /api/messages, loadMessages(), or history loading.
-function addConfirmedStaffMessageToBrowser(message) {
+// V31.5.8.60.3.9.49 - History Locked / Fast Send Response:
+// Add only the server-confirmed staff message into the currently loaded browser data.
+// This is NOT an optimistic echo. It runs only after /api/send returns ok=true.
+// Protected zone: do not change /api/messages, loadMessages(), or Google Sheet history loading.
+function addServerConfirmedStaffMessageToOpenChat(message) {
   try {
     if (!message || !message.phone || !message.body) return;
 
-    const incomingKey = browserMessageMergeKey(message);
+    const key = browserMessageMergeKey(message);
     const exists = (allMessages || []).some(function(existingMessage) {
-      return browserMessageMergeKey(existingMessage) === incomingKey;
+      return browserMessageMergeKey(existingMessage) === key;
     });
 
     if (!exists) {
@@ -22635,18 +22641,16 @@ function addConfirmedStaffMessageToBrowser(message) {
 
     selectedPhone = message.phone || selectedPhone;
     selectedPhoneNumberId = message.phoneNumberId || selectedPhoneNumberId || "";
+    selectedConversationKey = conversationKey(
+      message.phone,
+      message.phoneNumberId || selectedPhoneNumberId || "",
+      message.branch || ""
+    );
 
-    if (!selectedConversationKey || selectedPhone === message.phone) {
-      selectedConversationKey = conversationKey(message.phone, message.phoneNumberId || selectedPhoneNumberId, message.branch || "");
-    }
-
-    if (selectedConversationKey) {
-      markConversationRead(selectedConversationKey);
-    }
-
+    markConversationRead(selectedConversationKey);
     renderAll();
   } catch (error) {
-    console.log("Confirmed staff message display skipped:", error);
+    console.log("Server-confirmed staff message display skipped:", error);
   }
 }
 
@@ -22674,10 +22678,7 @@ async function sendReply() {
     if (data.ok) {
       resultBox.textContent = "Sent successfully.";
       inputBody.value = "";
-      selectedPhone = to;
-      selectedConversationKey = selectedConversationKey || conversationKey(to, phoneNumberId, "");
-      markConversationRead(selectedConversationKey);
-      addConfirmedStaffMessageToBrowser(data.message || {
+      addServerConfirmedStaffMessageToOpenChat(data.message || {
         time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }),
         phone: to,
         customerName: "",
@@ -22689,9 +22690,9 @@ async function sendReply() {
         phoneNumberId
       });
 
-      // Background sync only. The confirmed message is already visible, and
-      // stable history merging will keep it if Google Sheet is a little late.
-      setTimeout(loadMessages, 2500);
+      // Background sync only. The confirmed message is already visible from server memory.
+      // Keep this delayed so Google Sheet has time to finish saving without freezing the UI.
+      setTimeout(loadMessages, 3000);
     } else {
       resultBox.textContent = data.error || "فشل الإرسال / لم تصل للعميل.";
       loadMessages();
