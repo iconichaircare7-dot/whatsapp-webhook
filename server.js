@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-50-history-locked-messages-no-overlap-fast-api";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-51-history-locked-fast-send-guard-cache";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -803,6 +803,8 @@ function addInboxMessage(phone, sender, body, status = "Bot", phoneNumberId = nu
     console.log("Google Sheet log failed:");
     console.log(error);
   });
+
+  return item;
 }
 
 async function saveMessageToGoogleSheet(item) {
@@ -2894,7 +2896,13 @@ async function getStaffFreeTextSendGuard(phone = "", phoneNumberId = "") {
       return { ok: false, sendResult: buildStaffSendBlockedResult("missing_phone") };
     }
 
-    const sheetData = await loadMessagesFromGoogleSheet();
+    // V31.5.8.60.3.9.51 - Fast staff send guard:
+    // Do not block every staff reply on a fresh Google Sheet read. /api/messages already keeps
+    // a safe last-good Sheet cache + in-memory messages. Use that fast source for the 24h guard.
+    // This keeps the protection logic, but removes the extra 3-30s wait before WhatsApp send.
+    const sheetData = (typeof loadMessagesFromGoogleSheetForMessagesApi === "function")
+      ? await loadMessagesFromGoogleSheetForMessagesApi()
+      : await loadMessagesFromGoogleSheet();
     const sheetMessages = Array.isArray(sheetData.messages) ? sheetData.messages : [];
     const memoryMessages = Array.isArray(inboxMessages) ? inboxMessages : [];
     const messages = [...sheetMessages, ...memoryMessages];
@@ -9740,11 +9748,15 @@ app.post("/api/send", protectInbox, async (req, res) => {
     }
 
     setConversationStatus(to, "Human Reply");
-    addInboxMessage(to, "staff", body, "Human Reply - Sent", phoneNumberId, {
+    const sentMessage = addInboxMessage(to, "staff", body, "Human Reply - Sent", phoneNumberId, {
       messageType: "Human Reply - Sent",
       statusOverride: "Human Reply - Sent"
     });
-    await saveConversationStateToGoogleSheetFromServer({
+
+    // V31.5.8.60.3.9.51 - do not delay staff send response on conversation-state Sheet save.
+    // The actual WhatsApp send already succeeded and the message log has been queued.
+    // Conversation state is saved in the background so the Team Inbox can refresh quickly.
+    saveConversationStateToGoogleSheetFromServer({
       phone: to,
       phoneNumberId,
       branch: getLineConfig(phoneNumberId).branch,
@@ -9752,9 +9764,17 @@ app.post("/api/send", protectInbox, async (req, res) => {
       assignee: getBranchTeamAssignee(getLineConfig(phoneNumberId).branch),
       tags: ["Human Support", "Bot Paused"],
       updatedBy: "Team Inbox Human Reply"
+    }).catch((error) => {
+      console.log("Conversation state background save failed after staff reply:");
+      console.log(error);
     });
 
-    return res.json({ ok: true, status: "sent_to_whatsapp", result: sendResult });
+    return res.json({
+      ok: true,
+      status: "sent_to_whatsapp",
+      result: sendResult,
+      sentMessage
+    });
   } catch (error) {
     console.error("Inbox send failed:");
     console.error(error);
