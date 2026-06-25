@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-56-secure-command-center-clean-filters";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-57-closed-safe-dynamic-filters";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -15348,7 +15348,7 @@ app.get("/inbox", protectInbox, (req, res) => {
       box-shadow: inset 0 0 0 1px rgba(47,169,70,.18) !important;
     }
 
-    /* V31.5.8.60.3.9.55 - Secure Command Center.
+    /* V31.5.8.60.3.9.57 - Secure Command Center + Closed-safe Dynamic Filters.
        UI-only operational queue built from already loaded conversation data.
        No message history, Google Sheet loading, media, send, webhook, or note logic changed. */
     .needs-action-command-center {
@@ -15425,8 +15425,59 @@ app.get("/inbox", protectInbox, (req, res) => {
       background: linear-gradient(135deg, #f3fbf0, #ffffff) !important;
     }
 
+    .dynamic-command-center-filters {
+      display: grid !important;
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      gap: 6px !important;
+      padding-top: 6px !important;
+    }
+
+    .dynamic-command-filter {
+      min-width: 0 !important;
+      min-height: 38px !important;
+      padding: 6px 7px !important;
+      border-radius: 12px !important;
+      border: 1px solid rgba(218,226,218,.98) !important;
+      background: #ffffff !important;
+      color: #334155 !important;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 6px !important;
+      box-shadow: 0 6px 12px rgba(15,23,42,.035) !important;
+      font-size: 10px !important;
+      font-weight: 950 !important;
+      text-align: center !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+    }
+
+    .dynamic-command-filter strong {
+      min-width: 20px !important;
+      height: 20px !important;
+      padding: 0 6px !important;
+      border-radius: 999px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      background: rgba(120,184,62,.16) !important;
+      color: #2f8d2f !important;
+      font-size: 10px !important;
+      font-weight: 950 !important;
+    }
+
+    .dynamic-command-filter.active,
+    .dynamic-command-filter:hover {
+      border-color: rgba(47,169,70,.82) !important;
+      background: #f3fbf0 !important;
+      color: #168437 !important;
+    }
+
     @media (max-width: 1180px) {
-      .needs-action-command-center {
+      .needs-action-command-center,
+      .dynamic-command-center-filters {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       }
     }
@@ -21357,6 +21408,8 @@ app.get("/inbox", protectInbox, (req, res) => {
             </button>
           </div>
 
+          <div class="dynamic-command-center-filters" id="dynamicCommandCenterFilters" aria-label="Dynamic operational filters"></div>
+
           <div class="reference-hidden-filters" aria-hidden="true">
             <select id="branchFilter">
               <option value="">All branches</option>
@@ -21813,7 +21866,10 @@ if (chatBody) {
 const referenceFilterPills = Array.from(document.querySelectorAll(".reference-pill[data-status]"));
 const referenceBranchTabs = Array.from(document.querySelectorAll(".reference-branch-tab[data-branch]"));
 let commandCenterFilter = "";
-const commandCenterButtons = Array.from(document.querySelectorAll(".needs-action-card[data-command-filter]"));
+const dynamicCommandCenterFilters = document.getElementById("dynamicCommandCenterFilters");
+function getCommandCenterButtons() {
+  return Array.from(document.querySelectorAll(".needs-action-card[data-command-filter], .dynamic-command-filter[data-command-filter]"));
+}
 const conversationFooterText = document.getElementById("conversationFooterText");
 const refreshListBtn = document.getElementById("refreshListBtn");
 const composerTabs = Array.from(document.querySelectorAll(".composer-tab[data-mode]"));
@@ -21863,7 +21919,7 @@ function updateReferenceFilterUi(currentCount) {
     btn.classList.toggle("active", (branchFilter.value || "") === (btn.dataset.branch || ""));
   });
 
-  commandCenterButtons.forEach(function(btn) {
+  getCommandCenterButtons().forEach(function(btn) {
     btn.classList.toggle("active", commandCenterFilter === (btn.dataset.commandFilter || ""));
   });
 
@@ -21888,16 +21944,27 @@ referenceFilterPills.forEach(function(btn) {
   });
 });
 
-commandCenterButtons.forEach(function(btn) {
+function applyCommandCenterFilter(nextFilter) {
+  commandCenterFilter = commandCenterFilter === nextFilter ? "" : nextFilter;
+  if (statusFilter) statusFilter.value = "";
+  selectedConversationKey = "";
+  renderConversationList();
+  renderChat();
+}
+
+getCommandCenterButtons().forEach(function(btn) {
   btn.addEventListener("click", function() {
-    const nextFilter = btn.dataset.commandFilter || "";
-    commandCenterFilter = commandCenterFilter === nextFilter ? "" : nextFilter;
-    if (statusFilter) statusFilter.value = "";
-    selectedConversationKey = "";
-    renderConversationList();
-    renderChat();
+    applyCommandCenterFilter(btn.dataset.commandFilter || "");
   });
 });
+
+if (dynamicCommandCenterFilters) {
+  dynamicCommandCenterFilters.addEventListener("click", function(event) {
+    const btn = event.target.closest(".dynamic-command-filter[data-command-filter]");
+    if (!btn) return;
+    applyCommandCenterFilter(btn.dataset.commandFilter || "");
+  });
+}
 
 referenceBranchTabs.forEach(function(btn) {
   btn.addEventListener("click", function() {
@@ -23203,78 +23270,120 @@ function processLiveInboxNotifications(nextMessages) {
   updateLiveNotificationUi();
 }
 
-function buildStatusOptions() {
-  const current = statusFilter.value;
+const CLOSED_CONVERSATION_STATUS = "Closed";
+const STATIC_COMMAND_CENTER_FILTERS = [
+  "needs-action",
+  "Need Follow-up",
+  "Talk to Team",
+  "Waiting",
+  "Booking Request"
+];
+const REPLY_FILTER_STATUS_VALUES = ["Customer Reply", "Human Reply", "Bot Reply"];
+const NOISY_OPERATIONAL_STATUS_VALUES = new Set([
+  "",
+  "Bot",
+  "Follow-up Test",
+  "Follow-up Sent",
+  "Service Follow-up Reminder",
+  "Service Follow-up Template Test",
+  "Call Now Test",
+  "Call Now Template Test",
+  "Location Test",
+  "Location CTA Test"
+]);
+const CLEAN_STATUS_FILTER_GROUPS = [
+  {
+    label: "Workflow",
+    statuses: [
+      "Open",
+      "Waiting",
+      "Need Follow-up",
+      "Needs Team",
+      "Talk to Team",
+      "Closed"
+    ]
+  },
+  {
+    label: "Requests",
+    statuses: [
+      "Booking Request",
+      "Consultation Request",
+      "Price Question",
+      "Call Requested",
+      "Location Requested",
+      "Service Interest",
+      "Media Requested"
+    ]
+  },
+  {
+    label: "Replies",
+    statuses: REPLY_FILTER_STATUS_VALUES
+  }
+];
 
-  // V31.5.8.60.3.9.56 - Clean Status Filters:
-  // UI-only cleanup for the status dropdown. This keeps the existing filtering
-  // behavior but removes duplicate/noisy options and groups the useful statuses.
-  const hiddenStatuses = new Set([
-    "",
-    "Bot",
-    "Follow-up Test",
-    "Follow-up Sent",
-    "Service Follow-up Reminder",
-    "Service Follow-up Template Test",
-    "Call Now Test",
-    "Call Now Template Test",
-    "Location Test",
-    "Location CTA Test"
-  ]);
+function isClosedConversation(conversation) {
+  return (conversation?.status || "").toString().trim().toLowerCase() === "closed";
+}
 
-  const filterGroups = [
-    {
-      label: "Workflow",
-      statuses: [
-        "Open",
-        "Waiting",
-        "Need Follow-up",
-        "Needs Team",
-        "Talk to Team",
-        "Closed"
-      ]
-    },
-    {
-      label: "Requests",
-      statuses: [
-        "Booking Request",
-        "Consultation Request",
-        "Price Question",
-        "Call Requested",
-        "Location Requested",
-        "Service Interest",
-        "Media Requested"
-      ]
-    },
-    {
-      label: "Replies",
-      statuses: [
-        "Customer Reply",
-        "Human Reply",
-        "Bot Reply"
-      ]
-    }
-  ];
-
-  const primaryStatuses = [];
-
-  filterGroups.forEach(function(group) {
+function getPrimaryStatusValues() {
+  const values = [];
+  CLEAN_STATUS_FILTER_GROUPS.forEach(function(group) {
     group.statuses.forEach(function(status) {
-      if (!primaryStatuses.includes(status)) {
-        primaryStatuses.push(status);
-      }
+      if (!values.includes(status)) values.push(status);
+    });
+  });
+  return values;
+}
+
+function isReplyFilterStatus(status) {
+  return REPLY_FILTER_STATUS_VALUES.includes((status || "").toString().trim());
+}
+
+function isStaticCommandCenterStatus(status) {
+  return STATIC_COMMAND_CENTER_FILTERS.includes((status || "").toString().trim());
+}
+
+function isCleanOperationalStatus(status) {
+  const value = (status || "").toString().trim();
+  if (!value) return false;
+  if (NOISY_OPERATIONAL_STATUS_VALUES.has(value)) return false;
+  if (isReplyFilterStatus(value)) return false;
+  if (value === CLOSED_CONVERSATION_STATUS) return false;
+  return true;
+}
+
+function getDynamicDetectedStatuses(conversations) {
+  const primaryStatuses = getPrimaryStatusValues();
+  const detected = [];
+
+  (conversations || []).forEach(function(conversation) {
+    const candidates = [conversation.status].concat((conversation.messages || []).map(function(message) {
+      return message.status || "";
+    }));
+
+    candidates.forEach(function(status) {
+      const value = (status || "").toString().trim();
+      if (!value) return;
+      if (!isCleanOperationalStatus(value)) return;
+      if (primaryStatuses.includes(value)) return;
+      if (!detected.includes(value)) detected.push(value);
     });
   });
 
-  const dynamicStatuses = Array.from(new Set((allMessages || []).map(function(m) {
-    return (m.status || "").toString().trim();
-  }).filter(function(status) {
-    return status && !hiddenStatuses.has(status) && !primaryStatuses.includes(status);
-  }))).sort(function(a, b) {
+  return detected.sort(function(a, b) {
     return a.localeCompare(b);
   });
+}
 
-  const optionHtml = ['<option value="">All status / replies</option>'].concat(filterGroups.map(function(group) {
+function buildStatusOptions() {
+  const current = statusFilter.value;
+  const conversations = buildConversations();
+
+  // V31.5.8.60.3.9.57 - Clean + dynamic Status Filters:
+  // Primary filters stay organized. Any new real operational status appears under
+  // Other detected statuses automatically, while noisy/test statuses stay hidden.
+  const dynamicStatuses = getDynamicDetectedStatuses(conversations);
+  const optionHtml = ['<option value="">All status / replies</option>'].concat(CLEAN_STATUS_FILTER_GROUPS.map(function(group) {
     const options = group.statuses.map(function(status) {
       return '<option value="' + escapeHtml(status) + '">' + escapeHtml(status) + '</option>';
     }).join("");
@@ -23290,12 +23399,11 @@ function buildStatusOptions() {
 
   statusFilter.innerHTML = optionHtml.join("");
 
-  const validStatuses = primaryStatuses.concat(dynamicStatuses);
+  const validStatuses = getPrimaryStatusValues().concat(dynamicStatuses);
   if (validStatuses.includes(current)) {
     statusFilter.value = current;
   }
 }
-
 
 function buildAdvancedFilterOptions() {
   const currentAssignee = assigneeFilter ? assigneeFilter.value : "";
@@ -23378,21 +23486,60 @@ function conversationMatchesStatusLoose(conversation, status) {
   });
 }
 
+function conversationMatchesActiveOperationalStatus(conversation, status) {
+  const wanted = (status || "").toString().trim();
+  if (!wanted || !conversation) return false;
+
+  // Closed is a final workflow bucket. Old booking/call/price history must not
+  // keep the conversation inside active operational counters or command filters.
+  if (isClosedConversation(conversation)) return false;
+
+  if ((conversation.status || "").toString().trim() === wanted) return true;
+
+  return conversationMatchesStatusLoose(conversation, wanted) || conversationHasStatus(conversation, wanted);
+}
+
 function isNeedsActionConversation(conversation) {
   return NEEDS_ACTION_STATUS_VALUES.some(function(status) {
-    return conversationMatchesStatusLoose(conversation, status) || conversationHasStatus(conversation, status);
+    return conversationMatchesActiveOperationalStatus(conversation, status);
   });
 }
 
 function countConversationsByOperationalStatus(conversations, status) {
   return (conversations || []).filter(function(conversation) {
-    return conversationMatchesStatusLoose(conversation, status) || conversationHasStatus(conversation, status);
+    return conversationMatchesActiveOperationalStatus(conversation, status);
   }).length;
 }
 
 function setNeedsActionCounter(id, value) {
   const el = document.getElementById(id);
   if (el) el.textContent = String(value || 0);
+}
+
+function getDynamicCommandCenterStatuses(conversations) {
+  return getDynamicDetectedStatuses(conversations).filter(function(status) {
+    if (isStaticCommandCenterStatus(status)) return false;
+    return countConversationsByOperationalStatus(conversations, status) > 0;
+  });
+}
+
+function renderDynamicCommandCenterFilters(conversations) {
+  if (!dynamicCommandCenterFilters) return;
+
+  const statuses = getDynamicCommandCenterStatuses(conversations);
+
+  if (!statuses.length) {
+    dynamicCommandCenterFilters.innerHTML = "";
+    return;
+  }
+
+  dynamicCommandCenterFilters.innerHTML = statuses.map(function(status) {
+    const count = countConversationsByOperationalStatus(conversations, status);
+    return '<button type="button" class="dynamic-command-filter" data-command-filter="' + escapeHtml(status) + '" title="Show ' + escapeHtml(status) + '">' +
+      '<span>' + escapeHtml(status) + '</span>' +
+      '<strong>' + escapeHtml(String(count)) + '</strong>' +
+    '</button>';
+  }).join("");
 }
 
 function updateNeedsActionCommandCenter(conversations) {
@@ -23402,6 +23549,7 @@ function updateNeedsActionCommandCenter(conversations) {
   setNeedsActionCounter("needsTeamCount", countConversationsByOperationalStatus(list, "Talk to Team"));
   setNeedsActionCounter("needsWaitingCount", countConversationsByOperationalStatus(list, "Waiting"));
   setNeedsActionCounter("needsBookingCount", countConversationsByOperationalStatus(list, "Booking Request"));
+  renderDynamicCommandCenterFilters(list);
 }
 
 function updateStats() {
@@ -23571,7 +23719,7 @@ function filteredConversations() {
 
     if (activeCommandFilter === "needs-action" && !isNeedsActionConversation(c)) return false;
     if (activeCommandFilter && activeCommandFilter !== "needs-action") {
-      if (c.status !== activeCommandFilter && !conversationHasStatus(c, activeCommandFilter) && !conversationMatchesStatusLoose(c, activeCommandFilter)) return false;
+      if (!conversationMatchesActiveOperationalStatus(c, activeCommandFilter)) return false;
     }
 
     if (assigned && c.assignee !== assigned) return false;
@@ -23586,7 +23734,13 @@ function filteredConversations() {
       return (c.messages || []).some(function(m) { return m.sender === senderFilter; });
     }
 
-    if (status && c.status !== status && !conversationHasStatus(c, status)) return false;
+    if (status) {
+      if (isCleanOperationalStatus(status)) {
+        if (!conversationMatchesActiveOperationalStatus(c, status)) return false;
+      } else if (c.status !== status && !conversationHasStatus(c, status)) {
+        return false;
+      }
+    }
 
     return true;
   });
