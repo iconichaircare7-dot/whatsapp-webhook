@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-59-smooth-smart-refresh";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-60-workflow-speed-tools";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -15420,6 +15420,29 @@ app.get("/inbox", protectInbox, (req, res) => {
       color: #168437 !important;
     }
 
+    .workflow-next-btn,
+    .workflow-close-next-btn {
+      white-space: nowrap !important;
+      font-weight: 900 !important;
+    }
+
+    .workflow-next-btn {
+      border-color: rgba(34, 197, 94, 0.36) !important;
+      background: rgba(34, 197, 94, 0.10) !important;
+      color: #14532d !important;
+    }
+
+    .workflow-close-next-btn {
+      border-color: rgba(245, 158, 11, 0.40) !important;
+      background: rgba(245, 158, 11, 0.12) !important;
+      color: #78350f !important;
+    }
+
+    .workflow-template-btn {
+      border-color: rgba(120, 184, 62, 0.28) !important;
+      background: rgba(120, 184, 62, 0.08) !important;
+    }
+
     .needs-action-primary {
       border-color: rgba(37,169,65,.34) !important;
       background: linear-gradient(135deg, #f3fbf0, #ffffff) !important;
@@ -21503,6 +21526,8 @@ app.get("/inbox", protectInbox, (req, res) => {
             </select>
             <button type="button" class="mini-btn" id="copyPhoneBtn">Copy phone</button>
             <button type="button" class="mini-btn" id="markReadBtn">Mark read</button>
+            <button type="button" class="mini-btn workflow-next-btn" id="nextCustomerBtn" title="Jump to the next active customer">Next Customer</button>
+            <button type="button" class="mini-btn workflow-close-next-btn" id="closeNextBtn" title="Close this conversation and open the next active customer">Close & Next</button>
             <div class="chat-tags-menu-wrap">
               <button type="button" class="mini-btn more-btn" id="chatTagsMenuBtn" aria-label="Conversation tags">⋮</button>
               <div class="chat-tags-popover is-hidden" id="chatTagsPopover">
@@ -21596,6 +21621,10 @@ app.get("/inbox", protectInbox, (req, res) => {
                 <button type="button" class="quick-btn" data-text="شكراً لتواصلك معنا. تم استلام طلبك وسيقوم أحد أعضاء فريقنا بالرد عليك قريباً.&#10;&#10;Thank you for contacting us. Your request has been received and one of our team members will reply shortly.">Follow-up</button>
                 <button type="button" class="quick-btn" data-text="يمكنك مشاركة اسمك والخدمة المطلوبة والفرع المناسب لك حتى نساعدك بشكل أدق.&#10;&#10;Please share your name, required service, and preferred branch so we can assist you better.">Need details</button>
                 <button type="button" class="quick-btn" data-text="تم تحويل طلبك إلى الفريق المختص وسنتواصل معك بأقرب وقت ممكن.&#10;&#10;Your request has been transferred to the relevant team and we will contact you as soon as possible.">Team handoff</button>
+                <button type="button" class="quick-btn workflow-template-btn" data-text="السعر يعتمد على الحالة والمساحة المطلوبة ونوع الحل المناسب. ابعتلنا صورة واضحة أو احجز استشارة سريعة حتى نعطيك توجيه أدق.&#10;&#10;The price depends on your case, the required coverage area, and the right solution for you. Please send a clear photo or book a quick consultation so we can guide you accurately.">Price Reply</button>
+                <button type="button" class="quick-btn workflow-template-btn" data-text="أكيد، فينا نساعدك بالحجز. ابعتلنا الاسم، الفرع المناسب لك دبي أو أبوظبي، واليوم والوقت المفضل.&#10;&#10;Sure, we can help you book. Please send your name, preferred branch Dubai or Abu Dhabi, and your preferred day and time.">Booking Reply</button>
+                <button type="button" class="quick-btn workflow-template-btn" data-text="أكيد، فريقنا فين يتواصل معك. ابعتلنا الوقت المناسب للاتصال والفرع الأقرب لك.&#10;&#10;Sure, our team can contact you. Please send the best time to call and the branch closest to you.">Call Reply</button>
+                <button type="button" class="quick-btn workflow-template-btn" data-text="متابعين معك بخصوص طلبك. هل تحب نحجز لك استشارة أو تحكي مع الفريق؟&#10;&#10;Following up regarding your request. Would you like us to book a consultation or connect you with the team?">Follow-up Reply</button>
               </div>
             </div>
 
@@ -23472,6 +23501,56 @@ const NEEDS_ACTION_STATUS_VALUES = [
   "Price Question"
 ];
 
+// V31.5.8.60.3.9.60 - Workflow Speed Tools:
+// Status buttons already exist. This layer makes the team faster by sorting
+// active conversations by operational priority and adding Next / Close & Next.
+const WORKFLOW_PRIORITY_STATUS_VALUES = [
+  "Talk to Team",
+  "Booking Request",
+  "Consultation Request",
+  "Call Requested",
+  "Price Question",
+  "Need Follow-up",
+  "Waiting",
+  "Needs Team",
+  "Open",
+  "Customer Reply",
+  "Human Reply",
+  "Bot Reply",
+  "Closed"
+];
+
+function getWorkflowPriorityRank(conversation) {
+  const status = getCurrentConversationStatus(conversation) || conversation?.replyFilterStatus || "Open";
+  const index = WORKFLOW_PRIORITY_STATUS_VALUES.indexOf(status);
+
+  if (index >= 0) return index;
+  if (isClosedConversation(conversation)) return 999;
+  if (isNeedsActionConversation(conversation)) return 20;
+  return 500;
+}
+
+function compareConversationsByWorkflowPriority(a, b) {
+  const priorityDelta = getWorkflowPriorityRank(a) - getWorkflowPriorityRank(b);
+  if (priorityDelta !== 0) return priorityDelta;
+
+  const unreadDelta = getUnreadCustomerMessageCount(b) - getUnreadCustomerMessageCount(a);
+  if (unreadDelta !== 0) return unreadDelta;
+
+  return getMessageTimeValue(b?.latest || {}) - getMessageTimeValue(a?.latest || {});
+}
+
+function sortConversationsForWorkflow(conversations) {
+  return (conversations || []).slice().sort(compareConversationsByWorkflowPriority);
+}
+
+function shouldIncludeInNextWorkflow(conversation) {
+  if (!conversation || isClosedConversation(conversation)) return false;
+  return isNeedsActionConversation(conversation) ||
+    conversation.replyFilterStatus === "Customer Reply" ||
+    getCurrentConversationStatus(conversation) === "Open";
+}
+
 function conversationMatchesStatusLoose(conversation, status) {
   const wanted = (status || "").toString().toLowerCase().trim();
   if (!wanted || !conversation) return false;
@@ -23718,7 +23797,7 @@ function filteredConversations() {
   const activeCommandFilter = commandCenterFilter || "";
   const senderFilter = statusToSenderFilter(status);
 
-  return buildConversations().filter(function(c) {
+  return sortConversationsForWorkflow(buildConversations().filter(function(c) {
     const hay = [
       c.phone,
       c.branch,
@@ -23777,7 +23856,7 @@ function filteredConversations() {
     }
 
     return true;
-  });
+  }));
 }
 function formatConversationDisplayName(c) {
   const messages = c.messages || [];
@@ -23879,6 +23958,49 @@ function selectConversation(key) {
   markConversationRead(c.key);
   renderAll();
   inputBody.focus();
+}
+
+function getNextWorkflowConversation(excludeKey) {
+  const currentView = sortConversationsForWorkflow(filteredConversations()).filter(function(c) {
+    return c.key !== excludeKey && shouldIncludeInNextWorkflow(c);
+  });
+
+  if (currentView.length) return currentView[0];
+
+  return sortConversationsForWorkflow(buildConversations()).filter(function(c) {
+    return c.key !== excludeKey && shouldIncludeInNextWorkflow(c);
+  })[0] || null;
+}
+
+function openNextWorkflowConversation(options) {
+  const opts = options || {};
+  const nextConversation = getNextWorkflowConversation(opts.excludeKey || selectedConversationKey || "");
+
+  if (!nextConversation) {
+    resultBox.textContent = "No active customer waiting right now.";
+    renderAll();
+    return false;
+  }
+
+  selectedConversationKey = nextConversation.key;
+  selectedPhone = nextConversation.phone;
+  selectedPhoneNumberId = nextConversation.phoneNumberId || "";
+  inputTo.value = nextConversation.phone;
+  inputLine.value = nextConversation.phoneNumberId || "";
+  markConversationRead(nextConversation.key);
+  resultBox.textContent = "Opened next customer: " + formatConversationDisplayName(nextConversation);
+  renderAll();
+  inputBody.focus();
+  return true;
+}
+
+async function closeCurrentAndOpenNext() {
+  if (!selectedConversationKey) {
+    resultBox.textContent = "Select a customer first.";
+    return false;
+  }
+
+  await updateStatus("Closed", { selectNextAfterUpdate: true });
 }
 
 function renderChat() {
@@ -24290,7 +24412,8 @@ async function sendVoice() {
   }
 }
 
-async function updateStatus(status) {
+async function updateStatus(status, options) {
+  const updateOptions = options || {};
   const phone = inputTo.value.trim() || selectedPhone;
   if (!phone) {
     resultBox.textContent = "Select a customer first.";
@@ -24318,12 +24441,20 @@ async function updateStatus(status) {
       }
       if (conversationStatusSelect) conversationStatusSelect.value = status;
       resultBox.textContent = "Status updated: " + status;
-      loadMessages({ forceRender: true, reason: "action" });
+      if (updateOptions.selectNextAfterUpdate) {
+        openNextWorkflowConversation({ excludeKey: key });
+        loadMessages({ forceRender: true, reason: "action" });
+      } else {
+        loadMessages({ forceRender: true, reason: "action" });
+      }
+      return true;
     } else {
       resultBox.textContent = "Failed: " + (data.error || "Unknown error");
+      return false;
     }
   } catch (error) {
     resultBox.textContent = "Failed: status update error.";
+    return false;
   }
 }
 
@@ -24392,6 +24523,18 @@ document.getElementById("markReadBtn").addEventListener("click", function() {
   resultBox.textContent = "Marked as read.";
   renderAll();
 });
+
+const nextCustomerBtn = document.getElementById("nextCustomerBtn");
+if (nextCustomerBtn) {
+  nextCustomerBtn.addEventListener("click", function() {
+    openNextWorkflowConversation();
+  });
+}
+
+const closeNextBtn = document.getElementById("closeNextBtn");
+if (closeNextBtn) {
+  closeNextBtn.addEventListener("click", closeCurrentAndOpenNext);
+}
 
 function insertQuickReply(text) {
   inputBody.value = text || "";
@@ -24468,13 +24611,13 @@ if (conversationStatusSelect) {
 if (assigneeSelect) {
   assigneeSelect.addEventListener("change", async function() {
     if (!selectedConversationKey) return;
+    const currentConversation = getCurrentConversationForState();
     const value = normalizeAssigneeValue(assigneeSelect.value, currentConversation?.branch || "");
     setAssignee(selectedConversationKey, value);
     if (assigneeDisplay) {
       assigneeDisplay.className = "assignee-chip " + assigneeClass(value);
       assigneeDisplay.textContent = "Assigned: " + value;
     }
-    const currentConversation = getCurrentConversationForState();
     if (currentConversation) {
       currentConversation.assignee = value;
       await saveConversationStateToGoogleSheet(currentConversation);
