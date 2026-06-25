@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-64-archive-hidden-conversations";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-65-all-chronological-sort";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -23712,6 +23712,35 @@ function sortConversationsForWorkflow(conversations) {
   return (conversations || []).slice().sort(compareConversationsByWorkflowPriority);
 }
 
+// V31.5.8.60.3.9.65 - All view chronological safety:
+// The conversation list must feel predictable. "All" and normal status/branch filters
+// should follow latest activity date from newest to oldest. Workflow priority sorting is
+// kept only for the Needs Action command view and Next/Close & Next helpers.
+function compareConversationsByLatestActivity(a, b) {
+  const timeDelta = getMessageTimeValue(b?.latest || {}) - getMessageTimeValue(a?.latest || {});
+  if (timeDelta !== 0) return timeDelta;
+
+  const unreadDelta = getUnreadCustomerMessageCount(b) - getUnreadCustomerMessageCount(a);
+  if (unreadDelta !== 0) return unreadDelta;
+
+  return (formatConversationDisplayName(a) || "").localeCompare(formatConversationDisplayName(b) || "");
+}
+
+function sortConversationsByLatestActivity(conversations) {
+  return (conversations || []).slice().sort(compareConversationsByLatestActivity);
+}
+
+function sortConversationsForCurrentView(conversations) {
+  // Only the command-center "Needs Action" view gets priority sorting.
+  // All / Dubai / Abu Dhabi / Customer / Bot / Human / Follow-up / Talk to Team
+  // remain chronological so dates follow each other visually.
+  if (commandCenterFilter === "needs-action") {
+    return sortConversationsForWorkflow(conversations);
+  }
+
+  return sortConversationsByLatestActivity(conversations);
+}
+
 function shouldIncludeInNextWorkflow(conversation) {
   if (!conversation || isClosedOrArchivedConversation(conversation)) return false;
   return isNeedsActionConversation(conversation) ||
@@ -23965,7 +23994,7 @@ function filteredConversations() {
   const activeCommandFilter = commandCenterFilter || "";
   const senderFilter = statusToSenderFilter(status);
 
-  return sortConversationsForWorkflow(buildConversations().filter(function(c) {
+  return sortConversationsForCurrentView(buildConversations().filter(function(c) {
     const hay = [
       c.phone,
       c.branch,
