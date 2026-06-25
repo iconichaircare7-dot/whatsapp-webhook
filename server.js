@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-58-compact-active-filters";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-59-smooth-smart-refresh";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -21999,7 +21999,7 @@ referenceBranchTabs.forEach(function(btn) {
 
 if (refreshListBtn) {
   refreshListBtn.addEventListener("click", function() {
-    loadMessages();
+    loadMessages({ forceRender: true, reason: "manual" });
   });
 }
 
@@ -22499,7 +22499,7 @@ async function updateSelectedBookingStatus(status) {
 
     if (bookingRequestResult) bookingRequestResult.textContent = "Saved: " + bookingStatusLabel(result.status || status);
     updateBookingRequestCard(c);
-    loadMessages();
+    loadMessages({ forceRender: true, reason: "action" });
   } catch (error) {
     if (bookingRequestResult) bookingRequestResult.textContent = "Failed: appointment update error."; 
   } finally {
@@ -22563,7 +22563,7 @@ async function sendSelectedBookingUpdateToCustomer() {
     }
 
     if (bookingRequestResult) bookingRequestResult.textContent = "Customer update sent successfully."; 
-    loadMessages();
+    loadMessages({ forceRender: true, reason: "action" });
   } catch (error) {
     if (bookingRequestResult) bookingRequestResult.textContent = "Failed: customer update send error."; 
   } finally {
@@ -23973,6 +23973,59 @@ function renderAll() {
   renderChat();
 }
 
+function buildBrowserInboxRenderSignature(messages, conversationStates, bookingRequests) {
+  // V31.5.8.60.3.9.59:
+  // Prevent the visible chat window from being rebuilt every auto-refresh cycle.
+  // The previous 5-second full render caused a visual shake/flicker even when
+  // the data did not actually change. This signature is intentionally based on
+  // lightweight, user-visible fields only.
+  const messagePart = (messages || []).slice(0, 800).map(function(message) {
+    return [
+      message.phone || "",
+      message.phoneNumberId || "",
+      message.time || "",
+      message.sender || "",
+      message.status || "",
+      message.messageType || "",
+      (message.body || "").toString().slice(0, 120)
+    ].join("~");
+  }).join("||");
+
+  const statePart = (conversationStates || []).map(function(state) {
+    return [
+      state.phone || "",
+      state.phoneNumberId || "",
+      state.conversation_status || "",
+      state.assigned_to || "",
+      state.tags || "",
+      state.last_updated_at || ""
+    ].join("~");
+  }).join("||");
+
+  const bookingPart = (bookingRequests || []).map(function(booking) {
+    return [
+      booking.rowNumber || "",
+      booking.phone || "",
+      booking.phoneNumberId || "",
+      booking.status || "",
+      booking.notes || "",
+      booking.lastUpdated || ""
+    ].join("~");
+  }).join("||");
+
+  return [
+    (messages || []).length,
+    (conversationStates || []).length,
+    (bookingRequests || []).length,
+    messagePart,
+    statePart,
+    bookingPart
+  ].join("::");
+}
+
+let lastBrowserInboxRenderSignature = "";
+let lastBrowserRenderedAt = 0;
+
 function browserMessageMergeKey(message) {
   return [
     message.phone || "",
@@ -24004,10 +24057,14 @@ function mergeBrowserMessages(primaryMessages, fallbackMessages) {
 
 let messagesLoadInFlight = false;
 let messagesReloadQueued = false;
+let messagesReloadQueuedOptions = null;
 
-async function loadMessages() {
+async function loadMessages(options) {
+  const loadOptions = options || {};
+
   if (messagesLoadInFlight) {
     messagesReloadQueued = true;
+    messagesReloadQueuedOptions = Object.assign({}, messagesReloadQueuedOptions || {}, loadOptions);
     return;
   }
 
@@ -24017,6 +24074,8 @@ async function loadMessages() {
     const res = await fetch("/api/messages", { cache: "no-store" });
     const data = await res.json();
     const nextMessages = data.messages || [];
+    const nextConversationStates = data.conversationStates || [];
+    const nextBookingRequests = data.bookingRequests || allBookingRequests || [];
     const nextMessageCount = nextMessages.length;
     const currentMessageCount = (allMessages || []).length;
 
@@ -24026,11 +24085,22 @@ async function loadMessages() {
       ? mergeBrowserMessages(nextMessages, allMessages)
       : nextMessages;
 
+    const nextRenderSignature = buildBrowserInboxRenderSignature(safeMessages, nextConversationStates, nextBookingRequests);
+    const shouldRender = Boolean(loadOptions.forceRender) || nextRenderSignature !== lastBrowserInboxRenderSignature;
+
     processLiveInboxNotifications(safeMessages);
     allMessages = safeMessages;
-    allBookingRequests = data.bookingRequests || allBookingRequests || [];
-    applyConversationStates(data.conversationStates || []);
-    renderAll();
+    allBookingRequests = nextBookingRequests;
+    applyConversationStates(nextConversationStates);
+
+    if (shouldRender) {
+      lastBrowserInboxRenderSignature = nextRenderSignature;
+      lastBrowserRenderedAt = Date.now();
+      renderAll();
+    } else {
+      // Keep live counters/title fresh without rebuilding the open chat DOM.
+      updateLiveNotificationUi();
+    }
   } catch (error) {
     console.log("Failed to load messages:", error);
     // Do not clear the visible conversation list on temporary network/API delay.
@@ -24038,8 +24108,10 @@ async function loadMessages() {
     messagesLoadInFlight = false;
 
     if (messagesReloadQueued) {
+      const queuedOptions = messagesReloadQueuedOptions || {};
       messagesReloadQueued = false;
-      setTimeout(loadMessages, 250);
+      messagesReloadQueuedOptions = null;
+      setTimeout(function() { loadMessages(queuedOptions); }, 250);
     }
   }
 }
@@ -24071,10 +24143,10 @@ async function sendReply() {
       selectedPhone = to;
       selectedConversationKey = selectedConversationKey || conversationKey(to, phoneNumberId, "");
       markConversationRead(selectedConversationKey);
-      loadMessages();
+      loadMessages({ forceRender: true, reason: "action" });
     } else {
       resultBox.textContent = data.error || "فشل الإرسال / لم تصل للعميل.";
-      loadMessages();
+      loadMessages({ forceRender: true, reason: "action" });
     }
   } catch (error) {
     resultBox.textContent = "Failed: network or server error.";
@@ -24145,7 +24217,7 @@ async function sendImage() {
       selectedPhone = to;
       selectedConversationKey = selectedConversationKey || conversationKey(to, phoneNumberId, "");
       markConversationRead(selectedConversationKey);
-      loadMessages();
+      loadMessages({ forceRender: true, reason: "action" });
     } else {
       resultBox.textContent = "Failed: " + (data.error || "Image send failed");
     }
@@ -24209,7 +24281,7 @@ async function sendVoice() {
       selectedPhone = to;
       selectedConversationKey = selectedConversationKey || conversationKey(to, phoneNumberId, "");
       markConversationRead(selectedConversationKey);
-      loadMessages();
+      loadMessages({ forceRender: true, reason: "action" });
     } else {
       resultBox.textContent = "Failed: " + (data.error || "Voice send failed");
     }
@@ -24246,7 +24318,7 @@ async function updateStatus(status) {
       }
       if (conversationStatusSelect) conversationStatusSelect.value = status;
       resultBox.textContent = "Status updated: " + status;
-      loadMessages();
+      loadMessages({ forceRender: true, reason: "action" });
     } else {
       resultBox.textContent = "Failed: " + (data.error || "Unknown error");
     }
@@ -24645,8 +24717,11 @@ ensureBookingActionsVisible();
 
 updateLiveNotificationUi();
 
-loadMessages();
-setInterval(loadMessages, 5000);
+loadMessages({ forceRender: true, reason: "initial" });
+setInterval(function() {
+  if (document.visibilityState === "hidden") return;
+  loadMessages({ reason: "auto" });
+}, 8000);
 </script>
 </body>
 </html>`);
