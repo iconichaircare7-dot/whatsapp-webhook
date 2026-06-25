@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-71-safe-static-quick-replies";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-72-archive-only-notification-reset";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -9421,26 +9421,52 @@ function getArchivedConversationKeySet(conversationStates = []) {
   return archivedKeys;
 }
 
-function filterArchivedInboxPayload(messages = [], conversationStates = [], bookingRequests = [], includeArchived = false) {
-  if (includeArchived) {
+function filterArchivedInboxPayload(messages = [], conversationStates = [], bookingRequests = [], includeArchived = false, archiveOnly = false) {
+  const archivedKeys = getArchivedConversationKeySet(conversationStates);
+
+  if (!archivedKeys.size) {
     return {
-      messages,
-      conversationStates,
-      bookingRequests,
-      archivedConversationCount: getArchivedConversationKeySet(conversationStates).size,
+      messages: archiveOnly ? [] : messages,
+      conversationStates: archiveOnly ? [] : conversationStates,
+      bookingRequests: archiveOnly ? [] : bookingRequests,
+      archivedConversationCount: 0,
       hiddenMessagesCount: 0,
       hiddenBookingRequestsCount: 0
     };
   }
 
-  const archivedKeys = getArchivedConversationKeySet(conversationStates);
+  if (archiveOnly) {
+    const archivedMessages = (messages || []).filter((message) => {
+      const key = buildInboxArchiveConversationKey(message?.phone || "", normalizePhoneNumberId(message?.phoneNumberId || ""), message?.branch || "");
+      return archivedKeys.has(key);
+    });
 
-  if (!archivedKeys.size) {
+    const archivedConversationStates = (conversationStates || []).filter((state) => {
+      const key = buildInboxArchiveConversationKey(state?.phone || "", normalizePhoneNumberId(state?.phoneNumberId || ""), state?.branch || "");
+      return archivedKeys.has(key);
+    });
+
+    const archivedBookingRequests = (bookingRequests || []).filter((booking) => {
+      const key = buildInboxArchiveConversationKey(booking?.phone || "", normalizePhoneNumberId(booking?.phoneNumberId || ""), booking?.branch || "");
+      return archivedKeys.has(key);
+    });
+
+    return {
+      messages: archivedMessages,
+      conversationStates: archivedConversationStates,
+      bookingRequests: archivedBookingRequests,
+      archivedConversationCount: archivedKeys.size,
+      hiddenMessagesCount: Math.max(0, (messages || []).length - archivedMessages.length),
+      hiddenBookingRequestsCount: Math.max(0, (bookingRequests || []).length - archivedBookingRequests.length)
+    };
+  }
+
+  if (includeArchived) {
     return {
       messages,
       conversationStates,
       bookingRequests,
-      archivedConversationCount: 0,
+      archivedConversationCount: archivedKeys.size,
       hiddenMessagesCount: 0,
       hiddenBookingRequestsCount: 0
     };
@@ -9484,11 +9510,15 @@ function filterArchivedInboxPayload(messages = [], conversationStates = [], book
   const includeArchived = ["1", "true", "yes", "on"].includes(
     (req.query?.includeArchived || "").toString().trim().toLowerCase()
   );
+  const archiveOnly = ["1", "true", "yes", "on"].includes(
+    (req.query?.archiveOnly || "").toString().trim().toLowerCase()
+  );
   const archiveFilteredPayload = filterArchivedInboxPayload(
     mergedMessages,
     conversationStates,
     bookingRequests,
-    includeArchived
+    includeArchived,
+    archiveOnly
   );
   const source = sheetMessages.length > 0 && memoryMessages.length > 0
     ? "google_sheet_plus_memory"
@@ -9511,6 +9541,7 @@ function filterArchivedInboxPayload(messages = [], conversationStates = [], book
       bookingRequestsCount: archiveFilteredPayload.bookingRequests.length,
       unfilteredBookingRequestsCount: bookingRequests.length,
       includeArchived,
+      archiveOnly,
       archivedConversationCount: archiveFilteredPayload.archivedConversationCount,
       hiddenMessagesCount: archiveFilteredPayload.hiddenMessagesCount,
       hiddenBookingRequestsCount: archiveFilteredPayload.hiddenBookingRequestsCount
@@ -22629,6 +22660,11 @@ if (toggleArchivedBtn) {
     showArchivedConversations = !showArchivedConversations;
     localStorage.setItem("iconic_show_archived_conversations", showArchivedConversations ? "yes" : "no");
     syncArchivedToggleButton();
+    if (resultBox) {
+      resultBox.textContent = showArchivedConversations
+        ? "Archive view: showing archived conversations only. Select a conversation and press Restore if needed."
+        : "Active inbox: showing non-archived conversations.";
+    }
     selectedConversationKey = "";
     selectedPhone = "";
     selectedPhoneNumberId = "";
@@ -23741,6 +23777,16 @@ function getLiveToastStack() {
   return stack;
 }
 
+function clearLiveNotificationToasts() {
+  const stack = document.getElementById("liveToastStack");
+  if (stack) stack.innerHTML = "";
+}
+
+function resetVisibleLiveNotifications() {
+  resetLiveAlertCounter();
+  clearLiveNotificationToasts();
+}
+
 function getMessageConversationKey(message) {
   return conversationKey(message.phone || "unknown", message.phoneNumberId || "", message.branch || "");
 }
@@ -24533,7 +24579,7 @@ function renderConversationList() {
   const conversations = filteredConversations();
 
   if (!conversations.length) {
-    conversationList.innerHTML = '<div class="empty">No conversations yet.</div>';
+    conversationList.innerHTML = '<div class="empty">' + (showArchivedConversations ? 'No archived conversations.' : 'No conversations yet.') + '</div>';
     selectedPhone = "";
     selectedConversationKey = "";
     renderChat();
@@ -24872,7 +24918,7 @@ async function loadMessages(options) {
   messagesLoadInFlight = true;
 
   try {
-    const messagesUrl = "/api/messages" + (showArchivedConversations ? "?includeArchived=1" : "");
+    const messagesUrl = "/api/messages" + (showArchivedConversations ? "?archiveOnly=1" : "");
     const res = await fetch(messagesUrl, { cache: "no-store" });
     const data = await res.json();
     const nextMessages = data.messages || [];
@@ -25381,19 +25427,19 @@ if (liveNotificationBtn) {
         phoneNumberId: ""
       }, 1);
     } else {
-      resetLiveAlertCounter();
+      resetVisibleLiveNotifications();
       updateLiveNotificationUi();
     }
   });
 }
 
 window.addEventListener("focus", function() {
-  resetLiveAlertCounter();
+  resetVisibleLiveNotifications();
 });
 
 document.addEventListener("visibilitychange", function() {
   if (document.visibilityState === "visible") {
-    resetLiveAlertCounter();
+    resetVisibleLiveNotifications();
   }
 });
 
