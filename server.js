@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-72-archive-only-notification-reset";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-73-archive-notification-cleanup";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -22660,6 +22660,7 @@ if (toggleArchivedBtn) {
     showArchivedConversations = !showArchivedConversations;
     localStorage.setItem("iconic_show_archived_conversations", showArchivedConversations ? "yes" : "no");
     syncArchivedToggleButton();
+    resetVisibleLiveNotifications();
     if (resultBox) {
       resultBox.textContent = showArchivedConversations
         ? "Archive view: showing archived conversations only. Select a conversation and press Restore if needed."
@@ -23597,6 +23598,7 @@ function buildConversations() {
 
 function getUnreadCustomerMessageCount(c) {
   if (!c || !Array.isArray(c.messages)) return 0;
+  if (typeof isClosedOrArchivedConversation === "function" && isClosedOrArchivedConversation(c)) return 0;
 
   const readMarker = readMap[c.key] || "";
   let count = 0;
@@ -23679,10 +23681,24 @@ function isOperationalReminderConsentMessage(message) {
     body.includes("اوافق / yes");
 }
 
+function isArchivedStatusTextClient(status) {
+  const value = (status || "").toString().trim().toLowerCase();
+  return value === "archived" || value === "hidden" || value === "hide" || value === "deleted";
+}
+
+function isLiveNotificationArchivedMessage(message) {
+  if (!message) return false;
+  const key = getMessageConversationKey(message);
+  const state = conversationStateMap[key] || {};
+  const overrideStatus = statusOverrideMap[key] || "";
+  return isArchivedStatusTextClient(state.status || "") || isArchivedStatusTextClient(overrideStatus || "");
+}
+
 function shouldIncludeInLiveCustomerNotifications(message) {
   if (!message || message.sender !== "customer") return false;
   if (isInternalNotificationPhone(message.phone)) return false;
   if (isOperationalReminderConsentMessage(message)) return false;
+  if (isLiveNotificationArchivedMessage(message)) return false;
   return true;
 }
 
@@ -24715,6 +24731,8 @@ async function archiveOrRestoreCurrentConversation() {
   const ok = window.confirm("Archive this conversation from the active inbox? You can show archived conversations again from the Archive button.");
   if (!ok) return false;
 
+  markConversationRead(selectedConversationKey);
+  resetVisibleLiveNotifications();
   await updateStatus("Archived", { selectNextAfterUpdate: true });
   return true;
 }
@@ -24928,10 +24946,15 @@ async function loadMessages(options) {
     const currentMessageCount = (allMessages || []).length;
 
     // History guard: never replace a visible working inbox with an empty/partial response.
-    const shouldPreserveBrowserHistory = currentMessageCount > 0 && nextMessageCount < currentMessageCount;
+    // Archive view intentionally returns fewer rows, so it must not merge back active inbox messages.
+    const shouldPreserveBrowserHistory = !showArchivedConversations && currentMessageCount > 0 && nextMessageCount < currentMessageCount;
     const safeMessages = shouldPreserveBrowserHistory
       ? mergeBrowserMessages(nextMessages, allMessages)
       : nextMessages;
+
+    // Apply states before live notification processing so archived conversations never
+    // contribute to unread/live alert counters.
+    applyConversationStates(nextConversationStates);
 
     const nextRenderSignature = buildBrowserInboxRenderSignature(safeMessages, nextConversationStates, nextBookingRequests);
     const shouldRender = Boolean(loadOptions.forceRender) || nextRenderSignature !== lastBrowserInboxRenderSignature;
@@ -24939,7 +24962,6 @@ async function loadMessages(options) {
     processLiveInboxNotifications(safeMessages);
     allMessages = safeMessages;
     allBookingRequests = nextBookingRequests;
-    applyConversationStates(nextConversationStates);
 
     if (shouldRender) {
       lastBrowserInboxRenderSignature = nextRenderSignature;
@@ -25166,6 +25188,10 @@ async function updateStatus(status, options) {
         await saveConversationStateToGoogleSheet(currentConversation);
       }
       if (conversationStatusSelect) conversationStatusSelect.value = status;
+      if (isArchivedStatusTextClient(status) || (status || "").toString().trim().toLowerCase() === "closed") {
+        markConversationRead(key);
+        resetVisibleLiveNotifications();
+      }
       resultBox.textContent = "Status updated: " + status;
       if (updateOptions.selectNextAfterUpdate) {
         openNextWorkflowConversation({ excludeKey: key });
