@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-61-visual-polish";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-62-restore-chat-background";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -21858,6 +21858,51 @@ body::before {
     animation: none !important;
     scroll-behavior: auto !important;
   }
+}
+
+
+
+/* =========================================================
+   V31.5.8.60.3.9.62 - Restore Chat Background Image
+   Scope: CSS/UI only.
+   Reason: v31.5.8.60.3.9.61 visual polish used a final background shorthand
+   on #chatBody/.chat-body that covered the Iconic conversation background logo.
+   This restores the chat-window background image while preserving the softer
+   polished look. No history, refresh, send, webhook, sheet, or API logic touched.
+   ========================================================= */
+#chatBody.chat-body,
+#chatBody,
+.chat-body {
+  --iconic-chat-bg-logo-v3962: url("/assets/iconic-chat-background-logo.png") !important;
+  background-image:
+    linear-gradient(rgba(247,252,244,.72), rgba(247,252,244,.72)),
+    var(--iconic-chat-bg-logo-v3962),
+    radial-gradient(circle at 14% 8%, rgba(37,211,102,.08), transparent 26%),
+    radial-gradient(circle at 90% 82%, rgba(18,140,126,.06), transparent 28%) !important;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat !important;
+  background-position: center center, center center, center center, center center !important;
+  background-size: 100% 100%, min(980px, 88%) auto, 100% 100%, 100% 100% !important;
+  background-attachment: scroll, scroll, scroll, scroll !important;
+  background-color: #f7fcf4 !important;
+}
+
+#chatBody .chat-watermark,
+.chat-body .chat-watermark,
+.chat-watermark {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+#chatBody .bubble-row,
+.chat-body .bubble-row,
+#chatBody .bubble,
+.chat-body .bubble,
+#chatBody .empty,
+.chat-body .empty {
+  position: relative !important;
+  z-index: 2 !important;
 }
 
 </style>
