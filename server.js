@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-66-archive-button-visual-toggle";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-67-whatsapp-style-composer";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -21489,7 +21489,398 @@ app.get("/inbox", protectInbox, (req, res) => {
   box-shadow: 0 0 0 3px rgba(249, 115, 22, .16) !important;
 }
 
-    </style>
+    
+
+/* V31.5.8.60.3.9.67 - WhatsApp-style reply composer micro-polish
+   Scope: reply composer only.
+   Preserves existing Reply/Note, responding line selector, image send, voice send, quick replies, send logic, history, refresh, chat background, and inbox layout. */
+.chat-panel .premium-composer {
+  border: 1px solid #cfd8e3 !important;
+  border-radius: 13px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  overflow: hidden !important;
+}
+
+.chat-panel .premium-composer::before {
+  content: none !important;
+  display: none !important;
+}
+
+.chat-panel .premium-composer .composer-topbar {
+  min-height: 30px !important;
+  height: 30px !important;
+  padding: 6px 13px 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  background: #ffffff !important;
+  border: 0 !important;
+}
+
+.chat-panel .premium-composer .composer-tabs {
+  height: 24px !important;
+  min-height: 24px !important;
+  padding: 2px !important;
+  gap: 3px !important;
+  border: 1px solid rgba(203,213,225,.75) !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.chat-panel .premium-composer .composer-tab {
+  height: 20px !important;
+  min-height: 20px !important;
+  padding: 0 10px !important;
+  border-radius: 999px !important;
+  color: #64748b !important;
+  background: transparent !important;
+  font-size: 10px !important;
+  font-weight: 850 !important;
+  cursor: pointer !important;
+  box-shadow: none !important;
+}
+
+.chat-panel .premium-composer .composer-tab.active {
+  color: #ffffff !important;
+  background: #16a34a !important;
+  box-shadow: none !important;
+}
+
+.chat-panel .premium-composer .composer-reply-source {
+  height: 24px !important;
+  min-height: 24px !important;
+  max-width: 55% !important;
+  padding: 0 8px !important;
+  border: 1px solid rgba(203,213,225,.75) !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.chat-panel .premium-composer .composer-reply-source label {
+  color: #64748b !important;
+  font-size: 9px !important;
+  font-weight: 850 !important;
+  letter-spacing: .18px !important;
+  text-transform: uppercase !important;
+}
+
+.chat-panel .premium-composer .composer-reply-source select {
+  min-width: 180px !important;
+  max-width: 275px !important;
+  height: 22px !important;
+  color: #1f2937 !important;
+  font-size: 10px !important;
+  font-weight: 850 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
+.chat-panel .premium-composer .composer-pane-reply {
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns: 1fr auto !important;
+  grid-template-rows: minmax(44px, auto) 32px !important;
+  column-gap: 8px !important;
+  row-gap: 0 !important;
+  padding: 4px 12px 10px 54px !important;
+  background: #ffffff !important;
+}
+
+.chat-panel .premium-composer .composer-pane-reply::before {
+  content: "🎧" !important;
+  position: absolute !important;
+  left: 17px !important;
+  top: 20px !important;
+  width: 24px !important;
+  height: 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #c4cad3 !important;
+  filter: grayscale(1) saturate(0) opacity(.58) !important;
+  font-size: 24px !important;
+  line-height: 1 !important;
+  pointer-events: none !important;
+}
+
+.chat-panel .premium-composer textarea#body {
+  grid-column: 1 / 3 !important;
+  grid-row: 1 !important;
+  width: 100% !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  max-height: 88px !important;
+  margin: 0 !important;
+  padding: 10px 2px 6px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #223143 !important;
+  font-size: 14px !important;
+  font-weight: 520 !important;
+  line-height: 1.45 !important;
+  resize: vertical !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.chat-panel .premium-composer textarea#body::placeholder {
+  color: #334155 !important;
+  opacity: .92 !important;
+  font-weight: 520 !important;
+}
+
+.chat-panel .premium-composer textarea#body:focus {
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.chat-panel .premium-composer .composer-bottom-row {
+  grid-column: 1 / 3 !important;
+  grid-row: 2 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  min-height: 32px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.chat-panel .premium-composer .composer-media-actions {
+  order: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 12px !important;
+  width: auto !important;
+  min-height: 30px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.chat-panel .premium-composer .media-control {
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  min-height: 28px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.chat-panel .premium-composer .media-pick-btn,
+.chat-panel .premium-composer .media-send-btn,
+.chat-panel .premium-composer .composer-icon-btn {
+  width: 26px !important;
+  min-width: 26px !important;
+  height: 26px !important;
+  min-height: 26px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: #263746 !important;
+  box-shadow: none !important;
+  transform: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  font-size: 0 !important;
+  line-height: 1 !important;
+}
+
+.chat-panel .premium-composer .media-pick-btn:hover,
+.chat-panel .premium-composer .media-send-btn:hover,
+.chat-panel .premium-composer .composer-icon-btn:hover {
+  background: #f1f5f9 !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.chat-panel .premium-composer .media-text,
+.chat-panel .premium-composer .media-send-btn {
+  text-indent: -999px !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+}
+
+.chat-panel .premium-composer .media-icon {
+  width: auto !important;
+  height: auto !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #263746 !important;
+  filter: grayscale(1) saturate(0) !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+  text-indent: 0 !important;
+}
+
+.chat-panel .premium-composer .composer-image-picker .media-icon {
+  font-size: 0 !important;
+}
+
+.chat-panel .premium-composer .composer-image-picker .media-icon::before {
+  content: "📎" !important;
+  font-size: 19px !important;
+}
+
+.chat-panel .premium-composer .composer-voice-picker .media-icon {
+  font-size: 0 !important;
+}
+
+.chat-panel .premium-composer .composer-voice-picker .media-icon::before {
+  content: "🎙" !important;
+  font-size: 18px !important;
+}
+
+.chat-panel .premium-composer .send-image-btn::before {
+  content: "▣" !important;
+  font-size: 18px !important;
+  text-indent: 0 !important;
+  color: #263746 !important;
+}
+
+.chat-panel .premium-composer .send-voice-btn::before {
+  content: "✓" !important;
+  font-size: 18px !important;
+  text-indent: 0 !important;
+  color: #263746 !important;
+}
+
+.chat-panel .premium-composer .composer-image-picker.has-selected-image,
+.chat-panel .premium-composer .composer-voice-picker.has-selected-voice {
+  background: #dcfce7 !important;
+  color: #166534 !important;
+  outline: 2px solid rgba(34,197,94,.22) !important;
+}
+
+.chat-panel .premium-composer .composer-actions {
+  order: 2 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-width: auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.chat-panel .premium-composer .send-btn {
+  width: 32px !important;
+  min-width: 32px !important;
+  max-width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  border-radius: 999px !important;
+  background: #16a34a !important;
+  color: #ffffff !important;
+  border: 0 !important;
+  box-shadow: 0 8px 16px rgba(22,163,74,.22) !important;
+  font-size: 0 !important;
+}
+
+.chat-panel .premium-composer .send-btn::before {
+  content: "➤" !important;
+  color: #ffffff !important;
+  font-size: 17px !important;
+  transform: translateX(1px) !important;
+}
+
+.chat-panel .premium-composer .result,
+.chat-panel .premium-composer .media-hint,
+.chat-panel .premium-composer #imageCaption,
+.chat-panel .premium-composer .composer-media-actions::before,
+.chat-panel .premium-composer .composer-media-actions::after,
+.chat-panel .premium-composer .media-box::before,
+.chat-panel .premium-composer .media-box::after {
+  display: none !important;
+  content: none !important;
+}
+
+.chat-panel .premium-composer #imageFile,
+.chat-panel .premium-composer #audioFile,
+.chat-panel .premium-composer .voice-file-input,
+.chat-panel .premium-composer input[type="file"] {
+  position: absolute !important;
+  left: -99999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+.chat-panel .premium-composer .composer-mini-actions {
+  display: none !important;
+}
+
+.chat-panel .premium-composer .composer-note-wrap {
+  padding: 9px 12px 12px 54px !important;
+  position: relative !important;
+  background: #ffffff !important;
+}
+
+.chat-panel .premium-composer .composer-note-wrap::before {
+  content: "💬" !important;
+  position: absolute !important;
+  left: 17px !important;
+  top: 20px !important;
+  filter: grayscale(1) saturate(0) opacity(.58) !important;
+  font-size: 22px !important;
+}
+
+.chat-panel .premium-composer .composer-note-wrap textarea {
+  width: 100% !important;
+  min-height: 76px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 980px) {
+  .chat-panel .premium-composer .composer-topbar {
+    height: auto !important;
+    min-height: 52px !important;
+    align-items: flex-start !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+  }
+  .chat-panel .premium-composer .composer-reply-source {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  .chat-panel .premium-composer .composer-pane-reply {
+    padding-left: 46px !important;
+  }
+  .chat-panel .premium-composer .composer-media-actions {
+    gap: 7px !important;
+  }
+}
+
+</style>
 </head>
 <body>
   <div class="workspace-shell">
@@ -21764,7 +22155,7 @@ app.get("/inbox", protectInbox, (req, res) => {
 
             <div id="replyComposerPane" class="composer-pane composer-pane-reply">
               <label class="composer-message-label" for="body">Message</label>
-              <textarea id="body" rows="3" placeholder="Type your reply here..."></textarea>
+              <textarea id="body" rows="3" placeholder="Reply on WhatsApp..."></textarea>
 
               <div class="composer-bottom-row">
                 <div class="media-box composer-media-actions">
