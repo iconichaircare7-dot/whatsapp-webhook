@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-65-all-chronological-sort";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-66-archive-button-visual-toggle";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -21440,7 +21440,56 @@ app.get("/inbox", protectInbox, (req, res) => {
     grid-template-columns: 1fr !important;
   }
 }
-</style>
+
+
+/* V31.5.8.60.3.9.66 - Archive button visual toggle micro-polish
+   Scope: footer archive toggle only. Does not touch chat background, cards, history, or layout. */
+#toggleArchivedBtn {
+  width: auto !important;
+  min-width: 76px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 12px !important;
+  border: 1px solid rgba(148, 163, 184, .28) !important;
+  border-radius: 999px !important;
+  background: #f8fafc !important;
+  color: #475569 !important;
+  font-size: 10px !important;
+  font-weight: 950 !important;
+  letter-spacing: .025em !important;
+  text-transform: uppercase !important;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, .06) !important;
+}
+
+#toggleArchivedBtn:hover {
+  background: #eef7e8 !important;
+  border-color: rgba(34, 197, 94, .34) !important;
+  color: #14532d !important;
+}
+
+#toggleArchivedBtn.archived-on {
+  min-width: 96px !important;
+  background: #fff7ed !important;
+  border-color: rgba(249, 115, 22, .45) !important;
+  color: #9a3412 !important;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, .12) !important;
+}
+
+#toggleArchivedBtn.archived-on::before {
+  content: "";
+  width: 7px !important;
+  height: 7px !important;
+  margin-right: 7px !important;
+  border-radius: 999px !important;
+  background: #f97316 !important;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, .16) !important;
+}
+
+    </style>
 </head>
 <body>
   <div class="workspace-shell">
@@ -21623,7 +21672,7 @@ app.get("/inbox", protectInbox, (req, res) => {
         </div>
         <div class="reference-list-footer">
           <span id="conversationFooterText">Showing 0 - 0 of 0</span>
-          <button type="button" id="toggleArchivedBtn" title="Show hidden conversations">Hidden</button>
+          <button type="button" id="toggleArchivedBtn" title="Show archived conversations">Archive</button>
           <button type="button" id="refreshListBtn" title="Refresh conversations">⟳</button>
         </div>
       </aside>
@@ -21658,7 +21707,7 @@ app.get("/inbox", protectInbox, (req, res) => {
             <button type="button" class="mini-btn" id="markReadBtn">Mark read</button>
             <button type="button" class="mini-btn workflow-next-btn" id="nextCustomerBtn" title="Jump to the next active customer">Next Customer</button>
             <button type="button" class="mini-btn workflow-close-next-btn" id="closeNextBtn" title="Close this conversation and open the next active customer">Close & Next</button>
-            <button type="button" class="mini-btn" id="archiveConversationBtn" title="Hide this conversation from the active inbox">Hide</button>
+            <button type="button" class="mini-btn" id="archiveConversationBtn" title="Archive this conversation from the active inbox">Archive</button>
             <div class="chat-tags-menu-wrap">
               <button type="button" class="mini-btn more-btn" id="chatTagsMenuBtn" aria-label="Conversation tags">⋮</button>
               <div class="chat-tags-popover is-hidden" id="chatTagsPopover">
@@ -22169,9 +22218,9 @@ if (refreshListBtn) {
 
 function syncArchivedToggleButton() {
   if (!toggleArchivedBtn) return;
-  toggleArchivedBtn.textContent = showArchivedConversations ? "Hide hidden" : "Hidden";
+  toggleArchivedBtn.textContent = showArchivedConversations ? "Archive View" : "Archive";
   toggleArchivedBtn.classList.toggle("archived-on", Boolean(showArchivedConversations));
-  toggleArchivedBtn.setAttribute("title", showArchivedConversations ? "Hide archived conversations again" : "Show archived/hidden conversations");
+  toggleArchivedBtn.setAttribute("title", showArchivedConversations ? "Back to active inbox" : "Show archived conversations");
 }
 
 if (toggleArchivedBtn) {
@@ -24217,7 +24266,7 @@ async function archiveOrRestoreCurrentConversation() {
     return true;
   }
 
-  const ok = window.confirm("Hide this conversation from the active inbox? You can show hidden conversations again from the Hidden button.");
+  const ok = window.confirm("Archive this conversation from the active inbox? You can show archived conversations again from the Archive button.");
   if (!ok) return false;
 
   await updateStatus("Archived", { selectNextAfterUpdate: true });
@@ -24237,7 +24286,7 @@ function renderChat() {
     }
     if (archiveConversationBtn) {
       archiveConversationBtn.disabled = true;
-      archiveConversationBtn.textContent = "Hide";
+      archiveConversationBtn.textContent = "Archive";
     }
     if (chatTagsMenuBtn) chatTagsMenuBtn.disabled = true;
     closeChatTagsPopover();
@@ -24269,8 +24318,8 @@ function renderChat() {
   }
   if (archiveConversationBtn) {
     archiveConversationBtn.disabled = false;
-    archiveConversationBtn.textContent = isArchivedConversation(c) ? "Restore" : "Hide";
-    archiveConversationBtn.setAttribute("title", isArchivedConversation(c) ? "Restore this conversation to Open" : "Hide this conversation from the active inbox");
+    archiveConversationBtn.textContent = isArchivedConversation(c) ? "Restore" : "Archive";
+    archiveConversationBtn.setAttribute("title", isArchivedConversation(c) ? "Restore this conversation to Open" : "Archive this conversation from the active inbox");
   }
   if (chatTagsMenuBtn) chatTagsMenuBtn.disabled = false;
   if (assigneeSelect) {
