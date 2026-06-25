@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-75-branch-user-access";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-76-branch-ui-scope-cleanup";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -22113,12 +22113,12 @@ app.get("/inbox", protectInbox, (req, res) => {
             <div class="sidebar-section-kicker">Branches</div>
             <div class="sidebar-section-title">Our Branches</div>
           </div>
-          <button class="sidebar-branch-add" type="button" data-sidebar-branch-reset="true" aria-label="Show all branches" title="Show all branches">All</button>
+          <button class="sidebar-branch-add" type="button" data-sidebar-branch-reset="true" data-branch-all-control="true" aria-label="Show all branches" title="Show all branches">All</button>
         </div>
-        <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Dubai">
+        <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Dubai" data-branch-scope-item="Dubai">
           <span class="branch-left"><i class="branch-dot branch-dot-dubai"></i><span><strong>Dubai</strong><small>Main branch</small></span></span><b id="sideDubaiCount">0</b>
         </button>
-        <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Abu Dhabi">
+        <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Abu Dhabi" data-branch-scope-item="Abu Dhabi">
           <span class="branch-left"><i class="branch-dot branch-dot-abu"></i><span><strong>Abu Dhabi</strong><small>Second branch</small></span></span><b id="sideAbuCount">0</b>
         </button>
       </div>
@@ -22194,8 +22194,8 @@ app.get("/inbox", protectInbox, (req, res) => {
           </div>
 
           <div class="reference-branch-tabs" aria-label="Branch filters">
-            <button type="button" class="reference-branch-tab" data-branch="Dubai">Dubai <span id="tabDubaiCount">0</span></button>
-            <button type="button" class="reference-branch-tab" data-branch="Abu Dhabi">Abu Dhabi <span id="tabAbuCount">0</span></button>
+            <button type="button" class="reference-branch-tab" data-branch="Dubai" data-branch-scope-item="Dubai">Dubai <span id="tabDubaiCount">0</span></button>
+            <button type="button" class="reference-branch-tab" data-branch="Abu Dhabi" data-branch-scope-item="Abu Dhabi">Abu Dhabi <span id="tabAbuCount">0</span></button>
           </div>
 
           <div class="needs-action-command-center" id="needsActionCommandCenter" aria-label="Needs Action Command Center">
@@ -22612,6 +22612,33 @@ const customerProfileName = document.getElementById("customerProfileName");
 const customerProfileLocation = document.getElementById("customerProfileLocation");
 const inboxBranchScope = ${JSON.stringify(req.inboxBranchScope || "")};
 const inboxUserName = ${JSON.stringify(req.inboxUser || "")};
+
+function applyBranchScopeUiVisibility() {
+  if (!inboxBranchScope) {
+    document.querySelectorAll("[data-branch-scope-item]").forEach(function(el) {
+      el.style.display = "";
+      el.setAttribute("aria-hidden", "false");
+    });
+    document.querySelectorAll("[data-branch-all-control]").forEach(function(el) {
+      el.style.display = "";
+      el.setAttribute("aria-hidden", "false");
+    });
+    return;
+  }
+
+  document.querySelectorAll("[data-branch-scope-item]").forEach(function(el) {
+    const branchName = el.getAttribute("data-branch-scope-item") || "";
+    const allowed = branchName === inboxBranchScope;
+    el.style.display = allowed ? "" : "none";
+    el.setAttribute("aria-hidden", allowed ? "false" : "true");
+  });
+
+  // Branch-scoped users already see only their own branch, so hide the All branches reset.
+  document.querySelectorAll("[data-branch-all-control]").forEach(function(el) {
+    el.style.display = "none";
+    el.setAttribute("aria-hidden", "true");
+  });
+}
 const customerProfileFirstContact = document.getElementById("customerProfileFirstContact");
 const customerProfileLeadSource = document.getElementById("customerProfileLeadSource");
 const customerProfileLanguage = document.getElementById("customerProfileLanguage");
@@ -24571,6 +24598,7 @@ function updateStats() {
   }, { dubai: 0, abu: 0 });
   if (tabDubaiCount) tabDubaiCount.textContent = conversationBranchCounts.dubai;
   if (tabAbuCount) tabAbuCount.textContent = conversationBranchCounts.abu;
+  applyBranchScopeUiVisibility();
   updateNeedsActionCommandCenter(conversations);
   updateLiveNotificationUi();
 }
@@ -25786,6 +25814,7 @@ function ensureBookingActionsVisible() {
 ensureBookingActionsVisible();
 
 updateLiveNotificationUi();
+applyBranchScopeUiVisibility();
 
 if (inboxBranchScope && branchFilter) {
   branchFilter.value = inboxBranchScope;
