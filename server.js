@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-60-workflow-speed-tools";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-64-archive-hidden-conversations";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -9388,6 +9388,89 @@ async function loadMessagesFromGoogleSheetForMessagesApi() {
   }
 }
 
+
+function normalizeInboxArchiveStatusValue(value = "") {
+  return (value || "").toString().trim().toLowerCase();
+}
+
+function isArchivedInboxConversationStatus(status = "") {
+  const value = normalizeInboxArchiveStatusValue(status);
+  return value === "archived" || value === "hidden" || value === "hide" || value === "deleted";
+}
+
+function buildInboxArchiveConversationKey(phone = "", phoneNumberId = "", branch = "") {
+  return `${(phone || "unknown").toString().trim()}::${(phoneNumberId || branch || "line").toString().trim()}`;
+}
+
+function getArchivedConversationKeySet(conversationStates = []) {
+  const archivedKeys = new Set();
+
+  (conversationStates || []).forEach((state) => {
+    if (!isArchivedInboxConversationStatus(state?.conversation_status || state?.status || "")) {
+      return;
+    }
+
+    const phone = (state?.phone || "").toString().trim();
+    const phoneNumberId = normalizePhoneNumberId(state?.phoneNumberId || "");
+    const branch = (state?.branch || "").toString().trim();
+
+    if (!phone) return;
+    archivedKeys.add(buildInboxArchiveConversationKey(phone, phoneNumberId, branch));
+  });
+
+  return archivedKeys;
+}
+
+function filterArchivedInboxPayload(messages = [], conversationStates = [], bookingRequests = [], includeArchived = false) {
+  if (includeArchived) {
+    return {
+      messages,
+      conversationStates,
+      bookingRequests,
+      archivedConversationCount: getArchivedConversationKeySet(conversationStates).size,
+      hiddenMessagesCount: 0,
+      hiddenBookingRequestsCount: 0
+    };
+  }
+
+  const archivedKeys = getArchivedConversationKeySet(conversationStates);
+
+  if (!archivedKeys.size) {
+    return {
+      messages,
+      conversationStates,
+      bookingRequests,
+      archivedConversationCount: 0,
+      hiddenMessagesCount: 0,
+      hiddenBookingRequestsCount: 0
+    };
+  }
+
+  const visibleMessages = (messages || []).filter((message) => {
+    const key = buildInboxArchiveConversationKey(message?.phone || "", normalizePhoneNumberId(message?.phoneNumberId || ""), message?.branch || "");
+    return !archivedKeys.has(key);
+  });
+
+  const visibleConversationStates = (conversationStates || []).filter((state) => {
+    const key = buildInboxArchiveConversationKey(state?.phone || "", normalizePhoneNumberId(state?.phoneNumberId || ""), state?.branch || "");
+    return !archivedKeys.has(key);
+  });
+
+  const visibleBookingRequests = (bookingRequests || []).filter((booking) => {
+    const key = buildInboxArchiveConversationKey(booking?.phone || "", normalizePhoneNumberId(booking?.phoneNumberId || ""), booking?.branch || "");
+    return !archivedKeys.has(key);
+  });
+
+  return {
+    messages: visibleMessages,
+    conversationStates: visibleConversationStates,
+    bookingRequests: visibleBookingRequests,
+    archivedConversationCount: archivedKeys.size,
+    hiddenMessagesCount: Math.max(0, (messages || []).length - visibleMessages.length),
+    hiddenBookingRequestsCount: Math.max(0, (bookingRequests || []).length - visibleBookingRequests.length)
+  };
+}
+
   app.get("/api/messages", protectInbox, async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
@@ -9398,6 +9481,15 @@ async function loadMessagesFromGoogleSheetForMessagesApi() {
   const conversationStates = sheetData.conversationStates || [];
   const bookingRequests = sheetData.bookingRequests || [];
   const mergedMessages = mergeInboxHistory(sheetMessages, memoryMessages);
+  const includeArchived = ["1", "true", "yes", "on"].includes(
+    (req.query?.includeArchived || "").toString().trim().toLowerCase()
+  );
+  const archiveFilteredPayload = filterArchivedInboxPayload(
+    mergedMessages,
+    conversationStates,
+    bookingRequests,
+    includeArchived
+  );
   const source = sheetMessages.length > 0 && memoryMessages.length > 0
     ? "google_sheet_plus_memory"
     : (sheetMessages.length > 0 ? "google_sheet" : "memory");
@@ -9405,16 +9497,23 @@ async function loadMessagesFromGoogleSheetForMessagesApi() {
   return res.json({
     ok: true,
     source,
-    messages: mergedMessages,
-    conversationStates,
-    bookingRequests,
+    messages: archiveFilteredPayload.messages,
+    conversationStates: archiveFilteredPayload.conversationStates,
+    bookingRequests: archiveFilteredPayload.bookingRequests,
     debug: {
       botVersion: BOT_VERSION,
       sheetMessagesCount: sheetMessages.length,
       memoryMessagesCount: memoryMessages.length,
-      returnedMessagesCount: mergedMessages.length,
-      conversationStatesCount: conversationStates.length,
-      bookingRequestsCount: bookingRequests.length
+      returnedMessagesCount: archiveFilteredPayload.messages.length,
+      unfilteredMessagesCount: mergedMessages.length,
+      conversationStatesCount: archiveFilteredPayload.conversationStates.length,
+      unfilteredConversationStatesCount: conversationStates.length,
+      bookingRequestsCount: archiveFilteredPayload.bookingRequests.length,
+      unfilteredBookingRequestsCount: bookingRequests.length,
+      includeArchived,
+      archivedConversationCount: archiveFilteredPayload.archivedConversationCount,
+      hiddenMessagesCount: archiveFilteredPayload.hiddenMessagesCount,
+      hiddenBookingRequestsCount: archiveFilteredPayload.hiddenBookingRequestsCount
     }
   });
 });
@@ -10205,9 +10304,16 @@ async function getInboxBootstrapDataForServerRender() {
     const sheetData = await loadMessagesFromGoogleSheetForMessagesApi();
     const sheetMessages = sheetData.messages || [];
     const memoryMessages = inboxMessages || [];
-    const messages = mergeInboxHistory(sheetMessages, memoryMessages);
+    const mergedMessages = mergeInboxHistory(sheetMessages, memoryMessages);
     const conversationStates = sheetData.conversationStates || [];
     const bookingRequests = sheetData.bookingRequests || [];
+    const archiveFilteredPayload = filterArchivedInboxPayload(
+      mergedMessages,
+      conversationStates,
+      bookingRequests,
+      false
+    );
+    const messages = archiveFilteredPayload.messages;
     const conversations = buildInboxBootstrapConversations(messages);
 
     return {
@@ -10216,14 +10322,19 @@ async function getInboxBootstrapDataForServerRender() {
         ? "google_sheet_plus_memory"
         : (sheetMessages.length > 0 ? "google_sheet" : "memory"),
       messages,
-      conversationStates,
-      bookingRequests,
+      conversationStates: archiveFilteredPayload.conversationStates,
+      bookingRequests: archiveFilteredPayload.bookingRequests,
       conversations,
       debug: {
         sheetMessagesCount: sheetMessages.length,
         memoryMessagesCount: memoryMessages.length,
         returnedMessagesCount: messages.length,
-        conversationsCount: conversations.length
+        unfilteredMessagesCount: mergedMessages.length,
+        conversationsCount: conversations.length,
+        includeArchived: false,
+        archivedConversationCount: archiveFilteredPayload.archivedConversationCount,
+        hiddenMessagesCount: archiveFilteredPayload.hiddenMessagesCount,
+        hiddenBookingRequestsCount: archiveFilteredPayload.hiddenBookingRequestsCount
       }
     };
   } catch (error) {
@@ -17496,6 +17607,23 @@ app.get("/inbox", protectInbox, (req, res) => {
         color: #14532d !important;
       }
 
+      #toggleArchivedBtn {
+        min-height: 28px !important;
+        border: 0 !important;
+        border-radius: 999px !important;
+        background: #f8fafc !important;
+        color: #64748b !important;
+        cursor: pointer !important;
+        font-size: 10px !important;
+        font-weight: 900 !important;
+        padding: 0 9px !important;
+      }
+
+      #toggleArchivedBtn.archived-on {
+        background: #fff7ed !important;
+        color: #9a3412 !important;
+      }
+
       /* Balanced chat panel */
       .chat-panel {
         display: grid !important;
@@ -21495,6 +21623,7 @@ app.get("/inbox", protectInbox, (req, res) => {
         </div>
         <div class="reference-list-footer">
           <span id="conversationFooterText">Showing 0 - 0 of 0</span>
+          <button type="button" id="toggleArchivedBtn" title="Show hidden conversations">Hidden</button>
           <button type="button" id="refreshListBtn" title="Refresh conversations">⟳</button>
         </div>
       </aside>
@@ -21523,11 +21652,13 @@ app.get("/inbox", protectInbox, (req, res) => {
               <option value="Media Requested">Media Requested</option>
               <option value="Talk to Team">Talk to Team</option>
               <option value="Closed">Closed</option>
+              <option value="Archived">Archived</option>
             </select>
             <button type="button" class="mini-btn" id="copyPhoneBtn">Copy phone</button>
             <button type="button" class="mini-btn" id="markReadBtn">Mark read</button>
             <button type="button" class="mini-btn workflow-next-btn" id="nextCustomerBtn" title="Jump to the next active customer">Next Customer</button>
             <button type="button" class="mini-btn workflow-close-next-btn" id="closeNextBtn" title="Close this conversation and open the next active customer">Close & Next</button>
+            <button type="button" class="mini-btn" id="archiveConversationBtn" title="Hide this conversation from the active inbox">Hide</button>
             <div class="chat-tags-menu-wrap">
               <button type="button" class="mini-btn more-btn" id="chatTagsMenuBtn" aria-label="Conversation tags">⋮</button>
               <div class="chat-tags-popover is-hidden" id="chatTagsPopover">
@@ -21726,6 +21857,7 @@ app.get("/inbox", protectInbox, (req, res) => {
               <option value="Need Follow-up">Need Follow-up</option>
               <option value="Talk to Team">Talk to Team</option>
               <option value="Closed">Closed</option>
+              <option value="Archived">Archived</option>
             </select>
             <span id="assigneeDisplay" class="assignee-chip assignee-unassigned" style="display:none;">Assigned: Unassigned</span>
           </div>
@@ -21741,6 +21873,7 @@ let allBookingRequests = [];
 let selectedPhone = "";
 let selectedPhoneNumberId = "";
 let selectedConversationKey = "";
+let showArchivedConversations = localStorage.getItem("iconic_show_archived_conversations") === "yes";
 let readMap = {};
 
 try {
@@ -21801,6 +21934,7 @@ const chatTitle = document.getElementById("chatTitle");
 const chatMeta = document.getElementById("chatMeta");
 const chatAvatar = document.getElementById("chatAvatar");
 const conversationStatusSelect = document.getElementById("conversationStatusSelect");
+const archiveConversationBtn = document.getElementById("archiveConversationBtn");
 const assigneeSelect = document.getElementById("assigneeSelect");
 const assigneeDisplay = document.getElementById("assigneeDisplay");
 const tagPicker = document.getElementById("tagPicker");
@@ -21921,6 +22055,7 @@ function getCommandCenterButtons() {
   return Array.from(document.querySelectorAll(".needs-action-card[data-command-filter], .dynamic-command-filter[data-command-filter]"));
 }
 const conversationFooterText = document.getElementById("conversationFooterText");
+const toggleArchivedBtn = document.getElementById("toggleArchivedBtn");
 const refreshListBtn = document.getElementById("refreshListBtn");
 const composerTabs = Array.from(document.querySelectorAll(".composer-tab[data-mode]"));
 const replyComposerPane = document.getElementById("replyComposerPane");
@@ -22029,6 +22164,26 @@ referenceBranchTabs.forEach(function(btn) {
 if (refreshListBtn) {
   refreshListBtn.addEventListener("click", function() {
     loadMessages({ forceRender: true, reason: "manual" });
+  });
+}
+
+function syncArchivedToggleButton() {
+  if (!toggleArchivedBtn) return;
+  toggleArchivedBtn.textContent = showArchivedConversations ? "Hide hidden" : "Hidden";
+  toggleArchivedBtn.classList.toggle("archived-on", Boolean(showArchivedConversations));
+  toggleArchivedBtn.setAttribute("title", showArchivedConversations ? "Hide archived conversations again" : "Show archived/hidden conversations");
+}
+
+if (toggleArchivedBtn) {
+  syncArchivedToggleButton();
+  toggleArchivedBtn.addEventListener("click", function() {
+    showArchivedConversations = !showArchivedConversations;
+    localStorage.setItem("iconic_show_archived_conversations", showArchivedConversations ? "yes" : "no");
+    syncArchivedToggleButton();
+    selectedConversationKey = "";
+    selectedPhone = "";
+    selectedPhoneNumberId = "";
+    loadMessages({ forceRender: true, reason: "toggle-archived" });
   });
 }
 
@@ -22688,7 +22843,7 @@ function closeChatTagsPopover() {
 function statusClass(status) {
   const value = (status || "").toString().toLowerCase();
   if (value.includes("wait")) return "status-waiting";
-  if (value.includes("closed")) return "status-closed";
+  if (value.includes("closed") || value.includes("archived") || value.includes("hidden")) return "status-closed";
   if (value.includes("team")) return "status-team";
   if (value.includes("follow")) return "status-follow";
   return "status-open";
@@ -23321,6 +23476,7 @@ function processLiveInboxNotifications(nextMessages) {
 }
 
 const CLOSED_CONVERSATION_STATUS = "Closed";
+const ARCHIVED_CONVERSATION_STATUS = "Archived";
 const STATIC_COMMAND_CENTER_FILTERS = [
   "needs-action",
   "Need Follow-up",
@@ -23351,7 +23507,8 @@ const CLEAN_STATUS_FILTER_GROUPS = [
       "Need Follow-up",
       "Needs Team",
       "Talk to Team",
-      "Closed"
+      "Closed",
+      "Archived"
     ]
   },
   {
@@ -23374,6 +23531,15 @@ const CLEAN_STATUS_FILTER_GROUPS = [
 
 function isClosedConversation(conversation) {
   return (conversation?.status || "").toString().trim().toLowerCase() === "closed";
+}
+
+function isArchivedConversation(conversation) {
+  const value = (conversation?.status || "").toString().trim().toLowerCase();
+  return value === "archived" || value === "hidden" || value === "hide" || value === "deleted";
+}
+
+function isClosedOrArchivedConversation(conversation) {
+  return isClosedConversation(conversation) || isArchivedConversation(conversation);
 }
 
 function getPrimaryStatusValues() {
@@ -23400,6 +23566,7 @@ function isCleanOperationalStatus(status) {
   if (NOISY_OPERATIONAL_STATUS_VALUES.has(value)) return false;
   if (isReplyFilterStatus(value)) return false;
   if (value === CLOSED_CONVERSATION_STATUS) return false;
+  if (value === ARCHIVED_CONVERSATION_STATUS) return false;
   return true;
 }
 
@@ -23414,7 +23581,7 @@ function getDynamicDetectedStatuses(conversations) {
   (conversations || []).forEach(function(conversation) {
     const value = getCurrentConversationStatus(conversation);
     if (!value) return;
-    if (isClosedConversation(conversation)) return;
+    if (isClosedOrArchivedConversation(conversation)) return;
     if (!isCleanOperationalStatus(value)) return;
     if (primaryStatuses.includes(value)) return;
     if (!detected.includes(value)) detected.push(value);
@@ -23517,7 +23684,8 @@ const WORKFLOW_PRIORITY_STATUS_VALUES = [
   "Customer Reply",
   "Human Reply",
   "Bot Reply",
-  "Closed"
+  "Closed",
+  "Archived"
 ];
 
 function getWorkflowPriorityRank(conversation) {
@@ -23525,7 +23693,7 @@ function getWorkflowPriorityRank(conversation) {
   const index = WORKFLOW_PRIORITY_STATUS_VALUES.indexOf(status);
 
   if (index >= 0) return index;
-  if (isClosedConversation(conversation)) return 999;
+  if (isClosedOrArchivedConversation(conversation)) return 999;
   if (isNeedsActionConversation(conversation)) return 20;
   return 500;
 }
@@ -23545,7 +23713,7 @@ function sortConversationsForWorkflow(conversations) {
 }
 
 function shouldIncludeInNextWorkflow(conversation) {
-  if (!conversation || isClosedConversation(conversation)) return false;
+  if (!conversation || isClosedOrArchivedConversation(conversation)) return false;
   return isNeedsActionConversation(conversation) ||
     conversation.replyFilterStatus === "Customer Reply" ||
     getCurrentConversationStatus(conversation) === "Open";
@@ -23827,6 +23995,7 @@ function filteredConversations() {
       ].join(String.fromCharCode(10));
     })).join(" ").toLowerCase();
 
+    if (!showArchivedConversations && isArchivedConversation(c)) return false;
     if (q && !hay.includes(q)) return false;
     if (branch && c.branch !== branch) return false;
 
@@ -23944,6 +24113,7 @@ function renderConversationList() {
   });
 
   updateReferenceFilterUi(conversations.length);
+  syncArchivedToggleButton();
 }
 
 function selectConversation(key) {
@@ -24003,6 +24173,28 @@ async function closeCurrentAndOpenNext() {
   await updateStatus("Closed", { selectNextAfterUpdate: true });
 }
 
+async function archiveOrRestoreCurrentConversation() {
+  if (!selectedConversationKey) {
+    resultBox.textContent = "Select a customer first.";
+    return false;
+  }
+
+  const currentConversation = getCurrentConversationForState();
+  const shouldRestore = isArchivedConversation(currentConversation);
+
+  if (shouldRestore) {
+    await updateStatus("Open", { forceReloadAfterUpdate: true });
+    resultBox.textContent = "Conversation restored to Open.";
+    return true;
+  }
+
+  const ok = window.confirm("Hide this conversation from the active inbox? You can show hidden conversations again from the Hidden button.");
+  if (!ok) return false;
+
+  await updateStatus("Archived", { selectNextAfterUpdate: true });
+  return true;
+}
+
 function renderChat() {
   const c = buildConversations().find(function(item) { return item.key === selectedConversationKey; });
 
@@ -24013,6 +24205,10 @@ function renderChat() {
     if (conversationStatusSelect) {
       conversationStatusSelect.value = "Open";
       conversationStatusSelect.disabled = true;
+    }
+    if (archiveConversationBtn) {
+      archiveConversationBtn.disabled = true;
+      archiveConversationBtn.textContent = "Hide";
     }
     if (chatTagsMenuBtn) chatTagsMenuBtn.disabled = true;
     closeChatTagsPopover();
@@ -24038,9 +24234,14 @@ function renderChat() {
   const headerTagsHtml = headerTags.length ? tagBadges(headerTags, "tag-chip", 3) : "";
   chatMeta.innerHTML = branchBadge(c.branch) + '<span class="status ' + statusClass(c.status) + '">' + escapeHtml(c.status || "") + '</span>' + headerTagsHtml + '<div class="workflow-status-bar"><span class="workflow-status-chip ' + statusClass(c.status) + '">Workflow: ' + escapeHtml(c.status || "Open") + '</span>' + assigneeBadge(c.assignee) + '</div>';
   if (conversationStatusSelect) {
-    const allowedStatuses = ["Open", "Waiting", "Need Follow-up", "Needs Team", "Booking Request", "Consultation Request", "Price Question", "Call Requested", "Location Requested", "Service Interest", "Media Requested", "Talk to Team", "Closed"];
+    const allowedStatuses = ["Open", "Waiting", "Need Follow-up", "Needs Team", "Booking Request", "Consultation Request", "Price Question", "Call Requested", "Location Requested", "Service Interest", "Media Requested", "Talk to Team", "Closed", "Archived"];
     conversationStatusSelect.value = allowedStatuses.includes(c.status) ? c.status : "Open";
     conversationStatusSelect.disabled = false;
+  }
+  if (archiveConversationBtn) {
+    archiveConversationBtn.disabled = false;
+    archiveConversationBtn.textContent = isArchivedConversation(c) ? "Restore" : "Hide";
+    archiveConversationBtn.setAttribute("title", isArchivedConversation(c) ? "Restore this conversation to Open" : "Hide this conversation from the active inbox");
   }
   if (chatTagsMenuBtn) chatTagsMenuBtn.disabled = false;
   if (assigneeSelect) {
@@ -24193,7 +24394,8 @@ async function loadMessages(options) {
   messagesLoadInFlight = true;
 
   try {
-    const res = await fetch("/api/messages", { cache: "no-store" });
+    const messagesUrl = "/api/messages" + (showArchivedConversations ? "?includeArchived=1" : "");
+    const res = await fetch(messagesUrl, { cache: "no-store" });
     const data = await res.json();
     const nextMessages = data.messages || [];
     const nextConversationStates = data.conversationStates || [];
@@ -24534,6 +24736,10 @@ if (nextCustomerBtn) {
 const closeNextBtn = document.getElementById("closeNextBtn");
 if (closeNextBtn) {
   closeNextBtn.addEventListener("click", closeCurrentAndOpenNext);
+}
+
+if (archiveConversationBtn) {
+  archiveConversationBtn.addEventListener("click", archiveOrRestoreCurrentConversation);
 }
 
 function insertQuickReply(text) {
