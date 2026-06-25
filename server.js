@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-67-whatsapp-style-composer";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-68-iconic-composer-logo";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -21491,8 +21491,8 @@ app.get("/inbox", protectInbox, (req, res) => {
 
     
 
-/* V31.5.8.60.3.9.67 - WhatsApp-style reply composer micro-polish
-   Scope: reply composer only.
+/* V31.5.8.60.3.9.68 - Iconic logo inside WhatsApp-style reply composer
+   Scope: reply composer icon only.
    Preserves existing Reply/Note, responding line selector, image send, voice send, quick replies, send logic, history, refresh, chat background, and inbox layout. */
 .chat-panel .premium-composer {
   border: 1px solid #cfd8e3 !important;
@@ -21595,19 +21595,22 @@ app.get("/inbox", protectInbox, (req, res) => {
 }
 
 .chat-panel .premium-composer .composer-pane-reply::before {
-  content: "🎧" !important;
+  content: "" !important;
   position: absolute !important;
-  left: 17px !important;
-  top: 20px !important;
-  width: 24px !important;
-  height: 24px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  color: #c4cad3 !important;
-  filter: grayscale(1) saturate(0) opacity(.58) !important;
-  font-size: 24px !important;
-  line-height: 1 !important;
+  left: 15px !important;
+  top: 17px !important;
+  width: 30px !important;
+  height: 30px !important;
+  display: block !important;
+  border-radius: 999px !important;
+  background-image: url('/assets/iconic-chat-background-logo.png') !important;
+  background-size: contain !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-color: #ffffff !important;
+  border: 1px solid rgba(120,184,62,.18) !important;
+  box-shadow: 0 2px 7px rgba(15,23,42,.06) !important;
+  opacity: .98 !important;
   pointer-events: none !important;
 }
 
