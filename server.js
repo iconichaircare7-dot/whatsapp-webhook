@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-68-iconic-composer-logo";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-69-professional-quick-replies";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -16537,7 +16537,9 @@ app.get("/inbox", protectInbox, (req, res) => {
       position: absolute !important;
       top: calc(100% + 10px) !important;
       right: 0 !important;
-      width: 255px !important;
+      width: 360px !important;
+      max-height: min(72vh, 560px) !important;
+      overflow-y: auto !important;
       padding: 10px !important;
       border-radius: 16px !important;
       border: 1px solid rgba(15, 23, 42, .10) !important;
@@ -16590,12 +16592,22 @@ app.get("/inbox", protectInbox, (req, res) => {
 
     .quick-replies-list {
       display: grid !important;
-      gap: 7px !important;
+      gap: 8px !important;
+    }
+
+    .quick-reply-section-title {
+      margin: 4px 3px 2px !important;
+      font-size: 9px !important;
+      line-height: 1.2 !important;
+      letter-spacing: .08em !important;
+      text-transform: uppercase !important;
+      color: #6b7280 !important;
+      font-weight: 900 !important;
     }
 
     .quick-reply-item {
       width: 100% !important;
-      min-height: 38px !important;
+      min-height: 44px !important;
       padding: 8px 10px !important;
       border-radius: 12px !important;
       border: 1px solid rgba(120, 184, 62, .18) !important;
@@ -16610,6 +16622,29 @@ app.get("/inbox", protectInbox, (req, res) => {
       font-size: 11px !important;
       font-weight: 900 !important;
       box-shadow: none !important;
+    }
+
+    .quick-reply-copy {
+      display: grid !important;
+      gap: 2px !important;
+      min-width: 0 !important;
+    }
+
+    .quick-reply-copy strong {
+      color: #16352b !important;
+      font-size: 11px !important;
+      line-height: 1.15 !important;
+      font-weight: 900 !important;
+    }
+
+    .quick-reply-copy small {
+      color: #64748b !important;
+      font-size: 9px !important;
+      line-height: 1.15 !important;
+      font-weight: 800 !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
     }
 
     .quick-reply-item:hover {
@@ -21952,14 +21987,27 @@ app.get("/inbox", protectInbox, (req, res) => {
               <div class="quick-replies-menu-head">
                 <div>
                   <div class="quick-replies-menu-title">Quick Replies</div>
-                  <div class="quick-replies-menu-note">Insert into message</div>
+                  <div class="quick-replies-menu-note">Smart templates</div>
                 </div>
               </div>
               <div class="quick-replies-list">
-                <button type="button" class="quick-reply-item" data-text="مرحباً، معك فريق Iconic Hair Care. كيف فينا نساعدك؟&#10;&#10;Hello, this is the Iconic Hair Care team. How may we help you?"><span>Greeting</span><span>↵</span></button>
-                <button type="button" class="quick-reply-item" data-text="شكراً لتواصلك معنا. تم استلام طلبك وسيقوم أحد أعضاء فريقنا بالرد عليك قريباً.&#10;&#10;Thank you for contacting us. Your request has been received and one of our team members will reply shortly."><span>Follow-up</span><span>↵</span></button>
-                <button type="button" class="quick-reply-item" data-text="يمكنك مشاركة اسمك والخدمة المطلوبة والفرع المناسب لك حتى نساعدك بشكل أدق.&#10;&#10;Please share your name, required service, and preferred branch so we can assist you better."><span>Need details</span><span>↵</span></button>
-                <button type="button" class="quick-reply-item" data-text="تم تحويل طلبك إلى الفريق المختص وسنتواصل معك بأقرب وقت ممكن.&#10;&#10;Your request has been transferred to the relevant team and we will contact you as soon as possible."><span>Team handoff</span><span>↵</span></button>
+                <div class="quick-reply-section-title">Start</div>
+                <button type="button" class="quick-reply-item" data-text="{{greeting_ar}} 👋&#10;شكراً لتواصلك مع Iconic Hair Care.&#10;&#10;كيف نقدر نساعدك اليوم؟ استشارة، سعر، حجز، أو موعد خدمة؟&#10;&#10;{{greeting_en}} 👋&#10;Thank you for contacting Iconic Hair Care.&#10;&#10;How can we help you today — consultation, price, booking, or service appointment?"><span class="quick-reply-copy"><strong>Greeting</strong><small>Professional first response</small></span><span>↵</span></button>
+                <button type="button" class="quick-reply-item" data-text="حتى نوجهك بشكل أدق، أرسل لنا صورة واضحة لمنطقة الشعر، واذكر الفرع الأنسب لك: دبي أو أبوظبي.&#10;&#10;To guide you accurately, please send a clear photo of the hair area and tell us which branch suits you best: Dubai or Abu Dhabi."><span class="quick-reply-copy"><strong>Need details / Photo</strong><small>Ask for photo + branch</small></span><span>↵</span></button>
+
+                <div class="quick-reply-section-title">Sales guidance</div>
+                <button type="button" class="quick-reply-item" data-text="السعر يعتمد على الحالة، المساحة المطلوبة، الكثافة، ونوع الحل المناسب.&#10;&#10;حتى نعطيك توجيه صحيح، أرسل صورة واضحة أو احجز استشارة قصيرة مع الفريق.&#10;&#10;The price depends on your case, required coverage, density, and the right solution.&#10;&#10;To guide you correctly, please send a clear photo or book a short consultation with the team."><span class="quick-reply-copy"><strong>Price guidance</strong><small>Case-based pricing</small></span><span>↵</span></button>
+                <button type="button" class="quick-reply-item" data-text="النتيجة الطبيعية تعتمد على اختيار اللون، الكثافة، وخط الشعر المناسب لشكل الوجه.&#10;&#10;فريقنا يحدد الأنسب لك بخصوصية كاملة بعد مشاهدة الحالة.&#10;&#10;A natural result depends on the right color, density, and hairline design for your face.&#10;&#10;Our team can guide you privately after reviewing your case."><span class="quick-reply-copy"><strong>Natural result</strong><small>Natural look explanation</small></span><span>↵</span></button>
+
+                <div class="quick-reply-section-title">Booking</div>
+                <button type="button" class="quick-reply-item" data-text="أكيد، نقدر نساعدك بالحجز.&#10;&#10;أرسل لنا:&#10;• الاسم&#10;• الفرع المناسب: {{branch_ar}} أو أي فرع تفضله&#10;• اليوم والوقت المناسب&#10;&#10;Sure, we can help you book.&#10;&#10;Please send:&#10;• Name&#10;• Preferred branch: {{branch_en}} or any branch you prefer&#10;• Preferred day and time"><span class="quick-reply-copy"><strong>Book consultation</strong><small>Name + branch + time</small></span><span>↵</span></button>
+                <button type="button" class="quick-reply-item" data-text="إذا كنت عميل حالي وتحتاج سيرفس / تركيب / تعديل / متابعة، أرسل لنا الاسم والفرع واليوم والوقت المناسب.&#10;&#10;If you are an existing client and need service / fitting / adjustment / follow-up, please send your name, branch, and preferred day and time."><span class="quick-reply-copy"><strong>Existing client service</strong><small>Service appointment</small></span><span>↵</span></button>
+
+                <div class="quick-reply-section-title">Team support</div>
+                <button type="button" class="quick-reply-item" data-text="أكيد، فريق {{branch_ar}} يقدر يتواصل معك.&#10;&#10;أرسل لنا الوقت المناسب للاتصال، أو تقدر تتواصل معنا على: {{call_number}}&#10;&#10;Sure, our {{branch_en}} team can contact you.&#10;&#10;Please send the best time to call, or you can reach us on: {{call_number}}"><span class="quick-reply-copy"><strong>Call request</strong><small>Best time + branch number</small></span><span>↵</span></button>
+                <button type="button" class="quick-reply-item" data-text="تم تحويل طلبك إلى فريق {{branch_ar}}، وسيتابع معك أحد المختصين بأقرب وقت.&#10;&#10;Your request has been transferred to our {{branch_en}} team, and one of our specialists will follow up with you shortly."><span class="quick-reply-copy"><strong>Team handoff</strong><small>Human support message</small></span><span>↵</span></button>
+                <button type="button" class="quick-reply-item" data-text="موقع فرع {{branch_ar}}:&#10;{{location_url}}&#10;&#10;{{branch_en}} branch location:&#10;{{location_url}}"><span class="quick-reply-copy"><strong>Location</strong><small>Current branch map link</small></span><span>↵</span></button>
+                <button type="button" class="quick-reply-item" data-text="متابعين معك بخصوص طلبك. هل تحب نحجز لك استشارة، أو تفضل أن يتواصل معك الفريق؟&#10;&#10;Following up regarding your request. Would you like us to book a consultation, or would you prefer the team to contact you?"><span class="quick-reply-copy"><strong>Follow-up</strong><small>Re-open conversation</small></span><span>↵</span></button>
               </div>
             </div>
           </div>
@@ -22191,14 +22239,14 @@ app.get("/inbox", protectInbox, (req, res) => {
               </div>
 
               <div class="quick-grid composer-mini-actions composer-quick-replies">
-                <button type="button" class="quick-btn" data-text="مرحباً، معك فريق Iconic Hair Care. كيف فينا نساعدك؟&#10;&#10;Hello, this is the Iconic Hair Care team. How may we help you?">Greeting</button>
-                <button type="button" class="quick-btn" data-text="شكراً لتواصلك معنا. تم استلام طلبك وسيقوم أحد أعضاء فريقنا بالرد عليك قريباً.&#10;&#10;Thank you for contacting us. Your request has been received and one of our team members will reply shortly.">Follow-up</button>
-                <button type="button" class="quick-btn" data-text="يمكنك مشاركة اسمك والخدمة المطلوبة والفرع المناسب لك حتى نساعدك بشكل أدق.&#10;&#10;Please share your name, required service, and preferred branch so we can assist you better.">Need details</button>
-                <button type="button" class="quick-btn" data-text="تم تحويل طلبك إلى الفريق المختص وسنتواصل معك بأقرب وقت ممكن.&#10;&#10;Your request has been transferred to the relevant team and we will contact you as soon as possible.">Team handoff</button>
-                <button type="button" class="quick-btn workflow-template-btn" data-text="السعر يعتمد على الحالة والمساحة المطلوبة ونوع الحل المناسب. ابعتلنا صورة واضحة أو احجز استشارة سريعة حتى نعطيك توجيه أدق.&#10;&#10;The price depends on your case, the required coverage area, and the right solution for you. Please send a clear photo or book a quick consultation so we can guide you accurately.">Price Reply</button>
-                <button type="button" class="quick-btn workflow-template-btn" data-text="أكيد، فينا نساعدك بالحجز. ابعتلنا الاسم، الفرع المناسب لك دبي أو أبوظبي، واليوم والوقت المفضل.&#10;&#10;Sure, we can help you book. Please send your name, preferred branch Dubai or Abu Dhabi, and your preferred day and time.">Booking Reply</button>
-                <button type="button" class="quick-btn workflow-template-btn" data-text="أكيد، فريقنا فين يتواصل معك. ابعتلنا الوقت المناسب للاتصال والفرع الأقرب لك.&#10;&#10;Sure, our team can contact you. Please send the best time to call and the branch closest to you.">Call Reply</button>
-                <button type="button" class="quick-btn workflow-template-btn" data-text="متابعين معك بخصوص طلبك. هل تحب نحجز لك استشارة أو تحكي مع الفريق؟&#10;&#10;Following up regarding your request. Would you like us to book a consultation or connect you with the team?">Follow-up Reply</button>
+                <button type="button" class="quick-btn" data-text="{{greeting_ar}} 👋&#10;شكراً لتواصلك مع Iconic Hair Care. كيف نقدر نساعدك اليوم؟&#10;&#10;{{greeting_en}} 👋&#10;Thank you for contacting Iconic Hair Care. How can we help you today?">Greeting</button>
+                <button type="button" class="quick-btn" data-text="حتى نوجهك بشكل أدق، أرسل لنا صورة واضحة لمنطقة الشعر، واذكر الفرع الأنسب لك: دبي أو أبوظبي.&#10;&#10;To guide you accurately, please send a clear photo of the hair area and tell us which branch suits you best: Dubai or Abu Dhabi.">Need details</button>
+                <button type="button" class="quick-btn workflow-template-btn" data-text="السعر يعتمد على الحالة، المساحة المطلوبة، الكثافة، ونوع الحل المناسب. أرسل صورة واضحة أو احجز استشارة قصيرة مع الفريق.&#10;&#10;The price depends on your case, required coverage, density, and the right solution. Please send a clear photo or book a short consultation with the team.">Price</button>
+                <button type="button" class="quick-btn workflow-template-btn" data-text="أكيد، نقدر نساعدك بالحجز. أرسل لنا الاسم، الفرع المناسب، واليوم والوقت المفضل.&#10;&#10;Sure, we can help you book. Please send your name, preferred branch, and preferred day and time.">Booking</button>
+                <button type="button" class="quick-btn workflow-template-btn" data-text="أكيد، فريق {{branch_ar}} يقدر يتواصل معك. أرسل لنا الوقت المناسب للاتصال، أو تقدر تتواصل معنا على: {{call_number}}&#10;&#10;Sure, our {{branch_en}} team can contact you. Please send the best time to call, or you can reach us on: {{call_number}}">Call</button>
+                <button type="button" class="quick-btn workflow-template-btn" data-text="تم تحويل طلبك إلى فريق {{branch_ar}}، وسيتابع معك أحد المختصين بأقرب وقت.&#10;&#10;Your request has been transferred to our {{branch_en}} team, and one of our specialists will follow up with you shortly.">Team</button>
+                <button type="button" class="quick-btn workflow-template-btn" data-text="متابعين معك بخصوص طلبك. هل تحب نحجز لك استشارة، أو تفضل أن يتواصل معك الفريق؟&#10;&#10;Following up regarding your request. Would you like us to book a consultation, or would you prefer the team to contact you?">Follow-up</button>
+                <button type="button" class="quick-btn workflow-template-btn" data-text="موقع فرع {{branch_ar}}:&#10;{{location_url}}&#10;&#10;{{branch_en}} branch location:&#10;{{location_url}}">Location</button>
               </div>
             </div>
 
@@ -25214,8 +25262,37 @@ if (archiveConversationBtn) {
   archiveConversationBtn.addEventListener("click", archiveOrRestoreCurrentConversation);
 }
 
+function getQuickReplyContext() {
+  const c = getCurrentConversationForState ? getCurrentConversationForState() : null;
+  const branchValue = (c?.branch || "Dubai").toString();
+  const isAbuDhabi = branchValue.toLowerCase().includes("abu");
+  const customerName = (c?.customerName || "").toString().trim();
+
+  return {
+    name: customerName,
+    greeting_ar: customerName ? "مرحباً " + customerName : "مرحباً",
+    greeting_en: customerName ? "Hello " + customerName : "Hello",
+    branch_ar: isAbuDhabi ? "أبوظبي" : "دبي",
+    branch_en: isAbuDhabi ? "Abu Dhabi" : "Dubai",
+    call_number: isAbuDhabi ? "02 562 2778" : "04 396 3333",
+    display_number: isAbuDhabi ? "+971 2 562 2778" : "+971 4 396 3333",
+    location_url: isAbuDhabi ? "https://maps.app.goo.gl/twg5JEuP6JgKWP1s7" : "https://maps.app.goo.gl/4MXKKF6faQx4WQSy9"
+  };
+}
+
+function resolveQuickReplyTemplate(text) {
+  const context = getQuickReplyContext();
+  let value = (text || "").toString();
+
+  Object.keys(context).forEach(function(key) {
+    value = value.split("{{" + key + "}}").join(context[key] || "");
+  });
+
+  return value.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function insertQuickReply(text) {
-  inputBody.value = text || "";
+  inputBody.value = resolveQuickReplyTemplate(text || "");
   inputBody.focus();
 }
 
