@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-54-reply-composer-status-badges-ui";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-56-secure-command-center-clean-filters";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -9388,7 +9388,7 @@ async function loadMessagesFromGoogleSheetForMessagesApi() {
   }
 }
 
-  app.get("/api/messages", async (req, res) => {
+  app.get("/api/messages", protectInbox, async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
@@ -15348,6 +15348,89 @@ app.get("/inbox", protectInbox, (req, res) => {
       box-shadow: inset 0 0 0 1px rgba(47,169,70,.18) !important;
     }
 
+    /* V31.5.8.60.3.9.55 - Secure Command Center.
+       UI-only operational queue built from already loaded conversation data.
+       No message history, Google Sheet loading, media, send, webhook, or note logic changed. */
+    .needs-action-command-center {
+      display: grid !important;
+      grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+      gap: 6px !important;
+      padding-top: 8px !important;
+      margin-top: 4px !important;
+      border-top: 1px solid rgba(226,232,226,.92) !important;
+    }
+
+    .needs-action-card {
+      min-width: 0 !important;
+      min-height: 54px !important;
+      padding: 7px 6px !important;
+      border-radius: 13px !important;
+      border: 1px solid rgba(218,226,218,.98) !important;
+      background: linear-gradient(180deg, #ffffff, #f8fbf6) !important;
+      color: #334155 !important;
+      cursor: pointer !important;
+      display: grid !important;
+      align-content: center !important;
+      justify-items: center !important;
+      gap: 2px !important;
+      box-shadow: 0 7px 14px rgba(15,23,42,.045) !important;
+      text-align: center !important;
+    }
+
+    .needs-action-card span {
+      max-width: 100% !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+      font-size: 9.5px !important;
+      line-height: 1.1 !important;
+      font-weight: 950 !important;
+      letter-spacing: .035em !important;
+      text-transform: uppercase !important;
+      color: #64748b !important;
+    }
+
+    .needs-action-card strong {
+      font-size: 19px !important;
+      line-height: 1 !important;
+      font-weight: 950 !important;
+      color: #0f172a !important;
+    }
+
+    .needs-action-card small {
+      max-width: 100% !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+      font-size: 8.5px !important;
+      line-height: 1.1 !important;
+      font-weight: 850 !important;
+      color: #7c8b82 !important;
+    }
+
+    .needs-action-card.active,
+    .needs-action-card:hover {
+      border-color: rgba(47,169,70,.82) !important;
+      background: #f3fbf0 !important;
+      box-shadow: inset 0 0 0 1px rgba(47,169,70,.16), 0 9px 18px rgba(37,169,65,.10) !important;
+    }
+
+    .needs-action-card.active span,
+    .needs-action-card.active strong {
+      color: #168437 !important;
+    }
+
+    .needs-action-primary {
+      border-color: rgba(37,169,65,.34) !important;
+      background: linear-gradient(135deg, #f3fbf0, #ffffff) !important;
+    }
+
+    @media (max-width: 1180px) {
+      .needs-action-command-center {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      }
+    }
+
     .reference-hidden-filters {
       display: none !important;
     }
@@ -21246,6 +21329,34 @@ app.get("/inbox", protectInbox, (req, res) => {
             <button type="button" class="reference-branch-tab" data-branch="Abu Dhabi">Abu Dhabi <span id="tabAbuCount">0</span></button>
           </div>
 
+          <div class="needs-action-command-center" id="needsActionCommandCenter" aria-label="Needs Action Command Center">
+            <button type="button" class="needs-action-card needs-action-primary" data-command-filter="needs-action" title="Show conversations that need action today">
+              <span>Needs Action</span>
+              <strong id="needsActionCount">0</strong>
+              <small>Today queue</small>
+            </button>
+            <button type="button" class="needs-action-card" data-command-filter="Need Follow-up" title="Show follow-up conversations">
+              <span>Follow-up</span>
+              <strong id="needsFollowupCount">0</strong>
+              <small>Need reply</small>
+            </button>
+            <button type="button" class="needs-action-card" data-command-filter="Talk to Team" title="Show conversations waiting for the team">
+              <span>Team</span>
+              <strong id="needsTeamCount">0</strong>
+              <small>Human support</small>
+            </button>
+            <button type="button" class="needs-action-card" data-command-filter="Waiting" title="Show waiting conversations">
+              <span>Waiting</span>
+              <strong id="needsWaitingCount">0</strong>
+              <small>Pending</small>
+            </button>
+            <button type="button" class="needs-action-card" data-command-filter="Booking Request" title="Show booking requests">
+              <span>Booking</span>
+              <strong id="needsBookingCount">0</strong>
+              <small>Requests</small>
+            </button>
+          </div>
+
           <div class="reference-hidden-filters" aria-hidden="true">
             <select id="branchFilter">
               <option value="">All branches</option>
@@ -21701,6 +21812,8 @@ if (chatBody) {
 
 const referenceFilterPills = Array.from(document.querySelectorAll(".reference-pill[data-status]"));
 const referenceBranchTabs = Array.from(document.querySelectorAll(".reference-branch-tab[data-branch]"));
+let commandCenterFilter = "";
+const commandCenterButtons = Array.from(document.querySelectorAll(".needs-action-card[data-command-filter]"));
 const conversationFooterText = document.getElementById("conversationFooterText");
 const refreshListBtn = document.getElementById("refreshListBtn");
 const composerTabs = Array.from(document.querySelectorAll(".composer-tab[data-mode]"));
@@ -21743,11 +21856,15 @@ setComposerMode("reply");
 
 function updateReferenceFilterUi(currentCount) {
   referenceFilterPills.forEach(function(btn) {
-    btn.classList.toggle("active", (statusFilter.value || "") === (btn.dataset.status || ""));
+    btn.classList.toggle("active", !commandCenterFilter && (statusFilter.value || "") === (btn.dataset.status || ""));
   });
 
   referenceBranchTabs.forEach(function(btn) {
     btn.classList.toggle("active", (branchFilter.value || "") === (btn.dataset.branch || ""));
+  });
+
+  commandCenterButtons.forEach(function(btn) {
+    btn.classList.toggle("active", commandCenterFilter === (btn.dataset.commandFilter || ""));
   });
 
   if (conversationFooterText) {
@@ -21763,7 +21880,19 @@ function updateReferenceFilterUi(currentCount) {
 
 referenceFilterPills.forEach(function(btn) {
   btn.addEventListener("click", function() {
+    commandCenterFilter = "";
     if (statusFilter) statusFilter.value = btn.dataset.status || "";
+    selectedConversationKey = "";
+    renderConversationList();
+    renderChat();
+  });
+});
+
+commandCenterButtons.forEach(function(btn) {
+  btn.addEventListener("click", function() {
+    const nextFilter = btn.dataset.commandFilter || "";
+    commandCenterFilter = commandCenterFilter === nextFilter ? "" : nextFilter;
+    if (statusFilter) statusFilter.value = "";
     selectedConversationKey = "";
     renderConversationList();
     renderChat();
@@ -23077,35 +23206,11 @@ function processLiveInboxNotifications(nextMessages) {
 function buildStatusOptions() {
   const current = statusFilter.value;
 
-  // Clean operational filters only.
-  // Keep Bot Reply because it works and is useful, but hide raw/test statuses like "Bot" and "Follow-up Test".
-  const fixedStatuses = [
-    "Open",
-    "Waiting",
-    "Closed",
-    "Need Follow-up",
-    "Needs Team",
-    "Booking Request",
-    "Consultation Request",
-    "Price Question",
-    "Call Requested",
-    "Location Requested",
-    "Service Interest",
-    "Media Requested",
-    "Talk to Team",
-    "Customer Reply",
-    "Human Reply",
-    "Bot Reply",
-    "Talk to Team",
-    "Consultation Request",
-    "Location Requested",
-    "Call Requested",
-    "Follow-up",
-    "Need Follow-up",
-    "Closed"
-  ];
-
+  // V31.5.8.60.3.9.56 - Clean Status Filters:
+  // UI-only cleanup for the status dropdown. This keeps the existing filtering
+  // behavior but removes duplicate/noisy options and groups the useful statuses.
   const hiddenStatuses = new Set([
+    "",
     "Bot",
     "Follow-up Test",
     "Follow-up Sent",
@@ -23117,19 +23222,78 @@ function buildStatusOptions() {
     "Location CTA Test"
   ]);
 
+  const filterGroups = [
+    {
+      label: "Workflow",
+      statuses: [
+        "Open",
+        "Waiting",
+        "Need Follow-up",
+        "Needs Team",
+        "Talk to Team",
+        "Closed"
+      ]
+    },
+    {
+      label: "Requests",
+      statuses: [
+        "Booking Request",
+        "Consultation Request",
+        "Price Question",
+        "Call Requested",
+        "Location Requested",
+        "Service Interest",
+        "Media Requested"
+      ]
+    },
+    {
+      label: "Replies",
+      statuses: [
+        "Customer Reply",
+        "Human Reply",
+        "Bot Reply"
+      ]
+    }
+  ];
+
+  const primaryStatuses = [];
+
+  filterGroups.forEach(function(group) {
+    group.statuses.forEach(function(status) {
+      if (!primaryStatuses.includes(status)) {
+        primaryStatuses.push(status);
+      }
+    });
+  });
+
   const dynamicStatuses = Array.from(new Set((allMessages || []).map(function(m) {
     return (m.status || "").toString().trim();
   }).filter(function(status) {
-    return status && !hiddenStatuses.has(status);
-  })));
+    return status && !hiddenStatuses.has(status) && !primaryStatuses.includes(status);
+  }))).sort(function(a, b) {
+    return a.localeCompare(b);
+  });
 
-  const statuses = Array.from(new Set(fixedStatuses.concat(dynamicStatuses)));
+  const optionHtml = ['<option value="">All status / replies</option>'].concat(filterGroups.map(function(group) {
+    const options = group.statuses.map(function(status) {
+      return '<option value="' + escapeHtml(status) + '">' + escapeHtml(status) + '</option>';
+    }).join("");
 
-  statusFilter.innerHTML = '<option value="">All status / replies</option>' + statuses.map(function(s) {
-    return '<option value="' + escapeHtml(s) + '">' + escapeHtml(s) + '</option>';
-  }).join("");
+    return '<optgroup label="' + escapeHtml(group.label) + '">' + options + '</optgroup>';
+  }));
 
-  if (statuses.includes(current)) statusFilter.value = current;
+  if (dynamicStatuses.length) {
+    optionHtml.push('<optgroup label="Other detected statuses">' + dynamicStatuses.map(function(status) {
+      return '<option value="' + escapeHtml(status) + '">' + escapeHtml(status) + '</option>';
+    }).join("") + '</optgroup>');
+  }
+
+  statusFilter.innerHTML = optionHtml.join("");
+
+  const validStatuses = primaryStatuses.concat(dynamicStatuses);
+  if (validStatuses.includes(current)) {
+    statusFilter.value = current;
+  }
 }
 
 
@@ -23170,6 +23334,76 @@ function normalizedMessageBranch(message) {
   return "Dubai";
 }
 
+const NEEDS_ACTION_STATUS_VALUES = [
+  "Need Follow-up",
+  "Talk to Team",
+  "Waiting",
+  "Booking Request",
+  "Call Requested",
+  "Price Question"
+];
+
+function conversationMatchesStatusLoose(conversation, status) {
+  const wanted = (status || "").toString().toLowerCase().trim();
+  if (!wanted || !conversation) return false;
+
+  const directHay = [
+    conversation.status,
+    conversation.replyFilterStatus,
+    conversation.assignee,
+    (conversation.tags || []).join(" ")
+  ].join(" ").toLowerCase();
+
+  if (directHay.includes(wanted)) return true;
+
+  return (conversation.messages || []).some(function(message) {
+    const messageHay = [
+      message.status,
+      message.messageType,
+      message.body,
+      message.sender,
+      message.customerName,
+      message.branch,
+      message.buttonText,
+      message.buttonTitle,
+      message.buttonPayload,
+      message.buttonId,
+      message.payload,
+      message.interactiveTitle,
+      message.interactiveId,
+      message.interactivePayload
+    ].join(" ").toLowerCase();
+
+    return messageHay.includes(wanted);
+  });
+}
+
+function isNeedsActionConversation(conversation) {
+  return NEEDS_ACTION_STATUS_VALUES.some(function(status) {
+    return conversationMatchesStatusLoose(conversation, status) || conversationHasStatus(conversation, status);
+  });
+}
+
+function countConversationsByOperationalStatus(conversations, status) {
+  return (conversations || []).filter(function(conversation) {
+    return conversationMatchesStatusLoose(conversation, status) || conversationHasStatus(conversation, status);
+  }).length;
+}
+
+function setNeedsActionCounter(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = String(value || 0);
+}
+
+function updateNeedsActionCommandCenter(conversations) {
+  const list = conversations || [];
+  setNeedsActionCounter("needsActionCount", list.filter(isNeedsActionConversation).length);
+  setNeedsActionCounter("needsFollowupCount", countConversationsByOperationalStatus(list, "Need Follow-up"));
+  setNeedsActionCounter("needsTeamCount", countConversationsByOperationalStatus(list, "Talk to Team"));
+  setNeedsActionCounter("needsWaitingCount", countConversationsByOperationalStatus(list, "Waiting"));
+  setNeedsActionCounter("needsBookingCount", countConversationsByOperationalStatus(list, "Booking Request"));
+}
+
 function updateStats() {
   const conversations = buildConversations();
   const statTotal = document.getElementById("statTotal");
@@ -23197,6 +23431,7 @@ function updateStats() {
   }, { dubai: 0, abu: 0 });
   if (tabDubaiCount) tabDubaiCount.textContent = conversationBranchCounts.dubai;
   if (tabAbuCount) tabAbuCount.textContent = conversationBranchCounts.abu;
+  updateNeedsActionCommandCenter(conversations);
   updateLiveNotificationUi();
 }
 
@@ -23298,6 +23533,7 @@ function filteredConversations() {
   const status = statusFilter.value;
   const assigned = assigneeFilter ? assigneeFilter.value : "";
   const tag = tagFilter ? tagFilter.value : "";
+  const activeCommandFilter = commandCenterFilter || "";
   const senderFilter = statusToSenderFilter(status);
 
   return buildConversations().filter(function(c) {
@@ -23332,6 +23568,12 @@ function filteredConversations() {
 
     if (q && !hay.includes(q)) return false;
     if (branch && c.branch !== branch) return false;
+
+    if (activeCommandFilter === "needs-action" && !isNeedsActionConversation(c)) return false;
+    if (activeCommandFilter && activeCommandFilter !== "needs-action") {
+      if (c.status !== activeCommandFilter && !conversationHasStatus(c, activeCommandFilter) && !conversationMatchesStatusLoose(c, activeCommandFilter)) return false;
+    }
+
     if (assigned && c.assignee !== assigned) return false;
 
     const conversationTags = normalizeTags(c.tags || []);
@@ -24018,7 +24260,10 @@ if (tagPicker) {
 
 searchBox.addEventListener("input", renderAll);
 branchFilter.addEventListener("change", renderAll);
-statusFilter.addEventListener("change", renderAll);
+statusFilter.addEventListener("change", function() {
+  commandCenterFilter = "";
+  renderAll();
+});
 if (assigneeFilter) assigneeFilter.addEventListener("change", renderAll);
 if (tagFilter) tagFilter.addEventListener("change", renderAll);
 if (clearFiltersBtn) {
@@ -24026,6 +24271,7 @@ if (clearFiltersBtn) {
     searchBox.value = "";
     branchFilter.value = "";
     statusFilter.value = "";
+    commandCenterFilter = "";
     if (assigneeFilter) assigneeFilter.value = "";
     if (tagFilter) tagFilter.value = "";
     renderAll();
@@ -24119,6 +24365,7 @@ function openQuickRepliesFromSidebar() {
 
 function applySidebarAction(action) {
   action = action || "all";
+  commandCenterFilter = "";
 
   if (action === "all" || action === "dashboard" || action === "conversations") {
     if (branchFilter) branchFilter.value = "";
