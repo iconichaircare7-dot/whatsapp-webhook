@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-73-archive-notification-cleanup";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-74-quick-replies-clean-composer-height";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -21914,6 +21914,26 @@ app.get("/inbox", protectInbox, (req, res) => {
   }
 }
 
+
+/* V31.5.8.60.3.9.74 - Safe quick replies cleanup + slightly taller reply composer
+   Scope: quick reply text/buttons and reply composer height only.
+   Preserves history, render, archive, chat background, message loading, send logic, media, and webhook. */
+.chat-panel .premium-composer .composer-pane-reply {
+  grid-template-rows: minmax(60px, auto) 32px !important;
+  padding-top: 8px !important;
+}
+
+.chat-panel .premium-composer .composer-pane-reply::before {
+  top: 22px !important;
+}
+
+.chat-panel .premium-composer textarea#body {
+  height: 58px !important;
+  min-height: 58px !important;
+  max-height: 112px !important;
+  padding-top: 11px !important;
+}
+
 </style>
 </head>
 <body>
@@ -21988,12 +22008,11 @@ app.get("/inbox", protectInbox, (req, res) => {
               </div>
               <div class="quick-replies-list">
                 <button type="button" class="quick-reply-item" data-text="مرحباً، معك فريق Iconic Hair Care. شكراً لتواصلك معنا. كيف فينا نساعدك اليوم؟&#10;&#10;Hello, this is the Iconic Hair Care team. Thank you for contacting us. How may we help you today?"><span>Greeting</span><span>↵</span></button>
-                <button type="button" class="quick-reply-item" data-text="حتى نقدر نوجهك بشكل صحيح، يرجى إرسال صور واضحة من الأمام، الأعلى، والجانبين، مع تحديد الفرع المناسب لك: دبي أو أبوظبي.&#10;&#10;To guide you correctly, please send clear photos from the front, top, and sides, and let us know your preferred branch: Dubai or Abu Dhabi."><span>Photo / Details</span><span>↵</span></button>
-                <button type="button" class="quick-reply-item" data-text="السعر يعتمد على الحالة، المساحة المطلوبة، الكثافة، ونوع الحل المناسب. بعد ما نشوف الصور أو خلال الاستشارة، نقدر نعطيك توجيه أدق.&#10;&#10;The price depends on your case, required coverage area, density, and the right solution for you. After reviewing your photos or during consultation, we can guide you more accurately."><span>Price Guidance</span><span>↵</span></button>
+                <button type="button" class="quick-reply-item" data-text="السعر يعتمد على الحالة، المساحة المطلوبة، الكثافة، ونوع الحل المناسب. خلال الاستشارة، نقدر نعطيك توجيه أدق حسب حالتك.&#10;&#10;The price depends on your case, required coverage area, density, and the right solution for you. During the consultation, we can guide you more accurately based on your case."><span>Price Guidance</span><span>↵</span></button>
                 <button type="button" class="quick-reply-item" data-text="الهدف في Iconic Hair Care هو نتيجة طبيعية ومناسبة لشكل الوجه، بدون مبالغة أو مظهر واضح. الفريق يحدد اللون والكثافة والتصميم حسب حالتك.&#10;&#10;At Iconic Hair Care, our goal is a natural result that suits your face shape, without an obvious or exaggerated look. The team selects the color, density, and design based on your case."><span>Natural Result</span><span>↵</span></button>
-                <button type="button" class="quick-reply-item" data-text="أكيد، فينا نساعدك بحجز استشارة. يرجى إرسال الاسم، الفرع المناسب لك دبي أو أبوظبي، واليوم والوقت المفضل.&#10;&#10;Sure, we can help you book a consultation. Please send your name, preferred branch Dubai or Abu Dhabi, and your preferred day and time."><span>Book Consultation</span><span>↵</span></button>
-                <button type="button" class="quick-reply-item" data-text="إذا كنت عميل حالي وتحتاج سيرفس، متابعة، تركيب، أو تعديل، يرجى إرسال الاسم، الفرع، ونوع الخدمة المطلوبة مع الوقت المناسب.&#10;&#10;If you are an existing client and need service, follow-up, fitting, or adjustment, please send your name, branch, required service type, and preferred time."><span>Existing Client</span><span>↵</span></button>
-                <button type="button" class="quick-reply-item" data-text="أكيد، فينا نرتب اتصال من الفريق. يرجى إرسال الوقت المناسب للاتصال والفرع الأقرب لك: دبي أو أبوظبي.&#10;&#10;Sure, we can arrange a call from our team. Please send the best time to call and the branch closest to you: Dubai or Abu Dhabi."><span>Call Request</span><span>↵</span></button>
+                <button type="button" class="quick-reply-item" data-text="أكيد، فينا نساعدك بحجز استشارة. يرجى إرسال الاسم واليوم والوقت المفضل، والفريق يتابع معك من نفس هذا الرقم.&#10;&#10;Sure, we can help you book a consultation. Please send your name and preferred day and time, and the team will follow up with you from this same WhatsApp line."><span>Book Consultation</span><span>↵</span></button>
+                <button type="button" class="quick-reply-item" data-text="إذا كنت عميل حالي وتحتاج سيرفس، متابعة، تركيب، أو تعديل، يرجى إرسال الاسم، نوع الخدمة المطلوبة، والوقت المناسب.&#10;&#10;If you are an existing client and need service, follow-up, fitting, or adjustment, please send your name, required service type, and preferred time."><span>Existing Client</span><span>↵</span></button>
+                <button type="button" class="quick-reply-item" data-text="أكيد، فينا نرتب اتصال من الفريق. يرجى إرسال الوقت المناسب للاتصال، والفريق يتابع معك من نفس هذا الرقم.&#10;&#10;Sure, we can arrange a call from our team. Please send the best time to call, and the team will follow up with you from this same WhatsApp line."><span>Call Request</span><span>↵</span></button>
                 <button type="button" class="quick-reply-item" data-text="تم تحويل طلبك إلى الفريق المختص، وسيتم متابعتك بأقرب وقت ممكن. شكراً لصبرك.&#10;&#10;Your request has been transferred to the relevant team, and they will follow up with you as soon as possible. Thank you for your patience."><span>Team Handoff</span><span>↵</span></button>
                 <button type="button" class="quick-reply-item" data-text="فروعنا:&#10;Dubai: ${DUBAI_LOCATION_URL}&#10;Abu Dhabi: ${ABU_DHABI_LOCATION_URL}&#10;&#10;Our branches:&#10;Dubai: ${DUBAI_LOCATION_URL}&#10;Abu Dhabi: ${ABU_DHABI_LOCATION_URL}"><span>Location</span><span>↵</span></button>
                 <button type="button" class="quick-reply-item" data-text="متابعين معك بخصوص طلبك. هل تحب نحجز لك استشارة، أو تفضل يتواصل معك أحد أعضاء الفريق؟&#10;&#10;Following up regarding your request. Would you like us to book a consultation for you, or would you prefer one of our team members to contact you?"><span>Follow-up</span><span>↵</span></button>
@@ -22229,11 +22248,10 @@ app.get("/inbox", protectInbox, (req, res) => {
 
               <div class="quick-grid composer-mini-actions composer-quick-replies">
                 <button type="button" class="quick-btn" data-text="مرحباً، معك فريق Iconic Hair Care. شكراً لتواصلك معنا. كيف فينا نساعدك اليوم؟&#10;&#10;Hello, this is the Iconic Hair Care team. Thank you for contacting us. How may we help you today?">Greeting</button>
-                <button type="button" class="quick-btn" data-text="حتى نقدر نوجهك بشكل صحيح، يرجى إرسال صور واضحة من الأمام، الأعلى، والجانبين، مع تحديد الفرع المناسب لك: دبي أو أبوظبي.&#10;&#10;To guide you correctly, please send clear photos from the front, top, and sides, and let us know your preferred branch: Dubai or Abu Dhabi.">Photo / Details</button>
-                <button type="button" class="quick-btn workflow-template-btn" data-text="السعر يعتمد على الحالة، المساحة المطلوبة، الكثافة، ونوع الحل المناسب. بعد ما نشوف الصور أو خلال الاستشارة، نقدر نعطيك توجيه أدق.&#10;&#10;The price depends on your case, required coverage area, density, and the right solution for you. After reviewing your photos or during consultation, we can guide you more accurately.">Price</button>
-                <button type="button" class="quick-btn workflow-template-btn" data-text="أكيد، فينا نساعدك بحجز استشارة. يرجى إرسال الاسم، الفرع المناسب لك دبي أو أبوظبي، واليوم والوقت المفضل.&#10;&#10;Sure, we can help you book a consultation. Please send your name, preferred branch Dubai or Abu Dhabi, and your preferred day and time.">Booking</button>
-                <button type="button" class="quick-btn workflow-template-btn" data-text="إذا كنت عميل حالي وتحتاج سيرفس، متابعة، تركيب، أو تعديل، يرجى إرسال الاسم، الفرع، ونوع الخدمة المطلوبة مع الوقت المناسب.&#10;&#10;If you are an existing client and need service, follow-up, fitting, or adjustment, please send your name, branch, required service type, and preferred time.">Service</button>
-                <button type="button" class="quick-btn workflow-template-btn" data-text="أكيد، فينا نرتب اتصال من الفريق. يرجى إرسال الوقت المناسب للاتصال والفرع الأقرب لك: دبي أو أبوظبي.&#10;&#10;Sure, we can arrange a call from our team. Please send the best time to call and the branch closest to you: Dubai or Abu Dhabi.">Call</button>
+                <button type="button" class="quick-btn workflow-template-btn" data-text="السعر يعتمد على الحالة، المساحة المطلوبة، الكثافة، ونوع الحل المناسب. خلال الاستشارة، نقدر نعطيك توجيه أدق حسب حالتك.&#10;&#10;The price depends on your case, required coverage area, density, and the right solution for you. During the consultation, we can guide you more accurately based on your case.">Price</button>
+                <button type="button" class="quick-btn workflow-template-btn" data-text="أكيد، فينا نساعدك بحجز استشارة. يرجى إرسال الاسم واليوم والوقت المفضل، والفريق يتابع معك من نفس هذا الرقم.&#10;&#10;Sure, we can help you book a consultation. Please send your name and preferred day and time, and the team will follow up with you from this same WhatsApp line.">Booking</button>
+                <button type="button" class="quick-btn workflow-template-btn" data-text="إذا كنت عميل حالي وتحتاج سيرفس، متابعة، تركيب، أو تعديل، يرجى إرسال الاسم، نوع الخدمة المطلوبة، والوقت المناسب.&#10;&#10;If you are an existing client and need service, follow-up, fitting, or adjustment, please send your name, required service type, and preferred time.">Service</button>
+                <button type="button" class="quick-btn workflow-template-btn" data-text="أكيد، فينا نرتب اتصال من الفريق. يرجى إرسال الوقت المناسب للاتصال، والفريق يتابع معك من نفس هذا الرقم.&#10;&#10;Sure, we can arrange a call from our team. Please send the best time to call, and the team will follow up with you from this same WhatsApp line.">Call</button>
                 <button type="button" class="quick-btn workflow-template-btn" data-text="تم تحويل طلبك إلى الفريق المختص، وسيتم متابعتك بأقرب وقت ممكن. شكراً لصبرك.&#10;&#10;Your request has been transferred to the relevant team, and they will follow up with you as soon as possible. Thank you for your patience.">Team</button>
                 <button type="button" class="quick-btn workflow-template-btn" data-text="متابعين معك بخصوص طلبك. هل تحب نحجز لك استشارة، أو تفضل يتواصل معك أحد أعضاء الفريق؟&#10;&#10;Following up regarding your request. Would you like us to book a consultation for you, or would you prefer one of our team members to contact you?">Follow-up</button>
               </div>
