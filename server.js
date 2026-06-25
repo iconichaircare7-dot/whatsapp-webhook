@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-57-closed-safe-dynamic-filters";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-58-compact-active-filters";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -15427,31 +15427,52 @@ app.get("/inbox", protectInbox, (req, res) => {
 
     .dynamic-command-center-filters {
       display: grid !important;
-      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       gap: 6px !important;
       padding-top: 6px !important;
+      max-height: 96px !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      scrollbar-gutter: stable !important;
+    }
+
+    .dynamic-command-center-filters:empty {
+      display: none !important;
+    }
+
+    .dynamic-command-center-filters::-webkit-scrollbar { width: 6px !important; }
+    .dynamic-command-center-filters::-webkit-scrollbar-thumb {
+      background: rgba(120,184,62,.32) !important;
+      border-radius: 999px !important;
     }
 
     .dynamic-command-filter {
       min-width: 0 !important;
-      min-height: 38px !important;
-      padding: 6px 7px !important;
+      min-height: 34px !important;
+      padding: 5px 7px !important;
       border-radius: 12px !important;
       border: 1px solid rgba(218,226,218,.98) !important;
       background: #ffffff !important;
       color: #334155 !important;
       cursor: pointer !important;
-      display: inline-flex !important;
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) auto !important;
       align-items: center !important;
-      justify-content: center !important;
-      gap: 6px !important;
+      gap: 5px !important;
       box-shadow: 0 6px 12px rgba(15,23,42,.035) !important;
-      font-size: 10px !important;
+      font-size: 9px !important;
       font-weight: 950 !important;
-      text-align: center !important;
+      text-align: left !important;
       white-space: nowrap !important;
       overflow: hidden !important;
       text-overflow: ellipsis !important;
+    }
+
+    .dynamic-command-filter span {
+      min-width: 0 !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
     }
 
     .dynamic-command-filter strong {
@@ -23278,6 +23299,7 @@ const STATIC_COMMAND_CENTER_FILTERS = [
   "Waiting",
   "Booking Request"
 ];
+const MAX_DYNAMIC_COMMAND_CENTER_FILTERS = 8;
 const REPLY_FILTER_STATUS_VALUES = ["Customer Reply", "Human Reply", "Bot Reply"];
 const NOISY_OPERATIONAL_STATUS_VALUES = new Set([
   "",
@@ -23352,22 +23374,21 @@ function isCleanOperationalStatus(status) {
   return true;
 }
 
+function getCurrentConversationStatus(conversation) {
+  return (conversation?.status || "").toString().trim();
+}
+
 function getDynamicDetectedStatuses(conversations) {
   const primaryStatuses = getPrimaryStatusValues();
   const detected = [];
 
   (conversations || []).forEach(function(conversation) {
-    const candidates = [conversation.status].concat((conversation.messages || []).map(function(message) {
-      return message.status || "";
-    }));
-
-    candidates.forEach(function(status) {
-      const value = (status || "").toString().trim();
-      if (!value) return;
-      if (!isCleanOperationalStatus(value)) return;
-      if (primaryStatuses.includes(value)) return;
-      if (!detected.includes(value)) detected.push(value);
-    });
+    const value = getCurrentConversationStatus(conversation);
+    if (!value) return;
+    if (isClosedConversation(conversation)) return;
+    if (!isCleanOperationalStatus(value)) return;
+    if (primaryStatuses.includes(value)) return;
+    if (!detected.includes(value)) detected.push(value);
   });
 
   return detected.sort(function(a, b) {
@@ -23379,9 +23400,9 @@ function buildStatusOptions() {
   const current = statusFilter.value;
   const conversations = buildConversations();
 
-  // V31.5.8.60.3.9.57 - Clean + dynamic Status Filters:
-  // Primary filters stay organized. Any new real operational status appears under
-  // Other detected statuses automatically, while noisy/test statuses stay hidden.
+  // V31.5.8.60.3.9.58 - Clean + active dynamic Status Filters:
+  // Primary filters stay organized. New real current conversation statuses appear under
+  // Other detected statuses automatically, while noisy/test/history-only statuses stay hidden.
   const dynamicStatuses = getDynamicDetectedStatuses(conversations);
   const optionHtml = ['<option value="">All status / replies</option>'].concat(CLEAN_STATUS_FILTER_GROUPS.map(function(group) {
     const options = group.statuses.map(function(status) {
@@ -23494,9 +23515,10 @@ function conversationMatchesActiveOperationalStatus(conversation, status) {
   // keep the conversation inside active operational counters or command filters.
   if (isClosedConversation(conversation)) return false;
 
-  if ((conversation.status || "").toString().trim() === wanted) return true;
-
-  return conversationMatchesStatusLoose(conversation, wanted) || conversationHasStatus(conversation, wanted);
+  // V31.5.8.60.3.9.58:
+  // Command Center counters must reflect the current conversation status only.
+  // Do not count old message history, old buttons, old template statuses, or body text.
+  return getCurrentConversationStatus(conversation) === wanted;
 }
 
 function isNeedsActionConversation(conversation) {
@@ -23517,10 +23539,22 @@ function setNeedsActionCounter(id, value) {
 }
 
 function getDynamicCommandCenterStatuses(conversations) {
-  return getDynamicDetectedStatuses(conversations).filter(function(status) {
-    if (isStaticCommandCenterStatus(status)) return false;
-    return countConversationsByOperationalStatus(conversations, status) > 0;
-  });
+  return getDynamicDetectedStatuses(conversations)
+    .map(function(status) {
+      return {
+        status,
+        count: countConversationsByOperationalStatus(conversations, status)
+      };
+    })
+    .filter(function(item) {
+      if (isStaticCommandCenterStatus(item.status)) return false;
+      return item.count > 0;
+    })
+    .sort(function(a, b) {
+      return b.count - a.count || a.status.localeCompare(b.status);
+    })
+    .slice(0, MAX_DYNAMIC_COMMAND_CENTER_FILTERS)
+    .map(function(item) { return item.status; });
 }
 
 function renderDynamicCommandCenterFilters(conversations) {
