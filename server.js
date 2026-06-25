@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-76-branch-ui-scope-cleanup";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-77-hard-branch-ui-render-scope";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -10466,6 +10466,44 @@ function buildInboxAccessLabel(access = {}) {
   return scope || "All branches";
 }
 
+
+// V31.5.8.60.3.9.77 - Hard branch UI render scope:
+// Branch-scoped users must not see the other branch name at all.
+// This renders branch controls server-side based on login scope instead of only hiding with JS.
+function buildInboxSidebarBranchControls(branchScope = "") {
+  const scope = normalizeInboxBranchName(branchScope || "");
+  const includeDubai = !scope || scope === "Dubai";
+  const includeAbuDhabi = !scope || scope === "Abu Dhabi";
+
+  return [
+    '<div class="sidebar-branches premium-branch-card">',
+    '  <div class="sidebar-branches-head">',
+    '    <div>',
+    '      <div class="sidebar-section-kicker">Branches</div>',
+    `      <div class="sidebar-section-title">${scope ? escapeInboxServerHtml(scope) : "Our Branches"}</div>`,
+    '    </div>',
+    !scope ? '    <button class="sidebar-branch-add" type="button" data-sidebar-branch-reset="true" data-branch-all-control="true" aria-label="Show all branches" title="Show all branches">All</button>' : '',
+    '  </div>',
+    includeDubai ? '  <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Dubai" data-branch-scope-item="Dubai"><span class="branch-left"><i class="branch-dot branch-dot-dubai"></i><span><strong>Dubai</strong><small>Main branch</small></span></span><b id="sideDubaiCount">0</b></button>' : '',
+    includeAbuDhabi ? '  <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Abu Dhabi" data-branch-scope-item="Abu Dhabi"><span class="branch-left"><i class="branch-dot branch-dot-abu"></i><span><strong>Abu Dhabi</strong><small>Second branch</small></span></span><b id="sideAbuCount">0</b></button>' : '',
+    '</div>'
+  ].filter(Boolean).join("\n");
+}
+
+function buildInboxReferenceBranchTabs(branchScope = "") {
+  const scope = normalizeInboxBranchName(branchScope || "");
+  const includeDubai = !scope || scope === "Dubai";
+  const includeAbuDhabi = !scope || scope === "Abu Dhabi";
+
+  const buttons = [
+    includeDubai ? '<button type="button" class="reference-branch-tab" data-branch="Dubai" data-branch-scope-item="Dubai">Dubai <span id="tabDubaiCount">0</span></button>' : '',
+    includeAbuDhabi ? '<button type="button" class="reference-branch-tab" data-branch="Abu Dhabi" data-branch-scope-item="Abu Dhabi">Abu Dhabi <span id="tabAbuCount">0</span></button>' : ''
+  ].filter(Boolean).join("\n");
+
+  if (!buttons) return "";
+  return '<div class="reference-branch-tabs" aria-label="Branch filters">\n' + buttons + '\n</div>';
+}
+
 function safeInboxBootstrapJson(value = {}) {
   return JSON.stringify(value || {})
     .replace(/</g, "\\u003c")
@@ -10532,6 +10570,8 @@ app.get("/inbox", protectInbox, (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   const inboxAccessLabel = buildInboxAccessLabel(req.inboxAccess || {});
   const inboxQuickReplyLocationText = buildInboxQuickReplyLocationAttribute(req.inboxBranchScope || "");
+  const inboxSidebarBranchControls = buildInboxSidebarBranchControls(req.inboxBranchScope || "");
+  const inboxReferenceBranchTabs = buildInboxReferenceBranchTabs(req.inboxBranchScope || "");
 
   res.send(`<!doctype html>
 <html lang="en">
@@ -22107,21 +22147,7 @@ app.get("/inbox", protectInbox, (req, res) => {
         <button type="button" class="sidebar-item" data-sidebar-action="settings"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.2A3.2 3.2 0 1 0 12 8.8a3.2 3.2 0 0 0 0 6.4Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 3.4-.2-.1a1.7 1.7 0 0 0-2 .1 1.7 1.7 0 0 0-.8 1.6v.2H9.2V22a1.7 1.7 0 0 0-.8-1.6 1.7 1.7 0 0 0-2-.1l-.2.1-2-3.4.1-.1A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.4-1H3v-4h.2a1.7 1.7 0 0 0 1.4-1 1.7 1.7 0 0 0-.3-1.9L4.2 7l2-3.4.2.1a1.7 1.7 0 0 0 2-.1A1.7 1.7 0 0 0 9.2 2V1.8h5.6V2a1.7 1.7 0 0 0 .8 1.6 1.7 1.7 0 0 0 2 .1l.2-.1 2 3.4-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.4 1h.2v4h-.2a1.7 1.7 0 0 0-1.4 1Z"/></svg></span><span>Settings</span></button>
       </nav>
 
-      <div class="sidebar-branches premium-branch-card">
-        <div class="sidebar-branches-head">
-          <div>
-            <div class="sidebar-section-kicker">Branches</div>
-            <div class="sidebar-section-title">Our Branches</div>
-          </div>
-          <button class="sidebar-branch-add" type="button" data-sidebar-branch-reset="true" data-branch-all-control="true" aria-label="Show all branches" title="Show all branches">All</button>
-        </div>
-        <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Dubai" data-branch-scope-item="Dubai">
-          <span class="branch-left"><i class="branch-dot branch-dot-dubai"></i><span><strong>Dubai</strong><small>Main branch</small></span></span><b id="sideDubaiCount">0</b>
-        </button>
-        <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Abu Dhabi" data-branch-scope-item="Abu Dhabi">
-          <span class="branch-left"><i class="branch-dot branch-dot-abu"></i><span><strong>Abu Dhabi</strong><small>Second branch</small></span></span><b id="sideAbuCount">0</b>
-        </button>
-      </div>
+      ${inboxSidebarBranchControls}
 
       <div class="sidebar-user">
         <div class="sidebar-user-avatar"><img src="data:image/jpeg;base64,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" alt="Created by avatar" /></div>
@@ -22193,10 +22219,7 @@ app.get("/inbox", protectInbox, (req, res) => {
             <button type="button" class="reference-pill reference-soft-pill" data-status="Talk to Team">Talk to Team</button>
           </div>
 
-          <div class="reference-branch-tabs" aria-label="Branch filters">
-            <button type="button" class="reference-branch-tab" data-branch="Dubai" data-branch-scope-item="Dubai">Dubai <span id="tabDubaiCount">0</span></button>
-            <button type="button" class="reference-branch-tab" data-branch="Abu Dhabi" data-branch-scope-item="Abu Dhabi">Abu Dhabi <span id="tabAbuCount">0</span></button>
-          </div>
+          ${inboxReferenceBranchTabs}
 
           <div class="needs-action-command-center" id="needsActionCommandCenter" aria-label="Needs Action Command Center">
             <button type="button" class="needs-action-card needs-action-primary" data-command-filter="needs-action" title="Show conversations that need action today">
@@ -22614,12 +22637,16 @@ const inboxBranchScope = ${JSON.stringify(req.inboxBranchScope || "")};
 const inboxUserName = ${JSON.stringify(req.inboxUser || "")};
 
 function applyBranchScopeUiVisibility() {
-  if (!inboxBranchScope) {
+  const scope = (inboxBranchScope || "").toString().trim().toLowerCase();
+
+  if (!scope) {
     document.querySelectorAll("[data-branch-scope-item]").forEach(function(el) {
+      el.hidden = false;
       el.style.display = "";
       el.setAttribute("aria-hidden", "false");
     });
     document.querySelectorAll("[data-branch-all-control]").forEach(function(el) {
+      el.hidden = false;
       el.style.display = "";
       el.setAttribute("aria-hidden", "false");
     });
@@ -22627,14 +22654,16 @@ function applyBranchScopeUiVisibility() {
   }
 
   document.querySelectorAll("[data-branch-scope-item]").forEach(function(el) {
-    const branchName = el.getAttribute("data-branch-scope-item") || "";
-    const allowed = branchName === inboxBranchScope;
+    const branchName = (el.getAttribute("data-branch-scope-item") || "").toString().trim().toLowerCase();
+    const allowed = branchName === scope;
+    el.hidden = !allowed;
     el.style.display = allowed ? "" : "none";
     el.setAttribute("aria-hidden", allowed ? "false" : "true");
   });
 
   // Branch-scoped users already see only their own branch, so hide the All branches reset.
   document.querySelectorAll("[data-branch-all-control]").forEach(function(el) {
+    el.hidden = true;
     el.style.display = "none";
     el.setAttribute("aria-hidden", "true");
   });
