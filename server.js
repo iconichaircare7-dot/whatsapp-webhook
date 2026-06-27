@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-91-v90-badge-cleanup-lock";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-92-v91-right-panel-rest-polish";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -25392,6 +25392,130 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       .chat-meta .branch,
       .chat-meta .status {
         max-width: 72px !important;
+      }
+    }
+
+
+  
+    /* V31.5.8.60.3.9.92 - V91 right-panel rest polish.
+       UI/CSS-only patch on top of V91.
+       Scope: clean remaining CRM/Appointment panel spacing and title readability.
+       No layout reset. No API/history/media/webhook/send/archive/branch changes. */
+    @media (min-width: 1181px) {
+      .right-reference-panel .reference-card-head,
+      .right-reference-panel .panel-head,
+      .reference-card.customer-details-card .reference-card-head {
+        display: flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+        min-width: 0 !important;
+        padding-right: 58px !important;
+      }
+
+      .right-reference-panel .reference-card-head h3,
+      .right-reference-panel .panel-title,
+      .customer-profile-title,
+      .reference-card.customer-details-card .reference-card-head h3 {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        font-size: 14.6px !important;
+        line-height: 1.08 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .right-reference-panel .reference-card-head .crm-pill,
+      .right-reference-panel .reference-card-head .crm-badge,
+      .right-reference-panel .reference-card-head .tag,
+      .right-reference-panel .reference-card-head .chip {
+        flex: 0 0 auto !important;
+        height: 18px !important;
+        min-height: 18px !important;
+        line-height: 18px !important;
+        padding: 0 6px !important;
+        font-size: 8.5px !important;
+      }
+
+      .booking-request-card {
+        padding: 12px 13px !important;
+        margin-top: 10px !important;
+        border-radius: 17px !important;
+      }
+
+      .booking-request-card h3,
+      .booking-request-card .reference-card-head h3 {
+        font-size: 14px !important;
+        line-height: 1.12 !important;
+        margin: 0 !important;
+      }
+
+      .booking-status-pill,
+      .booking-request-card .booking-status-pill {
+        min-height: 19px !important;
+        height: 19px !important;
+        line-height: 19px !important;
+        padding: 0 7px !important;
+        border-radius: 999px !important;
+        font-size: 8.4px !important;
+        max-width: 132px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .booking-actions-grid {
+        gap: 7px !important;
+        margin-top: 9px !important;
+      }
+
+      .booking-action-btn {
+        min-height: 31px !important;
+        border-radius: 10px !important;
+        font-size: 10px !important;
+        line-height: 1.05 !important;
+      }
+
+      .booking-note-input {
+        min-height: 32px !important;
+        margin-top: 8px !important;
+        border-radius: 10px !important;
+        padding: 7px 9px !important;
+        font-size: 10.4px !important;
+      }
+
+      .booking-request-card .reference-detail-list {
+        gap: 6px !important;
+        margin-top: 9px !important;
+      }
+
+      .booking-request-card .reference-detail-row {
+        grid-template-columns: 82px minmax(0, 1fr) !important;
+        gap: 8px !important;
+        font-size: 9.8px !important;
+        align-items: start !important;
+      }
+
+      .booking-request-card .reference-detail-row strong,
+      .booking-request-card .reference-detail-row span {
+        min-width: 0 !important;
+        overflow-wrap: anywhere !important;
+      }
+
+      .booking-request-card .send-update-btn,
+      .booking-request-card button[type="submit"] {
+        min-height: 32px !important;
+        border-radius: 10px !important;
+        font-size: 10.5px !important;
+      }
+
+      .right-reference-scroll {
+        overflow-x: hidden !important;
+      }
+
+      .reply-panel::after,
+      .reference-version-badge::after {
+        content: "V92" !important;
       }
     }
 
