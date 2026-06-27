@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-78-official-inbox-redirect";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-79-standard-sidebar-100-zoom";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -22159,6 +22159,265 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
   max-height: 112px !important;
   padding-top: 11px !important;
 }
+
+
+
+    /* V31.5.8.60.3.9.79 - Standard 100% zoom left sidebar cleanup.
+       UI-only patch. Scope: the left navigation/sidebar block only.
+       Does not touch message history, /api/messages, webhook, send logic, media, archive logic, or branch permissions. */
+    @media (min-width: 1181px) {
+      :root {
+        --iconic-sidebar-v79-width: 236px;
+      }
+
+      .workspace-shell {
+        grid-template-columns: var(--iconic-sidebar-v79-width) minmax(0, 1fr) !important;
+      }
+
+      .workspace-shell > .main-sidebar,
+      .main-sidebar {
+        width: var(--iconic-sidebar-v79-width) !important;
+        min-width: var(--iconic-sidebar-v79-width) !important;
+        max-width: var(--iconic-sidebar-v79-width) !important;
+        padding: 12px 12px !important;
+        gap: 10px !important;
+        background:
+          radial-gradient(circle at 10% 0%, rgba(120,184,62,.14), transparent 32%),
+          linear-gradient(180deg, rgba(250,255,248,.99), rgba(242,250,239,.98)) !important;
+        box-shadow: 10px 0 26px rgba(15,23,42,.045) !important;
+        border-right: 1px solid rgba(203,220,199,.82) !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-brand,
+      .main-sidebar .sidebar-brand {
+        height: 92px !important;
+        min-height: 92px !important;
+        max-height: 92px !important;
+        padding: 10px 10px !important;
+        border-radius: 19px !important;
+        background: linear-gradient(135deg, rgba(255,255,255,.88), rgba(243,250,239,.76)) !important;
+        border: 1px solid rgba(215,226,212,.74) !important;
+        box-shadow: 0 8px 18px rgba(15,23,42,.035) !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-brand .sidebar-logo,
+      .main-sidebar .sidebar-brand .sidebar-logo {
+        width: 156px !important;
+        height: 64px !important;
+        max-width: 156px !important;
+        margin: 0 auto !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-nav,
+      .main-sidebar .sidebar-nav {
+        gap: 5px !important;
+        padding-right: 0 !important;
+        align-content: start !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-item,
+      .main-sidebar .sidebar-item {
+        min-height: 36px !important;
+        height: 36px !important;
+        padding: 7px 10px !important;
+        gap: 9px !important;
+        border-radius: 14px !important;
+        font-size: 12.4px !important;
+        line-height: 1 !important;
+        letter-spacing: .05px !important;
+        box-shadow: none !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-item:hover,
+      .main-sidebar .sidebar-item:hover {
+        transform: translateX(1px) !important;
+        box-shadow: 0 7px 15px rgba(15,23,42,.042) !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-item.active,
+      .workspace-shell > .main-sidebar .sidebar-item[aria-current="page"],
+      .main-sidebar .sidebar-item.active,
+      .main-sidebar .sidebar-item[aria-current="page"] {
+        box-shadow: 0 8px 18px rgba(120,184,62,.10), inset 0 1px 0 rgba(255,255,255,.70) !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-item.active::before,
+      .workspace-shell > .main-sidebar .sidebar-item[aria-current="page"]::before,
+      .main-sidebar .sidebar-item.active::before,
+      .main-sidebar .sidebar-item[aria-current="page"]::before {
+        left: 6px !important;
+        top: 10px !important;
+        bottom: 10px !important;
+        width: 2px !important;
+      }
+
+      .workspace-shell > .main-sidebar .nav-icon,
+      .main-sidebar .nav-icon {
+        width: 25px !important;
+        min-width: 25px !important;
+        height: 25px !important;
+        border-radius: 10px !important;
+      }
+
+      .workspace-shell > .main-sidebar .nav-icon svg,
+      .main-sidebar .nav-icon svg {
+        width: 15.5px !important;
+        height: 15.5px !important;
+        stroke-width: 2 !important;
+      }
+
+      .workspace-shell > .main-sidebar .premium-branch-card.sidebar-branches,
+      .workspace-shell > .main-sidebar .sidebar-branches,
+      .main-sidebar .premium-branch-card.sidebar-branches,
+      .main-sidebar .sidebar-branches {
+        padding: 10px !important;
+        border-radius: 18px !important;
+        box-shadow: 0 9px 20px rgba(15,23,42,.045), inset 0 1px 0 rgba(255,255,255,.72) !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-branches-head,
+      .main-sidebar .sidebar-branches-head {
+        margin-bottom: 7px !important;
+        padding-bottom: 7px !important;
+        gap: 8px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-section-kicker,
+      .main-sidebar .sidebar-section-kicker {
+        font-size: 8.4px !important;
+        letter-spacing: 1.05px !important;
+        margin-bottom: 3px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-section-title,
+      .main-sidebar .sidebar-section-title {
+        font-size: 11.4px !important;
+        line-height: 1.05 !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-branch-add,
+      .main-sidebar .sidebar-branch-add {
+        min-width: 34px !important;
+        height: 25px !important;
+        padding: 0 8px !important;
+        font-size: 10.2px !important;
+      }
+
+      .workspace-shell > .main-sidebar .branch-row.sidebar-branch-filter,
+      .main-sidebar .branch-row.sidebar-branch-filter {
+        min-height: 34px !important;
+        padding: 6px 6px !important;
+        border-radius: 14px !important;
+      }
+
+      .workspace-shell > .main-sidebar .branch-left,
+      .main-sidebar .branch-left {
+        gap: 8px !important;
+      }
+
+      .workspace-shell > .main-sidebar .branch-left strong,
+      .main-sidebar .branch-left strong {
+        font-size: 12.2px !important;
+        line-height: 1.05 !important;
+      }
+
+      .workspace-shell > .main-sidebar .branch-left small,
+      .main-sidebar .branch-left small {
+        font-size: 8.4px !important;
+        margin-top: 1px !important;
+        line-height: 1 !important;
+      }
+
+      .workspace-shell > .main-sidebar .branch-dot,
+      .main-sidebar .branch-dot {
+        width: 8px !important;
+        height: 8px !important;
+        box-shadow: 0 0 0 4px rgba(120,184,62,.13) !important;
+      }
+
+      .workspace-shell > .main-sidebar .branch-dot-abu,
+      .main-sidebar .branch-dot-abu {
+        box-shadow: 0 0 0 4px rgba(18,140,126,.12) !important;
+      }
+
+      .workspace-shell > .main-sidebar .branch-row b,
+      .main-sidebar .branch-row b {
+        min-width: 34px !important;
+        height: 23px !important;
+        padding: 0 8px !important;
+        font-size: 11px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-user,
+      .main-sidebar .sidebar-user {
+        margin-top: 0 !important;
+        min-height: 58px !important;
+        padding: 9px 10px !important;
+        gap: 9px !important;
+        border-radius: 18px !important;
+        box-shadow: 0 9px 20px rgba(15,23,42,.070), inset 0 1px 0 rgba(255,255,255,.72) !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-user-avatar,
+      .main-sidebar .sidebar-user-avatar {
+        width: 38px !important;
+        min-width: 38px !important;
+        height: 38px !important;
+        border-width: 1px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-user-name,
+      .main-sidebar .sidebar-user-name {
+        font-size: 11.5px !important;
+        line-height: 1.12 !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-user-role,
+      .main-sidebar .sidebar-user-role {
+        margin-top: 3px !important;
+        padding: 3px 7px !important;
+        font-size: 8.8px !important;
+        letter-spacing: .72px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-user-role::before,
+      .main-sidebar .sidebar-user-role::before {
+        width: 6px !important;
+        height: 6px !important;
+        box-shadow: 0 0 0 3px rgba(120,184,62,.12) !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-height: 720px) {
+      .workspace-shell > .main-sidebar,
+      .main-sidebar {
+        padding-top: 9px !important;
+        padding-bottom: 9px !important;
+        gap: 8px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-brand,
+      .main-sidebar .sidebar-brand {
+        height: 82px !important;
+        min-height: 82px !important;
+        max-height: 82px !important;
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-brand .sidebar-logo,
+      .main-sidebar .sidebar-brand .sidebar-logo {
+        width: 146px !important;
+        height: 58px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-item,
+      .main-sidebar .sidebar-item {
+        height: 34px !important;
+        min-height: 34px !important;
+        font-size: 12px !important;
+      }
+    }
 
 </style>
 </head>
