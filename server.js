@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-90-browser-100-matches-80-internal-zoom-lock";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-91-v90-badge-cleanup-lock";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -25319,6 +25319,79 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
         justify-content: flex-start !important;
         flex-wrap: wrap !important;
         gap: 6px !important;
+      }
+    }
+
+
+  
+    /* V31.5.8.60.3.9.91 - V90 badge cleanup lock.
+       UI/CSS-only micro patch on top of V90.
+       Scope: stop chat header status badges from clipping at browser zoom 100%.
+       No global layout changes. No API/history/media/webhook/send/archive/branch changes. */
+    @media (min-width: 1181px) {
+      .chat-meta {
+        max-height: 24px !important;
+        min-height: 21px !important;
+        overflow: visible !important;
+        gap: 4px !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span,
+      .chat-meta .branch,
+      .chat-meta .status,
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip,
+      .chat-meta .workflow-status-chip,
+      .chat-meta .assignee-chip {
+        max-width: 136px !important;
+        height: 21px !important;
+        min-height: 21px !important;
+        line-height: 21px !important;
+        padding: 0 8px !important;
+        font-size: 9.4px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+      }
+
+      .chat-meta .branch,
+      .chat-meta .status {
+        max-width: 78px !important;
+      }
+
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip {
+        max-width: 142px !important;
+      }
+
+      .chat-meta > .workflow-status-bar {
+        display: none !important;
+      }
+
+      .reply-panel::after,
+      .reference-version-badge::after {
+        content: "V91" !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-width: 1500px) {
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span,
+      .chat-meta .branch,
+      .chat-meta .status,
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip {
+        max-width: 128px !important;
+        font-size: 9.2px !important;
+        padding: 0 7px !important;
+      }
+
+      .chat-meta .branch,
+      .chat-meta .status {
+        max-width: 72px !important;
       }
     }
 
