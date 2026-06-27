@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-82-stable-100-chat-header-cards-balance";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-83-stable-100-header-final-balance";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -23031,7 +23031,147 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
         font-size: 9px !important;
       }
     }
-</style>
+
+
+    /* V31.5.8.60.3.9.83 - Stable 100% final header balance.
+       UI-only CSS patch on top of V82. Scope: chat header/customer info/actions layout at browser zoom 100%.
+       Fixes title/tag/action compression by moving actions to a dedicated second line when space is tight.
+       Does not touch message history rendering, /api/messages, webhook, send logic, media, archive logic, branch permissions, or JS. */
+    @media (min-width: 1181px) {
+      .chat-head {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        grid-template-rows: auto auto !important;
+        align-items: start !important;
+        gap: 6px !important;
+        min-height: 92px !important;
+        padding: 9px 12px 8px !important;
+        overflow: hidden !important;
+      }
+
+      .chat-customer {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        display: grid !important;
+        grid-template-columns: 42px minmax(0, 1fr) !important;
+        align-items: center !important;
+        gap: 10px !important;
+      }
+
+      .chat-title {
+        max-width: 100% !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        font-size: 16px !important;
+        line-height: 1.05 !important;
+      }
+
+      .chat-meta {
+        max-width: 100% !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 4px !important;
+        overflow: hidden !important;
+        min-height: 22px !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span {
+        flex: 0 1 auto !important;
+        max-width: 102px !important;
+        min-width: 0 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .chat-actions {
+        grid-row: 2 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        display: flex !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+        gap: 5px !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        padding: 0 0 3px !important;
+        scrollbar-width: thin !important;
+      }
+
+      .conversation-status-select {
+        flex: 0 0 104px !important;
+        width: 104px !important;
+        min-width: 104px !important;
+        max-width: 104px !important;
+        height: 30px !important;
+        min-height: 30px !important;
+        padding: 0 22px 0 9px !important;
+        border-radius: 11px !important;
+        font-size: 9.2px !important;
+      }
+
+      .chat-actions .mini-btn {
+        flex: 0 0 auto !important;
+        height: 30px !important;
+        min-height: 30px !important;
+        padding: 0 8px !important;
+        border-radius: 11px !important;
+        font-size: 9.1px !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+      }
+
+      .chat-actions .mini-btn[data-action="copy-phone"],
+      .chat-actions .mini-btn.copy-phone,
+      .chat-actions .mini-btn.mark-read {
+        max-width: 92px !important;
+      }
+
+      .chat-actions .mini-btn.next-customer,
+      .chat-actions .mini-btn.close-next {
+        max-width: 112px !important;
+      }
+
+      .messages {
+        scroll-padding-top: 8px !important;
+      }
+    }
+
+    @media (min-width: 1501px) {
+      .chat-head {
+        grid-template-columns: minmax(230px, 310px) minmax(0, 1fr) !important;
+        grid-template-rows: auto !important;
+        align-items: center !important;
+        min-height: 70px !important;
+        gap: 8px !important;
+      }
+
+      .chat-actions {
+        grid-row: auto !important;
+        justify-content: flex-end !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-width: 1500px) {
+      .chat-head {
+        min-height: 96px !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span {
+        max-width: 92px !important;
+      }
+    }
+
+  </style>
 </head>
 <body>
   <div class="workspace-shell">
