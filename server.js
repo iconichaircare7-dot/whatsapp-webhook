@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-94-header-full-width-badges-lock";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-95-notifications-appointment-polish";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -25776,6 +25776,151 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
         max-width: 150px !important;
         font-size: 8.6px !important;
         padding: 0 7px !important;
+      }
+    }
+
+
+  
+    /* V31.5.8.60.3.9.95 - Notifications + Appointment card polish.
+       UI/CSS-only patch on top of V94.
+       Scope: improve top-right notification visuals and clean the Appointment Request header/details.
+       No message/API/history/media/webhook/send/archive/branch logic changes. */
+    @media (min-width: 1181px) {
+      .topbar-actions {
+        gap: 16px !important;
+      }
+
+      .topbar-system {
+        padding-right: 10px !important;
+      }
+
+      .topbar-notification {
+        position: relative !important;
+        width: 44px !important;
+        min-width: 44px !important;
+        height: 42px !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(120,184,62,.34) !important;
+        background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(244,251,239,.98)) !important;
+        box-shadow: 0 8px 18px rgba(120,184,62,.10) !important;
+        color: #a16207 !important;
+        font-size: 16px !important;
+        line-height: 1 !important;
+        overflow: visible !important;
+      }
+
+      .topbar-notification:hover {
+        border-color: rgba(120,184,62,.50) !important;
+        box-shadow: 0 10px 22px rgba(120,184,62,.14) !important;
+      }
+
+      .topbar-notification .notification-count {
+        top: -5px !important;
+        right: -5px !important;
+        width: 16px !important;
+        height: 16px !important;
+        min-width: 16px !important;
+        min-height: 16px !important;
+        font-size: 9px !important;
+        border: 2px solid #f8fff3 !important;
+        box-shadow: 0 4px 10px rgba(34,197,94,.28) !important;
+      }
+
+      .topbar-profile-avatar {
+        width: 43px !important;
+        height: 43px !important;
+        min-width: 43px !important;
+        margin-left: 1px !important;
+      }
+
+      .booking-request-card {
+        padding: 13px 14px !important;
+      }
+
+      .booking-request-card .reference-card-head {
+        display: flex !important;
+        align-items: flex-start !important;
+        justify-content: space-between !important;
+        gap: 7px 8px !important;
+        flex-wrap: wrap !important;
+        margin-bottom: 8px !important;
+      }
+
+      .booking-request-card .reference-card-head h3,
+      .booking-request-card h3 {
+        flex: 1 1 150px !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        font-size: 14.2px !important;
+        line-height: 1.14 !important;
+        letter-spacing: -.01em !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+      }
+
+      .booking-status-pill,
+      .booking-request-card .booking-status-pill {
+        flex: 0 0 auto !important;
+        max-width: 118px !important;
+        min-height: 18px !important;
+        height: 18px !important;
+        line-height: 18px !important;
+        padding: 0 6px !important;
+        font-size: 8px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .booking-card-helper {
+        margin: 0 0 10px !important;
+        font-size: 10.4px !important;
+        line-height: 1.42 !important;
+      }
+
+      .booking-actions-grid {
+        gap: 6px !important;
+      }
+
+      .booking-action-btn {
+        min-height: 30px !important;
+        font-size: 9.8px !important;
+      }
+
+      .booking-note-input {
+        font-size: 10.2px !important;
+      }
+
+      .booking-request-card .reference-detail-list {
+        margin-top: 10px !important;
+        padding-top: 8px !important;
+      }
+
+      .booking-request-card .reference-detail-row {
+        grid-template-columns: 78px minmax(0, 1fr) !important;
+        gap: 8px !important;
+        padding: 6px 0 !important;
+      }
+
+      .booking-request-card .reference-detail-row span {
+        font-size: 10px !important;
+        letter-spacing: .02em !important;
+      }
+
+      .booking-request-card .reference-detail-row strong {
+        font-size: 11.2px !important;
+        line-height: 1.38 !important;
+      }
+
+      #bookingRequestMessage {
+        max-height: 210px !important;
+        line-height: 1.38 !important;
+      }
+
+      .reply-panel::after,
+      .reference-version-badge::after {
+        content: "V95" !important;
       }
     }
 
