@@ -24353,6 +24353,465 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     }
 
 
+  
+
+    /* V31.5.8.60.3.9.88 - Stable 100% real density without global scale.
+       UI/CSS-only patch. Keeps v87 density direction, but removes the fake full-page shrink
+       that caused the large white area and "zoomed-out" look. No changes to message history,
+       /api/messages, webhook, media rendering, send logic, archive logic, or branch access. */
+    @media (min-width: 1181px) {
+      html,
+      body {
+        width: 100% !important;
+        min-width: 0 !important;
+        height: auto !important;
+        min-height: 100% !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+      }
+
+      body {
+        background: linear-gradient(90deg, #f7fbf4 0%, #ffffff 48%, #f6fbf2 100%) !important;
+      }
+
+      .workspace-shell {
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        height: auto !important;
+        min-height: 100vh !important;
+        max-height: none !important;
+        transform: none !important;
+        transform-origin: top left !important;
+        overflow: visible !important;
+      }
+
+      .page,
+      .page .app,
+      main.app,
+      .messages-panel,
+      .chat-panel,
+      .reply-panel,
+      .right-reference-panel {
+        min-width: 0 !important;
+        max-width: none !important;
+      }
+
+      .workspace-shell,
+      .workspace-shell > .main-sidebar,
+      .main-sidebar {
+        grid-template-columns: 220px minmax(0, 1fr) !important;
+      }
+
+      .workspace-shell > .main-sidebar,
+      .main-sidebar {
+        width: 220px !important;
+        min-width: 220px !important;
+        max-width: 220px !important;
+        padding: 12px 10px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-brand,
+      .main-sidebar .sidebar-brand {
+        height: 82px !important;
+        min-height: 82px !important;
+        padding: 8px 8px 12px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-logo,
+      .main-sidebar .sidebar-logo {
+        width: 138px !important;
+        height: 54px !important;
+        max-width: 138px !important;
+      }
+
+      .workspace-shell > .main-sidebar .sidebar-item,
+      .main-sidebar .sidebar-item {
+        height: 34px !important;
+        min-height: 34px !important;
+        padding: 6px 9px !important;
+        font-size: 11.5px !important;
+      }
+
+      .page .app,
+      main.app {
+        grid-template-columns: minmax(276px, 296px) minmax(0, 1fr) minmax(272px, 300px) !important;
+        gap: 8px !important;
+        align-items: stretch !important;
+        overflow: hidden !important;
+      }
+
+      .topbar {
+        min-height: 72px !important;
+        height: auto !important;
+        padding: 14px 18px 10px !important;
+      }
+
+      .topbar-title {
+        font-size: 18px !important;
+      }
+
+      .topbar-sub {
+        font-size: 11px !important;
+      }
+
+      .reference-conversation-filters {
+        padding: 7px 8px 6px !important;
+        gap: 5px !important;
+      }
+
+      .reference-search-row {
+        grid-template-columns: minmax(0, 1fr) 34px !important;
+        gap: 5px !important;
+      }
+
+      .reference-search-row input,
+      .reference-filter-icon {
+        height: 34px !important;
+        min-height: 34px !important;
+        border-radius: 11px !important;
+      }
+
+      .reference-search-row input {
+        padding: 0 11px !important;
+        font-size: 11.5px !important;
+      }
+
+      .reference-pill,
+      .reference-secondary-pills .reference-pill {
+        height: 27px !important;
+        min-height: 27px !important;
+        padding: 0 7px !important;
+        border-radius: 10px !important;
+        font-size: 9.8px !important;
+      }
+
+      .reference-branch-tab {
+        height: 32px !important;
+        min-height: 32px !important;
+        font-size: 10.6px !important;
+      }
+
+      .needs-action-command-center {
+        gap: 4px !important;
+      }
+
+      .needs-action-card {
+        min-height: 48px !important;
+        padding: 5px 3px !important;
+      }
+
+      .needs-action-card strong {
+        font-size: 14px !important;
+      }
+
+      #conversationList.reference-conversation-list,
+      #conversationList.conversation-list {
+        padding-top: 4px !important;
+      }
+
+      #conversationList .conversation-card.reference-conversation-card {
+        grid-template-columns: 38px minmax(0, 1fr) !important;
+        gap: 8px !important;
+        min-height: 70px !important;
+        margin: 4px 6px !important;
+        padding: 8px 9px !important;
+        border-radius: 13px !important;
+      }
+
+      #conversationList .conversation-card.reference-conversation-card.active {
+        min-height: 74px !important;
+      }
+
+      #conversationList .reference-avatar {
+        width: 36px !important;
+        height: 36px !important;
+        min-width: 36px !important;
+        font-size: 11px !important;
+      }
+
+      #conversationList .reference-card-name {
+        font-size: 11.8px !important;
+        line-height: 1.08 !important;
+      }
+
+      #conversationList .reference-card-preview,
+      #conversationList .reference-card-snippet {
+        font-size: 10.4px !important;
+        line-height: 1.16 !important;
+      }
+
+      #conversationList .reference-card-time {
+        max-width: 74px !important;
+        font-size: 7.8px !important;
+      }
+
+      #conversationList .branch,
+      #conversationList .status,
+      #conversationList .conversation-tag-chip,
+      #conversationList .message-count-badge,
+      #conversationList .unread-badge,
+      #conversationList .tag,
+      #conversationList .chip {
+        height: 17px !important;
+        min-height: 17px !important;
+        line-height: 17px !important;
+        padding: 0 6px !important;
+        font-size: 8.1px !important;
+      }
+
+      .chat-panel {
+        display: grid !important;
+        grid-template-rows: auto minmax(0, 1fr) auto !important;
+        overflow: hidden !important;
+      }
+
+      .chat-head {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) auto !important;
+        grid-template-rows: auto !important;
+        align-items: center !important;
+        align-content: center !important;
+        gap: 8px 10px !important;
+        min-height: 74px !important;
+        padding: 9px 12px !important;
+        width: 100% !important;
+        overflow: visible !important;
+      }
+
+      .chat-customer {
+        grid-column: 1 !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        display: grid !important;
+        grid-template-columns: 40px minmax(0, 1fr) !important;
+        align-items: center !important;
+        gap: 9px !important;
+        overflow: hidden !important;
+      }
+
+      .chat-head .avatar,
+      .chat-customer .avatar {
+        width: 40px !important;
+        height: 40px !important;
+        min-width: 40px !important;
+        min-height: 40px !important;
+        font-size: 11px !important;
+      }
+
+      .chat-title {
+        font-size: 16px !important;
+        line-height: 1.08 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .chat-meta {
+        min-width: 0 !important;
+        min-height: 20px !important;
+        max-height: 24px !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 4px !important;
+        margin-top: 4px !important;
+        overflow: hidden !important;
+      }
+
+      .chat-meta > .workflow-status-bar {
+        display: none !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span,
+      .chat-meta .branch,
+      .chat-meta .status,
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip,
+      .chat-meta .workflow-status-chip,
+      .chat-meta .assignee-chip {
+        flex: 0 1 auto !important;
+        max-width: 120px !important;
+        min-width: 0 !important;
+        height: 20px !important;
+        min-height: 20px !important;
+        line-height: 20px !important;
+        padding: 0 7px !important;
+        border-radius: 999px !important;
+        font-size: 9.6px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .chat-actions {
+        grid-column: 2 !important;
+        width: auto !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        align-content: center !important;
+        gap: 5px !important;
+        overflow: visible !important;
+      }
+
+      .conversation-status-select {
+        flex: 0 0 104px !important;
+        width: 104px !important;
+        min-width: 104px !important;
+        max-width: 104px !important;
+        height: 29px !important;
+        min-height: 29px !important;
+        max-height: 29px !important;
+        padding: 0 22px 0 9px !important;
+        border-radius: 11px !important;
+        font-size: 9.2px !important;
+      }
+
+      .chat-actions .mini-btn,
+      .chat-head .mini-btn {
+        flex: 0 0 auto !important;
+        height: 29px !important;
+        min-height: 29px !important;
+        max-height: 29px !important;
+        padding: 0 8px !important;
+        border-radius: 11px !important;
+        font-size: 9.2px !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+      }
+
+      .chat-composer-wrap {
+        padding: 8px 10px 10px !important;
+      }
+
+      .reference-card.customer-details-card,
+      .customer-details-card {
+        padding: 13px 14px !important;
+        border-radius: 18px !important;
+      }
+
+      .reference-card-head,
+      .reference-card.customer-details-card .reference-card-head,
+      .right-reference-panel .reference-card-head,
+      .right-reference-panel .panel-head {
+        padding-right: 64px !important;
+      }
+
+      .reference-card-head h3,
+      .right-reference-panel .reference-card-head h3,
+      .right-reference-panel .panel-title,
+      .customer-profile-title {
+        max-width: calc(100% - 58px) !important;
+        font-size: 15px !important;
+        line-height: 1.08 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .customer-details-top .reference-avatar {
+        width: 42px !important;
+        height: 42px !important;
+        min-width: 42px !important;
+      }
+
+      .customer-name {
+        font-size: 14px !important;
+      }
+
+      .customer-phone-small {
+        font-size: 10px !important;
+      }
+
+      .crm-privacy-strip {
+        min-height: 28px !important;
+        padding: 0 10px !important;
+        font-size: 10px !important;
+      }
+
+      .reference-detail-row {
+        grid-template-columns: 92px minmax(0, 1fr) !important;
+        gap: 8px !important;
+        font-size: 10.5px !important;
+      }
+
+      .assign-team-card {
+        padding: 10px !important;
+        margin-top: 10px !important;
+        border-radius: 14px !important;
+      }
+
+      .branch-team-select {
+        height: 34px !important;
+        min-height: 34px !important;
+        font-size: 10.8px !important;
+      }
+
+      .reply-panel::after,
+      .reference-version-badge::after {
+        content: "V88" !important;
+        top: 15px !important;
+        right: 15px !important;
+        padding: 5px 9px !important;
+        font-size: 10.5px !important;
+        z-index: 24 !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-width: 1500px) {
+      .page .app,
+      main.app {
+        grid-template-columns: minmax(268px, 286px) minmax(0, 1fr) minmax(262px, 288px) !important;
+        gap: 7px !important;
+      }
+
+      .chat-head {
+        grid-template-columns: minmax(0, 1fr) !important;
+        grid-template-rows: auto auto !important;
+        align-items: start !important;
+        gap: 6px !important;
+        min-height: 96px !important;
+      }
+
+      .chat-actions {
+        grid-column: 1 !important;
+        justify-content: flex-start !important;
+        flex-wrap: wrap !important;
+        gap: 5px !important;
+      }
+
+      .conversation-status-select {
+        flex-basis: 100px !important;
+        width: 100px !important;
+        min-width: 100px !important;
+        max-width: 100px !important;
+      }
+
+      .chat-actions .mini-btn,
+      .chat-head .mini-btn {
+        font-size: 9px !important;
+        padding: 0 7px !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span,
+      .chat-meta .branch,
+      .chat-meta .status,
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip {
+        max-width: 108px !important;
+      }
+    }
+
+
   </style>
 </head>
 <body>
