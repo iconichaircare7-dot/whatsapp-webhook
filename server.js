@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-86-stable-100-two-row-header-layout-lock";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-87-stable-100-density-match-80-reference";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -24163,6 +24163,192 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       .chat-meta .sender-badge,
       .chat-meta .tag-chip {
         max-width: 112px !important;
+      }
+    }
+
+
+    /* V31.5.8.60.3.9.87 - 100% desktop density match to the accepted 80% reference.
+       UI/CSS-only patch. This intentionally does NOT touch /api/messages, loadMessagesFromGoogleSheet,
+       message history rendering, media rendering, webhook, WhatsApp send logic, archive logic,
+       smart refresh, branch permissions, Basic Auth, Google Sheet data logic, Meta webhook logic,
+       message grouping, or timestamps.
+
+       Reason:
+       v86 fixed the real header collision by separating customer identity from controls, but the
+       user-approved visual reference is the browser 80% screenshot. This patch makes browser 100%
+       render with the same professional density by scaling the desktop workspace internally and
+       expanding its layout canvas back to the viewport size. The user stays at browser zoom 100%. */
+    @media (min-width: 1181px) {
+      :root {
+        --iconic-density-v87: .88;
+      }
+
+      html,
+      body {
+        width: 100% !important;
+        height: 100% !important;
+        overflow: hidden !important;
+      }
+
+      body {
+        background: linear-gradient(90deg, #f7fbf4 0%, #ffffff 48%, #f6fbf2 100%) !important;
+      }
+
+      .workspace-shell {
+        width: calc(100vw / var(--iconic-density-v87)) !important;
+        height: calc(100vh / var(--iconic-density-v87)) !important;
+        min-width: calc(100vw / var(--iconic-density-v87)) !important;
+        min-height: calc(100vh / var(--iconic-density-v87)) !important;
+        max-width: none !important;
+        max-height: none !important;
+        transform: scale(var(--iconic-density-v87)) !important;
+        transform-origin: top left !important;
+        overflow: hidden !important;
+      }
+
+      .topbar {
+        min-height: 76px !important;
+        height: 76px !important;
+        padding: 16px 20px 12px !important;
+      }
+
+      .page,
+      .page .app,
+      main.app {
+        min-width: 0 !important;
+        max-width: none !important;
+        overflow: hidden !important;
+      }
+
+      .page .app,
+      main.app {
+        grid-template-columns: minmax(286px, 320px) minmax(0, 1fr) minmax(292px, 330px) !important;
+        gap: 10px !important;
+      }
+
+      .chat-head {
+        min-height: 92px !important;
+        padding: 11px 14px 10px !important;
+        gap: 8px !important;
+      }
+
+      .chat-actions {
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+        gap: 7px !important;
+        overflow: visible !important;
+      }
+
+      .conversation-status-select {
+        flex: 0 0 126px !important;
+        width: 126px !important;
+        min-width: 126px !important;
+        max-width: 126px !important;
+        height: 32px !important;
+        min-height: 32px !important;
+        max-height: 32px !important;
+        font-size: 10.1px !important;
+      }
+
+      .chat-actions .mini-btn,
+      .chat-head .mini-btn {
+        height: 32px !important;
+        min-height: 32px !important;
+        max-height: 32px !important;
+        padding: 0 10px !important;
+        font-size: 10px !important;
+      }
+
+      #copyPhoneBtn,
+      #markReadBtn,
+      #nextCustomerBtn {
+        width: 52px !important;
+        max-width: 52px !important;
+      }
+
+      #closeNextBtn {
+        width: 98px !important;
+        max-width: 98px !important;
+      }
+
+      #archiveConversationBtn {
+        width: 78px !important;
+        max-width: 78px !important;
+      }
+
+      .chat-title {
+        font-size: 17px !important;
+      }
+
+      .chat-meta {
+        gap: 5px !important;
+        max-height: 26px !important;
+        flex-wrap: nowrap !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span,
+      .chat-meta .branch,
+      .chat-meta .status,
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip,
+      .chat-meta .workflow-status-chip,
+      .chat-meta .assignee-chip {
+        max-width: 145px !important;
+        height: 21px !important;
+        min-height: 21px !important;
+        line-height: 21px !important;
+        padding: 0 8px !important;
+        font-size: 10px !important;
+      }
+
+      .right-reference-panel .reference-card-head,
+      .right-reference-panel .panel-head,
+      .reply-panel .panel-head {
+        padding-right: 78px !important;
+      }
+
+      .right-reference-panel .reference-card-head h3,
+      .right-reference-panel .panel-title,
+      .customer-profile-title {
+        max-width: calc(100% - 72px) !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+      }
+
+      .reply-panel::after,
+      .reference-version-badge::after {
+        content: "V87" !important;
+        top: 15px !important;
+        right: 15px !important;
+        padding: 5px 9px !important;
+        font-size: 10.5px !important;
+        z-index: 24 !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-width: 1500px) {
+      :root {
+        --iconic-density-v87: .86;
+      }
+
+      .page .app,
+      main.app {
+        grid-template-columns: minmax(280px, 306px) minmax(0, 1fr) minmax(286px, 318px) !important;
+        gap: 9px !important;
+      }
+
+      .chat-actions {
+        gap: 6px !important;
+      }
+
+      .conversation-status-select {
+        flex-basis: 118px !important;
+        width: 118px !important;
+        min-width: 118px !important;
+        max-width: 118px !important;
       }
     }
 
