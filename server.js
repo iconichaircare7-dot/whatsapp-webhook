@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-84-stable-100-header-real-layout";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-85-stable-100-real-density-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -23451,6 +23451,333 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       }
     }
 
+
+    /* V31.5.8.60.3.9.85 - Stable 100% real density fix.
+       UI/CSS/label-only patch. Does not touch /api/messages, loadMessagesFromGoogleSheet,
+       message history rendering, media rendering, webhook, WhatsApp send logic, archive logic,
+       branch permissions, Basic Auth, Google Sheet data logic, or Meta webhook logic.
+
+       Why this exists after v84:
+       v84 stopped the worst header collision, but it still spent too much desktop space on
+       repeated header labels. v85 removes the non-operational "Chat UI upgraded" pseudo badge,
+       hides the duplicate workflow/assignee row from the chat header, and gives the center chat
+       column a stronger desktop width budget at 100% browser zoom. */
+    @media (min-width: 1181px) {
+      :root {
+        --iconic-sidebar-v85-width: 218px !important;
+      }
+
+      .workspace-shell {
+        grid-template-columns: var(--iconic-sidebar-v85-width) minmax(0, 1fr) !important;
+        gap: 0 !important;
+        overflow: hidden !important;
+      }
+
+      .workspace-shell > .main-sidebar,
+      .main-sidebar {
+        width: var(--iconic-sidebar-v85-width) !important;
+        min-width: var(--iconic-sidebar-v85-width) !important;
+        max-width: var(--iconic-sidebar-v85-width) !important;
+        padding-left: 9px !important;
+        padding-right: 9px !important;
+      }
+
+      .page,
+      .page .app,
+      main.app,
+      .page .app > .panel,
+      .page .app > aside.panel:first-child,
+      .page .app > section.chat-panel,
+      .page .app > aside.reply-panel,
+      .messages-panel,
+      .chat-panel,
+      .reply-panel,
+      .right-reference-panel {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      .page .app,
+      main.app {
+        display: grid !important;
+        grid-template-columns: minmax(272px, 300px) minmax(650px, 1fr) minmax(262px, 300px) !important;
+        gap: 8px !important;
+        align-items: stretch !important;
+        overflow: hidden !important;
+      }
+
+      .page .app > aside.panel:first-child,
+      .page .app > .panel:first-child,
+      .messages-panel {
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: 300px !important;
+      }
+
+      .page .app > aside.reply-panel,
+      .reply-panel,
+      .right-reference-panel {
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: 300px !important;
+      }
+
+      .chat-panel {
+        width: auto !important;
+        min-width: 0 !important;
+        display: grid !important;
+        grid-template-rows: auto minmax(0, 1fr) auto !important;
+        overflow: hidden !important;
+      }
+
+      .chat-head {
+        grid-row: 1 !important;
+        display: grid !important;
+        grid-template-columns: minmax(250px, 1fr) auto !important;
+        grid-template-rows: auto !important;
+        align-items: center !important;
+        gap: 8px 10px !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        height: auto !important;
+        min-height: 68px !important;
+        max-height: none !important;
+        padding: 9px 12px !important;
+        overflow: visible !important;
+        border-radius: 24px 24px 0 0 !important;
+      }
+
+      .chat-customer {
+        grid-column: 1 !important;
+        grid-row: 1 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        display: grid !important;
+        grid-template-columns: 40px minmax(0, 1fr) !important;
+        align-items: center !important;
+        gap: 9px !important;
+        padding-top: 0 !important;
+        overflow: hidden !important;
+      }
+
+      .chat-head .avatar,
+      .chat-customer .avatar {
+        width: 40px !important;
+        height: 40px !important;
+        min-width: 40px !important;
+        min-height: 40px !important;
+        font-size: 11px !important;
+      }
+
+      .chat-title {
+        max-width: 100% !important;
+        min-width: 0 !important;
+        font-size: 16px !important;
+        line-height: 1.08 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .chat-title::after {
+        content: none !important;
+        display: none !important;
+      }
+
+      .chat-meta {
+        max-width: 100% !important;
+        min-width: 0 !important;
+        min-height: 20px !important;
+        max-height: 24px !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 4px !important;
+        margin-top: 4px !important;
+        overflow: hidden !important;
+      }
+
+      .chat-meta > .workflow-status-bar {
+        display: none !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span,
+      .chat-meta .branch,
+      .chat-meta .status,
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip {
+        flex: 0 1 auto !important;
+        max-width: 112px !important;
+        min-width: 0 !important;
+        height: 20px !important;
+        min-height: 20px !important;
+        line-height: 20px !important;
+        padding: 0 7px !important;
+        border-radius: 999px !important;
+        font-size: 9.6px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .chat-actions {
+        grid-column: 2 !important;
+        grid-row: 1 !important;
+        width: auto !important;
+        max-width: 520px !important;
+        min-width: 0 !important;
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        align-content: center !important;
+        gap: 5px !important;
+        padding: 0 !important;
+        overflow: visible !important;
+      }
+
+      .conversation-status-select {
+        flex: 0 0 104px !important;
+        width: 104px !important;
+        min-width: 104px !important;
+        max-width: 104px !important;
+        height: 29px !important;
+        min-height: 29px !important;
+        max-height: 29px !important;
+        padding: 0 22px 0 9px !important;
+        border-radius: 11px !important;
+        font-size: 9.2px !important;
+        line-height: 1 !important;
+      }
+
+      .chat-actions .mini-btn,
+      .chat-head .mini-btn {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        height: 29px !important;
+        min-height: 29px !important;
+        max-height: 29px !important;
+        padding: 0 8px !important;
+        border-radius: 11px !important;
+        font-size: 9.2px !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+      }
+
+      .chat-tags-menu-wrap .more-btn,
+      #chatTagsMenuBtn {
+        width: 29px !important;
+        min-width: 29px !important;
+        padding: 0 !important;
+      }
+
+      .chat-body {
+        grid-row: 2 !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+      }
+
+      .chat-composer-wrap {
+        grid-row: 3 !important;
+      }
+
+      .reply-panel .panel-head,
+      .right-reference-panel .panel-head,
+      .customer-profile-card .panel-head {
+        padding-right: 60px !important;
+      }
+
+      .reply-panel .panel-title,
+      .right-reference-panel .panel-title,
+      .customer-profile-title {
+        max-width: 100% !important;
+        min-width: 0 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .reference-version-badge::after {
+        content: "V85" !important;
+        font-size: 11px !important;
+        padding: 6px 9px !important;
+        letter-spacing: 0 !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-width: 1500px) {
+      :root {
+        --iconic-sidebar-v85-width: 206px !important;
+      }
+
+      .page .app,
+      main.app {
+        grid-template-columns: minmax(246px, 270px) minmax(520px, 1fr) minmax(238px, 270px) !important;
+        gap: 6px !important;
+      }
+
+      .page .app > aside.panel:first-child,
+      .page .app > .panel:first-child,
+      .messages-panel {
+        max-width: 270px !important;
+      }
+
+      .page .app > aside.reply-panel,
+      .reply-panel,
+      .right-reference-panel {
+        max-width: 270px !important;
+      }
+
+      .chat-head {
+        grid-template-columns: minmax(0, 1fr) !important;
+        grid-template-rows: auto auto !important;
+        min-height: 94px !important;
+        gap: 6px !important;
+        padding: 8px 10px !important;
+      }
+
+      .chat-customer {
+        grid-column: 1 !important;
+        grid-row: 1 !important;
+      }
+
+      .chat-actions {
+        grid-column: 1 !important;
+        grid-row: 2 !important;
+        max-width: 100% !important;
+        justify-content: flex-start !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        scrollbar-width: thin !important;
+        padding-bottom: 2px !important;
+      }
+
+      .chat-actions::-webkit-scrollbar {
+        height: 3px !important;
+        display: block !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span,
+      .chat-meta .branch,
+      .chat-meta .status,
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip {
+        max-width: 94px !important;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -23653,10 +23980,10 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
               <option value="Closed">Closed</option>
               <option value="Archived">Archived</option>
             </select>
-            <button type="button" class="mini-btn" id="copyPhoneBtn">Copy phone</button>
-            <button type="button" class="mini-btn" id="markReadBtn">Mark read</button>
-            <button type="button" class="mini-btn workflow-next-btn" id="nextCustomerBtn" title="Jump to the next active customer">Next Customer</button>
-            <button type="button" class="mini-btn workflow-close-next-btn" id="closeNextBtn" title="Close this conversation and open the next active customer">Close & Next</button>
+            <button type="button" class="mini-btn" id="copyPhoneBtn" title="Copy customer phone">Copy</button>
+            <button type="button" class="mini-btn" id="markReadBtn" title="Mark this conversation as read">Read</button>
+            <button type="button" class="mini-btn workflow-next-btn" id="nextCustomerBtn" title="Jump to the next active customer">Next</button>
+            <button type="button" class="mini-btn workflow-close-next-btn" id="closeNextBtn" title="Close this conversation and open the next active customer">Close + Next</button>
             <button type="button" class="mini-btn" id="archiveConversationBtn" title="Archive this conversation from the active inbox">Archive</button>
             <div class="chat-tags-menu-wrap">
               <button type="button" class="mini-btn more-btn" id="chatTagsMenuBtn" aria-label="Conversation tags">⋮</button>
