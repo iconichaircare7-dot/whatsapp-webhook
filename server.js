@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-81-rollback-v80-compact-100-layout";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-82-stable-100-chat-header-cards-balance";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -22855,6 +22855,180 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
 
       .chat-customer {
         max-width: 28% !important;
+      }
+    }
+
+
+    /* V31.5.8.60.3.9.82 - Stable 100% layout balance.
+       UI-only CSS patch on top of V81. Scope: chat header no-overlap, cleaner customer-card density,
+       safer middle-column/composer width at browser zoom 100%.
+       Does not touch message history rendering, /api/messages, webhook, send logic, media, archive logic, branch permissions, or JS. */
+    @media (min-width: 1181px) {
+      .page .app,
+      main.app {
+        grid-template-columns: minmax(286px, 306px) minmax(0, 1fr) minmax(282px, 318px) !important;
+        gap: 9px !important;
+      }
+
+      .chat-head {
+        display: grid !important;
+        grid-template-columns: minmax(178px, 240px) minmax(0, 1fr) !important;
+        align-items: center !important;
+        min-height: 68px !important;
+        padding: 8px 11px !important;
+        overflow: hidden !important;
+      }
+
+      .chat-customer {
+        max-width: none !important;
+        min-width: 0 !important;
+        width: 100% !important;
+        display: grid !important;
+        grid-template-columns: 42px minmax(0, 1fr) !important;
+        align-items: center !important;
+      }
+
+      .chat-customer > div:last-child {
+        min-width: 0 !important;
+        overflow: hidden !important;
+      }
+
+      .chat-title {
+        max-width: 100% !important;
+        font-size: 16px !important;
+      }
+
+      .chat-meta {
+        max-width: 100% !important;
+        max-height: 23px !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 5px !important;
+        overflow: hidden !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span {
+        max-width: 108px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .chat-actions {
+        min-width: 0 !important;
+        width: 100% !important;
+        justify-content: flex-end !important;
+        gap: 5px !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        padding: 1px 0 3px !important;
+      }
+
+      .conversation-status-select {
+        height: 31px !important;
+        min-height: 31px !important;
+        min-width: 104px !important;
+        max-width: 124px !important;
+        padding: 0 24px 0 10px !important;
+        border-radius: 11px !important;
+        font-size: 9.6px !important;
+      }
+
+      .chat-actions .mini-btn {
+        height: 31px !important;
+        min-height: 31px !important;
+        padding: 0 9px !important;
+        border-radius: 11px !important;
+        font-size: 9.4px !important;
+      }
+
+      #conversationList .conversation-card.reference-conversation-card {
+        min-height: 66px !important;
+        padding: 7px 8px !important;
+        gap: 7px !important;
+      }
+
+      #conversationList .conversation-card.reference-conversation-card.active {
+        min-height: 70px !important;
+        padding: 7px 8px !important;
+      }
+
+      #conversationList .reference-avatar {
+        width: 34px !important;
+        height: 34px !important;
+        min-width: 34px !important;
+      }
+
+      #conversationList .reference-card-name {
+        font-size: 11.6px !important;
+      }
+
+      #conversationList .reference-card-snippet {
+        font-size: 10.2px !important;
+        line-height: 1.15 !important;
+        max-height: 24px !important;
+        overflow: hidden !important;
+      }
+
+      #conversationList .reference-card-time {
+        max-width: 68px !important;
+        font-size: 7.4px !important;
+      }
+
+      #conversationList .tag,
+      #conversationList .chip,
+      #conversationList .conversation-tag,
+      #conversationList .reference-tag {
+        font-size: 8.2px !important;
+        line-height: 1 !important;
+        padding: 3px 6px !important;
+        max-width: 86px !important;
+      }
+
+      .chat-composer-wrap {
+        padding: 8px 10px 10px !important;
+      }
+
+      .reply-box,
+      .composer-card,
+      .whatsapp-composer,
+      .composer-shell {
+        max-width: 100% !important;
+        overflow: hidden !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-width: 1500px) {
+      .page .app,
+      main.app {
+        grid-template-columns: minmax(270px, 292px) minmax(0, 1fr) minmax(262px, 292px) !important;
+        gap: 7px !important;
+      }
+
+      .chat-head {
+        grid-template-columns: 1fr !important;
+        grid-template-rows: auto auto !important;
+        align-items: start !important;
+        min-height: 92px !important;
+        gap: 6px !important;
+      }
+
+      .chat-actions {
+        justify-content: flex-start !important;
+        flex-wrap: nowrap !important;
+      }
+
+      .conversation-status-select {
+        min-width: 96px !important;
+        max-width: 112px !important;
+      }
+
+      .chat-actions .mini-btn {
+        padding: 0 8px !important;
+        font-size: 9px !important;
       }
     }
 </style>
