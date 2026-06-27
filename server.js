@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-92-v91-right-panel-rest-polish";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-94-header-full-width-badges-lock";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -25516,6 +25516,266 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       .reply-panel::after,
       .reference-version-badge::after {
         content: "V92" !important;
+      }
+    }
+
+
+  
+    /* V31.5.8.60.3.9.93 - V92 chat header badges clean lock.
+       UI/CSS-only micro patch on top of V92.
+       Scope: fix clipped customer header badges in the circled area.
+       No global density/layout reset. No API/history/media/webhook/send/archive/branch changes. */
+    @media (min-width: 1181px) {
+      .chat-head {
+        min-height: 82px !important;
+        padding: 9px 12px 10px !important;
+        align-items: center !important;
+        overflow: visible !important;
+      }
+
+      .chat-customer {
+        align-items: start !important;
+        overflow: visible !important;
+        min-width: 0 !important;
+      }
+
+      .chat-customer > div:not(.avatar) {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        overflow: visible !important;
+      }
+
+      .chat-title {
+        line-height: 1.05 !important;
+        margin-bottom: 3px !important;
+      }
+
+      .chat-meta {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        align-content: flex-start !important;
+        gap: 4px 5px !important;
+        min-height: 22px !important;
+        max-height: 48px !important;
+        overflow: visible !important;
+        padding-bottom: 1px !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span,
+      .chat-meta .branch,
+      .chat-meta .status,
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip,
+      .chat-meta .workflow-status-chip,
+      .chat-meta .assignee-chip {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        max-width: 170px !important;
+        min-width: 0 !important;
+        height: 20px !important;
+        min-height: 20px !important;
+        line-height: 20px !important;
+        padding: 0 7px !important;
+        border-radius: 999px !important;
+        font-size: 8.9px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .chat-meta .branch {
+        max-width: 92px !important;
+      }
+
+      .chat-meta .status {
+        max-width: 86px !important;
+      }
+
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip {
+        max-width: 150px !important;
+      }
+
+      .chat-actions {
+        align-self: center !important;
+        flex-wrap: nowrap !important;
+      }
+
+      .reply-panel::after,
+      .reference-version-badge::after {
+        content: "V93" !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-width: 1500px) {
+      .chat-head {
+        grid-template-columns: minmax(0, 1fr) !important;
+        grid-template-rows: auto auto !important;
+        min-height: 98px !important;
+        align-items: start !important;
+        gap: 6px !important;
+      }
+
+      .chat-actions {
+        grid-column: 1 !important;
+        grid-row: 2 !important;
+        justify-content: flex-start !important;
+        flex-wrap: wrap !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span,
+      .chat-meta .branch,
+      .chat-meta .status,
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip {
+        max-width: 140px !important;
+        font-size: 8.8px !important;
+      }
+    }
+
+
+  
+    /* V31.5.8.60.3.9.94 - Header full-width badges lock.
+       UI/CSS-only patch on top of V93.
+       Real fix for clipped customer header badges: customer identity gets full row width,
+       controls stay on a separate row. No API/history/media/webhook/send/archive/branch changes. */
+    @media (min-width: 1181px) {
+      .chat-head {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        grid-template-rows: auto auto !important;
+        align-items: start !important;
+        align-content: start !important;
+        gap: 7px !important;
+        min-height: 96px !important;
+        height: auto !important;
+        padding: 9px 12px 10px !important;
+        overflow: visible !important;
+      }
+
+      .chat-customer {
+        grid-column: 1 / -1 !important;
+        grid-row: 1 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        display: grid !important;
+        grid-template-columns: 40px minmax(0, 1fr) !important;
+        align-items: start !important;
+        gap: 9px !important;
+        overflow: visible !important;
+      }
+
+      .chat-customer > div:not(.avatar) {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        overflow: visible !important;
+      }
+
+      .chat-title {
+        font-size: 16px !important;
+        line-height: 1.05 !important;
+        margin: 0 0 3px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .chat-meta {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        min-height: 22px !important;
+        max-height: 48px !important;
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        align-content: flex-start !important;
+        gap: 4px 5px !important;
+        overflow: visible !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span,
+      .chat-meta .branch,
+      .chat-meta .status,
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip,
+      .chat-meta .workflow-status-chip,
+      .chat-meta .assignee-chip {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        max-width: 180px !important;
+        min-width: 0 !important;
+        height: 20px !important;
+        min-height: 20px !important;
+        line-height: 20px !important;
+        padding: 0 8px !important;
+        border-radius: 999px !important;
+        font-size: 8.8px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .chat-meta .branch {
+        max-width: 110px !important;
+      }
+
+      .chat-meta .status {
+        max-width: 105px !important;
+      }
+
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip {
+        max-width: 170px !important;
+      }
+
+      .chat-actions {
+        grid-column: 1 / -1 !important;
+        grid-row: 2 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        justify-content: flex-end !important;
+        align-items: center !important;
+        gap: 5px !important;
+        overflow: visible !important;
+      }
+
+      .reply-panel::after,
+      .reference-version-badge::after {
+        content: "V94" !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-width: 1500px) {
+      .chat-head {
+        min-height: 102px !important;
+      }
+
+      .chat-actions {
+        justify-content: flex-start !important;
+        flex-wrap: wrap !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span,
+      .chat-meta .branch,
+      .chat-meta .status,
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip {
+        max-width: 150px !important;
+        font-size: 8.6px !important;
+        padding: 0 7px !important;
       }
     }
 
