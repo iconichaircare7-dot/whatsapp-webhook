@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-85-stable-100-real-density-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-86-stable-100-two-row-header-layout-lock";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -23172,7 +23172,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     }
 
 
-    /* V31.5.8.60.3.9.84 - Stable 100% header real layout fix.
+    /* V31.5.8.60.3.9.86 - Stable 100% header real layout fix.
        UI/CSS only. This patch keeps the message history, /api/messages, media rendering,
        WhatsApp send logic, webhook, archive logic, Google Sheet loading, and branch access untouched.
        Goal: stop the desktop 100% chat header from compressing customer badges and action buttons. */
@@ -23387,7 +23387,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
 
       .reply-panel::after,
       .reference-version-badge::after {
-        content: "V31.5.8.60.3.9.84" !important;
+        content: "V31.5.8.60.3.9.86" !important;
       }
     }
 
@@ -23707,7 +23707,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       }
 
       .reference-version-badge::after {
-        content: "V85" !important;
+        content: "V86" !important;
         font-size: 11px !important;
         padding: 6px 9px !important;
         letter-spacing: 0 !important;
@@ -23777,6 +23777,395 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
         max-width: 94px !important;
       }
     }
+
+
+    /* V31.5.8.60.3.9.86 - Stable 100% two-row header layout lock.
+       UI/CSS only. It does not touch /api/messages, loadMessagesFromGoogleSheet,
+       message history rendering, media rendering, webhook, WhatsApp send logic,
+       archive logic, branch permissions, Basic Auth, Google Sheet data logic,
+       Meta webhook logic, grouping, or timestamps.
+
+       Real fix after v84/v85:
+       The prior patches still let the name/badges and action buttons compete in
+       one horizontal row. This locks the chat header into two predictable rows:
+       row 1 = customer identity + badges, row 2 = operational buttons.
+       It also makes the version badge small so it no longer covers the CRM title. */
+    @media (min-width: 1181px) {
+      html,
+      body {
+        overflow-x: hidden !important;
+      }
+
+      .workspace-shell,
+      .workspace-shell > .page,
+      .page,
+      .page .app,
+      main.app,
+      .page .app > .panel,
+      .messages-panel,
+      .chat-panel,
+      .reply-panel,
+      .right-reference-panel {
+        min-width: 0 !important;
+        box-sizing: border-box !important;
+      }
+
+      .workspace-shell {
+        grid-template-columns: 248px minmax(0, 1fr) !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        overflow: hidden !important;
+      }
+
+      .main-sidebar,
+      .workspace-shell > .main-sidebar {
+        width: 248px !important;
+        min-width: 248px !important;
+        max-width: 248px !important;
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+      }
+
+      .page {
+        width: 100% !important;
+        max-width: none !important;
+        padding: 14px 14px 34px !important;
+        overflow: hidden !important;
+      }
+
+      .topbar {
+        margin-bottom: 10px !important;
+        padding: 10px 14px !important;
+        min-height: 68px !important;
+      }
+
+      .page .app,
+      main.app {
+        display: grid !important;
+        grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) minmax(320px, 350px) !important;
+        gap: 10px !important;
+        align-items: stretch !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-height: 0 !important;
+        height: calc(100vh - 104px) !important;
+        overflow: hidden !important;
+      }
+
+      .page .app > aside.panel:first-child,
+      .page .app > .panel:first-child,
+      .messages-panel {
+        width: auto !important;
+        max-width: 340px !important;
+        overflow: hidden !important;
+      }
+
+      .page .app > aside.reply-panel,
+      .reply-panel,
+      .right-reference-panel {
+        width: auto !important;
+        max-width: 350px !important;
+        overflow: hidden !important;
+      }
+
+      .chat-panel {
+        display: grid !important;
+        grid-template-rows: auto minmax(0, 1fr) auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+      }
+
+      .chat-head {
+        grid-row: 1 !important;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        grid-template-rows: auto auto !important;
+        align-items: start !important;
+        align-content: start !important;
+        gap: 8px !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        min-height: 100px !important;
+        height: auto !important;
+        max-height: none !important;
+        padding: 10px 14px 11px !important;
+        overflow: visible !important;
+        border-radius: 24px 24px 0 0 !important;
+      }
+
+      .chat-customer {
+        grid-column: 1 !important;
+        grid-row: 1 !important;
+        display: grid !important;
+        grid-template-columns: 42px minmax(0, 1fr) !important;
+        align-items: center !important;
+        gap: 10px !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        overflow: visible !important;
+      }
+
+      .chat-customer > div:not(.avatar) {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        overflow: visible !important;
+      }
+
+      .chat-head .avatar,
+      .chat-customer .avatar {
+        width: 42px !important;
+        height: 42px !important;
+        min-width: 42px !important;
+        min-height: 42px !important;
+        font-size: 11px !important;
+      }
+
+      .chat-title {
+        max-width: 100% !important;
+        min-width: 0 !important;
+        font-size: 16px !important;
+        line-height: 1.08 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .chat-title::after {
+        content: none !important;
+        display: none !important;
+      }
+
+      .chat-meta {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        align-content: flex-start !important;
+        gap: 4px 5px !important;
+        margin-top: 4px !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        max-height: none !important;
+        overflow: visible !important;
+      }
+
+      .chat-meta > .workflow-status-bar {
+        display: none !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span,
+      .chat-meta .branch,
+      .chat-meta .status,
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip,
+      .chat-meta .workflow-status-chip,
+      .chat-meta .assignee-chip {
+        flex: 0 1 auto !important;
+        width: auto !important;
+        max-width: 150px !important;
+        min-width: 0 !important;
+        height: 20px !important;
+        min-height: 20px !important;
+        line-height: 20px !important;
+        padding: 0 7px !important;
+        border-radius: 999px !important;
+        font-size: 9.5px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .chat-actions {
+        grid-column: 1 !important;
+        grid-row: 2 !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 6px !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        padding: 0 !important;
+        overflow-x: auto !important;
+        overflow-y: visible !important;
+        scrollbar-width: none !important;
+      }
+
+      .chat-actions::-webkit-scrollbar {
+        display: none !important;
+      }
+
+      .conversation-status-select {
+        flex: 0 0 118px !important;
+        width: 118px !important;
+        min-width: 118px !important;
+        max-width: 118px !important;
+        height: 30px !important;
+        min-height: 30px !important;
+        max-height: 30px !important;
+        padding: 0 24px 0 10px !important;
+        border-radius: 12px !important;
+        font-size: 9.4px !important;
+        line-height: 1 !important;
+      }
+
+      .chat-actions .mini-btn,
+      .chat-head .mini-btn {
+        flex: 0 0 auto !important;
+        height: 30px !important;
+        min-height: 30px !important;
+        max-height: 30px !important;
+        min-width: 0 !important;
+        padding: 0 8px !important;
+        border-radius: 12px !important;
+        font-size: 9.4px !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+      }
+
+      #copyPhoneBtn,
+      #markReadBtn,
+      #nextCustomerBtn {
+        width: 48px !important;
+        max-width: 48px !important;
+      }
+
+      #closeNextBtn {
+        width: 92px !important;
+        max-width: 92px !important;
+      }
+
+      #archiveConversationBtn {
+        width: 70px !important;
+        max-width: 70px !important;
+      }
+
+      .chat-tags-menu-wrap,
+      #chatTagsMenuBtn {
+        flex: 0 0 auto !important;
+      }
+
+      .chat-tags-menu-wrap .more-btn,
+      #chatTagsMenuBtn {
+        width: 30px !important;
+        min-width: 30px !important;
+        max-width: 30px !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+      }
+
+      .chat-body {
+        grid-row: 2 !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+      }
+
+      .chat-composer-wrap {
+        grid-row: 3 !important;
+        min-height: 0 !important;
+      }
+
+      .right-reference-panel .reference-card-head,
+      .right-reference-panel .panel-head,
+      .reply-panel .panel-head {
+        padding-right: 54px !important;
+      }
+
+      .right-reference-panel .reference-card-head h3,
+      .right-reference-panel .panel-title,
+      .customer-profile-title {
+        max-width: calc(100% - 44px) !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .reply-panel::after,
+      .reference-version-badge::after {
+        content: "V86" !important;
+        top: 14px !important;
+        right: 14px !important;
+        padding: 5px 8px !important;
+        border-radius: 999px !important;
+        font-size: 10px !important;
+        line-height: 1 !important;
+        letter-spacing: 0 !important;
+        z-index: 20 !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-width: 1599px) {
+      .workspace-shell {
+        grid-template-columns: 224px minmax(0, 1fr) !important;
+      }
+
+      .main-sidebar,
+      .workspace-shell > .main-sidebar {
+        width: 224px !important;
+        min-width: 224px !important;
+        max-width: 224px !important;
+        padding-left: 9px !important;
+        padding-right: 9px !important;
+      }
+
+      .page .app,
+      main.app {
+        grid-template-columns: minmax(264px, 292px) minmax(0, 1fr) minmax(260px, 292px) !important;
+        gap: 7px !important;
+      }
+
+      .chat-head {
+        min-height: 108px !important;
+        padding: 9px 10px 10px !important;
+      }
+
+      .chat-actions {
+        justify-content: flex-start !important;
+        flex-wrap: wrap !important;
+        gap: 5px !important;
+        overflow-x: hidden !important;
+      }
+
+      .conversation-status-select {
+        flex-basis: 106px !important;
+        width: 106px !important;
+        min-width: 106px !important;
+        max-width: 106px !important;
+      }
+
+      #copyPhoneBtn,
+      #markReadBtn,
+      #nextCustomerBtn {
+        width: 45px !important;
+        max-width: 45px !important;
+      }
+
+      #closeNextBtn {
+        width: 86px !important;
+        max-width: 86px !important;
+      }
+
+      #archiveConversationBtn {
+        width: 64px !important;
+        max-width: 64px !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span,
+      .chat-meta .branch,
+      .chat-meta .status,
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip {
+        max-width: 112px !important;
+      }
+    }
+
 
   </style>
 </head>
