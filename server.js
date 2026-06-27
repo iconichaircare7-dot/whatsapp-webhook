@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-79-standard-sidebar-100-zoom";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-80-standard-customer-cards-column";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -22416,6 +22416,312 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
         height: 34px !important;
         min-height: 34px !important;
         font-size: 12px !important;
+      }
+    }
+
+
+
+    /* V31.5.8.60.3.9.80 - Standard 100% zoom customer cards column cleanup.
+       UI-only patch. Scope: conversation filters, branch/action cards, conversation cards, and list footer.
+       Does not touch message history, /api/messages, webhook, send logic, media, archive logic, or branch permissions. */
+    @media (min-width: 1181px) {
+      .page .app,
+      main.app {
+        grid-template-columns: minmax(342px, 362px) minmax(0, 1fr) minmax(330px, 378px) !important;
+        gap: 13px !important;
+      }
+
+      .panel:first-child,
+      .messages-panel {
+        border-radius: 18px !important;
+        background: rgba(255,255,255,.985) !important;
+        border: 1px solid rgba(214,228,214,.92) !important;
+        box-shadow: 0 10px 22px rgba(15,23,42,.050) !important;
+        overflow: hidden !important;
+      }
+
+      .reference-conversation-filters {
+        padding: 8px 9px 7px !important;
+        gap: 6px !important;
+        background: linear-gradient(180deg, #ffffff 0%, #fbfef9 100%) !important;
+        border-bottom: 1px solid rgba(224,232,224,.95) !important;
+      }
+
+      .reference-search-row {
+        grid-template-columns: minmax(0, 1fr) 36px !important;
+        gap: 6px !important;
+      }
+
+      .reference-search-row input,
+      .reference-filter-icon {
+        height: 36px !important;
+        min-height: 36px !important;
+        border-radius: 11px !important;
+      }
+
+      .reference-search-row input {
+        padding: 0 12px !important;
+        font-size: 12px !important;
+        font-weight: 650 !important;
+      }
+
+      .reference-filter-icon {
+        width: 36px !important;
+        font-size: 14px !important;
+      }
+
+      .reference-pill-row {
+        gap: 5px !important;
+      }
+
+      .reference-pill,
+      .reference-secondary-pills .reference-pill {
+        height: 28px !important;
+        min-height: 28px !important;
+        border-radius: 10px !important;
+        padding: 0 7px !important;
+        font-size: 10.4px !important;
+        font-weight: 820 !important;
+      }
+
+      .reference-branch-tabs {
+        gap: 8px !important;
+        padding-top: 7px !important;
+        margin-top: 3px !important;
+      }
+
+      .reference-branch-tab {
+        height: 35px !important;
+        min-height: 35px !important;
+        border-radius: 11px !important;
+        font-size: 11.5px !important;
+        gap: 6px !important;
+      }
+
+      .reference-branch-tab span {
+        height: 20px !important;
+        min-width: 22px !important;
+        padding: 0 7px !important;
+        font-size: 10.3px !important;
+      }
+
+      .needs-action-command-center {
+        grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+        gap: 5px !important;
+        padding-top: 7px !important;
+        margin-top: 3px !important;
+      }
+
+      .needs-action-card {
+        min-height: 55px !important;
+        border-radius: 12px !important;
+        padding: 6px 4px !important;
+        gap: 2px !important;
+      }
+
+      .needs-action-card span,
+      .needs-action-card small {
+        white-space: normal !important;
+        overflow: hidden !important;
+        text-overflow: clip !important;
+        display: -webkit-box !important;
+        -webkit-box-orient: vertical !important;
+      }
+
+      .needs-action-card span {
+        -webkit-line-clamp: 2 !important;
+        font-size: 8.4px !important;
+        line-height: 1.05 !important;
+        letter-spacing: .025em !important;
+      }
+
+      .needs-action-card strong {
+        font-size: 17px !important;
+        line-height: .98 !important;
+      }
+
+      .needs-action-card small {
+        -webkit-line-clamp: 1 !important;
+        font-size: 7.8px !important;
+        line-height: 1.05 !important;
+      }
+
+      .dynamic-command-center-filters {
+        gap: 5px !important;
+        padding-top: 5px !important;
+        max-height: 74px !important;
+      }
+
+      .dynamic-command-filter {
+        min-height: 30px !important;
+        border-radius: 11px !important;
+        padding: 4px 6px !important;
+        font-size: 8.4px !important;
+      }
+
+      #conversationList.reference-conversation-list,
+      #conversationList.conversation-list {
+        padding: 5px 0 2px !important;
+        background: #ffffff !important;
+      }
+
+      #conversationList .conversation-card.reference-conversation-card {
+        grid-template-columns: 42px minmax(0, 1fr) !important;
+        gap: 9px !important;
+        min-height: 78px !important;
+        margin: 4px 7px !important;
+        padding: 10px 10px !important;
+        border: 1px solid rgba(226,234,226,.92) !important;
+        border-radius: 14px !important;
+        background: #ffffff !important;
+        box-shadow: 0 3px 10px rgba(15,23,42,.025) !important;
+      }
+
+      #conversationList .conversation-card.reference-conversation-card:hover {
+        background: #fbfef9 !important;
+        border-color: rgba(120,184,62,.24) !important;
+        box-shadow: 0 7px 16px rgba(15,23,42,.045) !important;
+      }
+
+      #conversationList .conversation-card.reference-conversation-card.active {
+        margin: 5px 7px !important;
+        min-height: 84px !important;
+        border: 1px solid rgba(37,211,102,.55) !important;
+        border-left: 4px solid #25d366 !important;
+        border-radius: 15px !important;
+        background: linear-gradient(135deg, #efffed 0%, #ffffff 100%) !important;
+        box-shadow: 0 9px 18px rgba(37,211,102,.12), inset 0 0 0 1px rgba(37,211,102,.10) !important;
+        padding-left: 9px !important;
+      }
+
+      #conversationList .conversation-card.reference-conversation-card.unread,
+      #conversationList .conversation-card.reference-conversation-card.card-live-alert {
+        border-left: 4px solid #25d366 !important;
+        padding-left: 9px !important;
+        box-shadow: inset 0 0 0 1px rgba(37,211,102,.11), 0 7px 16px rgba(37,211,102,.08) !important;
+      }
+
+      #conversationList .reference-avatar {
+        width: 38px !important;
+        height: 38px !important;
+        font-size: 12px !important;
+        margin-top: 1px !important;
+      }
+
+      #conversationList .reference-conversation-main {
+        gap: 4px !important;
+        overflow: hidden !important;
+      }
+
+      #conversationList .reference-card-top {
+        grid-template-columns: minmax(0, 1fr) minmax(78px, 94px) !important;
+        gap: 6px !important;
+        align-items: start !important;
+      }
+
+      #conversationList .reference-card-name {
+        font-size: 12.9px !important;
+        line-height: 1.12 !important;
+        letter-spacing: -.015em !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      #conversationList .reference-card-time {
+        max-width: 94px !important;
+        white-space: normal !important;
+        overflow: hidden !important;
+        text-overflow: clip !important;
+        text-align: right !important;
+        font-size: 9px !important;
+        line-height: 1.05 !important;
+        font-weight: 850 !important;
+        color: #667085 !important;
+      }
+
+      #conversationList .reference-card-preview {
+        font-size: 11.5px !important;
+        line-height: 1.27 !important;
+        min-height: 26px !important;
+        max-height: 31px !important;
+        color: #59676a !important;
+      }
+
+      #conversationList .reference-card-footer {
+        gap: 6px !important;
+        align-items: center !important;
+      }
+
+      #conversationList .reference-card-badges {
+        gap: 4px !important;
+        overflow: hidden !important;
+        max-height: 44px !important;
+      }
+
+      #conversationList .branch,
+      #conversationList .status,
+      #conversationList .conversation-tag-chip,
+      #conversationList .message-count-badge,
+      #conversationList .unread-badge {
+        height: 18px !important;
+        min-height: 18px !important;
+        line-height: 18px !important;
+        padding: 0 7px !important;
+        font-size: 8.8px !important;
+        font-weight: 950 !important;
+      }
+
+      #conversationList .live-card-badge {
+        height: 20px !important;
+        line-height: 20px !important;
+        padding: 0 8px !important;
+        font-size: 9.5px !important;
+        box-shadow: 0 0 0 2px rgba(37,211,102,.13), 0 6px 12px rgba(37,211,102,.16) !important;
+      }
+
+      #conversationList .message-count-badge,
+      #conversationList .unread-badge {
+        min-width: 20px !important;
+        padding: 0 6px !important;
+      }
+
+      #conversationList .conversation-card.reference-conversation-card.unread .reference-card-name::after {
+        height: 15px !important;
+        line-height: 15px !important;
+        padding: 0 6px !important;
+        margin-left: 5px !important;
+        font-size: 8px !important;
+      }
+
+      .reference-list-footer {
+        height: 40px !important;
+        padding: 0 12px !important;
+        font-size: 10.8px !important;
+        background: #ffffff !important;
+      }
+
+      .reference-list-footer button,
+      #refreshBtn {
+        width: 26px !important;
+        height: 26px !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-width: 1380px) {
+      .page .app,
+      main.app {
+        grid-template-columns: minmax(330px, 348px) minmax(0, 1fr) minmax(320px, 350px) !important;
+        gap: 11px !important;
+      }
+
+      #conversationList .reference-card-top {
+        grid-template-columns: minmax(0, 1fr) minmax(72px, 88px) !important;
+      }
+
+      #conversationList .reference-card-time {
+        max-width: 88px !important;
+        font-size: 8.5px !important;
       }
     }
 
