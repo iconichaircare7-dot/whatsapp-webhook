@@ -66,11 +66,21 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-77-hard-branch-ui-render-scope";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-78-official-inbox-redirect";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
 const RESULTS_VIDEO_URL = (process.env.RESULTS_VIDEO_URL || "").toString().trim();
+
+// V31.5.8.60.3.9.78 - Official Team Inbox URL redirect:
+// Keep Render's default subdomain enabled for webhook/API emergency fallback,
+// but redirect browser visits to /inbox from the old onrender.com host to the official Iconic subdomain.
+const OFFICIAL_INBOX_HOST = (process.env.OFFICIAL_INBOX_HOST || "inbox.iconichaircare.com").toString().trim().toLowerCase();
+const LEGACY_RENDER_INBOX_HOST = (process.env.LEGACY_RENDER_INBOX_HOST || "whatsapp-webhook-g0c5.onrender.com").toString().trim().toLowerCase();
+const OFFICIAL_INBOX_REDIRECT_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.OFFICIAL_INBOX_REDIRECT_ENABLED || "true").toString().trim().toLowerCase()
+);
+
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
@@ -339,6 +349,35 @@ function protectInbox(req, res, next) {
 
   res.setHeader("WWW-Authenticate", 'Basic realm="Iconic Inbox"');
   return res.status(401).send("Invalid username or password");
+}
+
+function normalizeRequestHost(value = "") {
+  return (value || "")
+    .toString()
+    .split(",")[0]
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/:\d+$/, "");
+}
+
+function redirectLegacyInboxHost(req, res, next) {
+  if (!OFFICIAL_INBOX_REDIRECT_ENABLED) {
+    return next();
+  }
+
+  const requestHost = normalizeRequestHost(
+    req.headers["x-forwarded-host"] || req.headers.host || req.hostname || ""
+  );
+  const legacyHost = normalizeRequestHost(LEGACY_RENDER_INBOX_HOST);
+  const officialHost = normalizeRequestHost(OFFICIAL_INBOX_HOST);
+
+  if (requestHost && legacyHost && officialHost && requestHost === legacyHost) {
+    const path = req.originalUrl || req.url || "/inbox";
+    return res.redirect(302, `https://${officialHost}${path}`);
+  }
+
+  return next();
 }
 
 
@@ -10566,7 +10605,7 @@ async function getInboxBootstrapDataForServerRender() {
   }
 }
 
-app.get("/inbox", protectInbox, (req, res) => {
+app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   const inboxAccessLabel = buildInboxAccessLabel(req.inboxAccess || {});
   const inboxQuickReplyLocationText = buildInboxQuickReplyLocationAttribute(req.inboxBranchScope || "");
