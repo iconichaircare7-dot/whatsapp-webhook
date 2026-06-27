@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-89-stable-100-header-crm-width-lock";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-90-browser-100-matches-80-internal-zoom-lock";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -25071,6 +25071,254 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       .chat-head .mini-btn {
         font-size: 9px !important;
         padding: 0 7px !important;
+      }
+    }
+
+
+  
+
+    /* V31.5.8.60.3.9.90 - Browser 100% should visually match the accepted browser 80% reference.
+       UI/CSS-only patch. Does not touch /api/messages, loadMessagesFromGoogleSheet,
+       message history, media rendering, webhook, WhatsApp send logic, archive logic,
+       branch permissions, Basic Auth, Google Sheet logic, or Meta webhook logic.
+
+       Reason:
+       The accepted reference is not just smaller padding; browser 80% changes the effective
+       layout density and visible canvas. v88/v89 compressed individual elements but could not
+       reproduce the 80% reference. This patch applies an internal workspace zoom in Chromium
+       and expands the workspace/page/app heights and widths inversely, so browser zoom stays
+       at 100% while the UI renders like the 80% reference without bottom whitespace. */
+    @media (min-width: 1181px) {
+      :root {
+        --iconic-v90-ui-zoom: .80;
+        --iconic-v90-inverse: 1.25;
+      }
+
+      html,
+      body {
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 100% !important;
+        overflow: hidden !important;
+      }
+
+      body {
+        background: linear-gradient(90deg, #f7fbf4 0%, #ffffff 48%, #f6fbf2 100%) !important;
+      }
+
+      .workspace-shell {
+        zoom: var(--iconic-v90-ui-zoom) !important;
+        width: calc(100vw * var(--iconic-v90-inverse)) !important;
+        min-width: calc(100vw * var(--iconic-v90-inverse)) !important;
+        max-width: none !important;
+        height: calc(100vh * var(--iconic-v90-inverse)) !important;
+        min-height: calc(100vh * var(--iconic-v90-inverse)) !important;
+        max-height: calc(100vh * var(--iconic-v90-inverse)) !important;
+        transform: none !important;
+        transform-origin: top left !important;
+        overflow: hidden !important;
+      }
+
+      .workspace-shell > .main-sidebar,
+      .main-sidebar {
+        height: calc(100vh * var(--iconic-v90-inverse)) !important;
+        min-height: calc(100vh * var(--iconic-v90-inverse)) !important;
+        max-height: calc(100vh * var(--iconic-v90-inverse)) !important;
+        overflow: hidden auto !important;
+      }
+
+      .page {
+        height: calc(100vh * var(--iconic-v90-inverse)) !important;
+        min-height: calc(100vh * var(--iconic-v90-inverse)) !important;
+        max-height: calc(100vh * var(--iconic-v90-inverse)) !important;
+        overflow: hidden !important;
+      }
+
+      .topbar {
+        min-height: 78px !important;
+        height: 78px !important;
+        max-height: 78px !important;
+        padding: 16px 20px 12px !important;
+      }
+
+      .page .app,
+      main.app {
+        height: calc((100vh * var(--iconic-v90-inverse)) - 78px) !important;
+        min-height: calc((100vh * var(--iconic-v90-inverse)) - 78px) !important;
+        max-height: calc((100vh * var(--iconic-v90-inverse)) - 78px) !important;
+        overflow: hidden !important;
+        grid-template-columns: minmax(332px, 368px) minmax(0, 1fr) minmax(340px, 395px) !important;
+        gap: 10px !important;
+        align-items: stretch !important;
+      }
+
+      .messages-panel,
+      .chat-panel,
+      .reply-panel,
+      .right-reference-panel {
+        min-height: 0 !important;
+        height: 100% !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
+      }
+
+      .chat-panel {
+        display: grid !important;
+        grid-template-rows: auto minmax(0, 1fr) auto !important;
+      }
+
+      .chat-body {
+        min-height: 0 !important;
+        overflow: hidden auto !important;
+      }
+
+      .right-reference-panel,
+      .right-reference-scroll,
+      .reference-conversation-list,
+      #conversationList {
+        min-height: 0 !important;
+        overflow-y: auto !important;
+      }
+
+      .chat-head {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) auto !important;
+        grid-template-rows: auto !important;
+        align-items: center !important;
+        gap: 8px 12px !important;
+        min-height: 78px !important;
+        padding: 10px 14px !important;
+        overflow: visible !important;
+      }
+
+      .chat-customer {
+        grid-column: 1 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        display: grid !important;
+        grid-template-columns: 44px minmax(0, 1fr) !important;
+        align-items: center !important;
+        gap: 10px !important;
+        overflow: hidden !important;
+      }
+
+      .chat-title {
+        font-size: 18px !important;
+        line-height: 1.08 !important;
+      }
+
+      .chat-meta {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 6px !important;
+        max-height: 25px !important;
+        overflow: hidden !important;
+      }
+
+      .chat-meta > .workflow-status-bar {
+        display: none !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span,
+      .chat-meta .branch,
+      .chat-meta .status,
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip,
+      .chat-meta .workflow-status-chip,
+      .chat-meta .assignee-chip {
+        max-width: 155px !important;
+        height: 22px !important;
+        min-height: 22px !important;
+        line-height: 22px !important;
+        padding: 0 9px !important;
+        font-size: 10.2px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .chat-actions {
+        grid-column: 2 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+        gap: 7px !important;
+        overflow: visible !important;
+      }
+
+      .conversation-status-select {
+        flex: 0 0 126px !important;
+        width: 126px !important;
+        min-width: 126px !important;
+        max-width: 126px !important;
+        height: 34px !important;
+        min-height: 34px !important;
+        max-height: 34px !important;
+        font-size: 10.2px !important;
+      }
+
+      .chat-actions .mini-btn,
+      .chat-head .mini-btn {
+        height: 34px !important;
+        min-height: 34px !important;
+        max-height: 34px !important;
+        padding: 0 11px !important;
+        font-size: 10.1px !important;
+        white-space: nowrap !important;
+      }
+
+      .reference-card-head h3,
+      .right-reference-panel .reference-card-head h3,
+      .right-reference-panel .panel-title,
+      .customer-profile-title {
+        max-width: none !important;
+        font-size: 16px !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+      }
+
+      .reference-card.customer-details-card,
+      .customer-details-card {
+        padding: 14px 16px !important;
+      }
+
+      .reply-panel::after,
+      .reference-version-badge::after {
+        content: "V90" !important;
+        top: 15px !important;
+        right: 15px !important;
+        padding: 5px 9px !important;
+        font-size: 10.5px !important;
+        z-index: 24 !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-width: 1500px) {
+      .page .app,
+      main.app {
+        grid-template-columns: minmax(316px, 348px) minmax(0, 1fr) minmax(320px, 370px) !important;
+        gap: 9px !important;
+      }
+
+      .chat-head {
+        grid-template-columns: minmax(0, 1fr) !important;
+        grid-template-rows: auto auto !important;
+        min-height: 104px !important;
+        align-items: start !important;
+        gap: 7px !important;
+      }
+
+      .chat-actions {
+        grid-column: 1 !important;
+        justify-content: flex-start !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
       }
     }
 
