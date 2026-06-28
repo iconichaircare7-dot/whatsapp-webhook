@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-104-larger-left-logo-fit";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-105-premium-crm-conversation-list-polish";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -26789,6 +26789,348 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
         height: 58px !important;
         min-height: 58px !important;
         max-height: 58px !important;
+      }
+    }
+
+
+    /* V31.5.8.60.3.9.105 - Premium CRM + Conversation List Polish.
+       UI-only refinement for staging.
+       Scope: right CRM profile, left conversation list, badges, active card, list footer.
+       Does not touch history, /api/messages, Google Sheet, send logic, webhook,
+       booking logic, media rendering, or chat background. */
+
+    :root {
+      --v105-card-border: rgba(203, 223, 197, .72);
+      --v105-card-shadow: 0 10px 24px rgba(15, 23, 42, .045);
+      --v105-card-shadow-hover: 0 14px 30px rgba(15, 23, 42, .065);
+      --v105-green-soft: rgba(120, 184, 62, .125);
+      --v105-green-line: rgba(120, 184, 62, .34);
+      --v105-text: #15251b;
+      --v105-muted: #6b7d70;
+    }
+
+    /* Conversation list: cleaner SaaS cards */
+    #conversationList,
+    .conversation-list.reference-conversation-list {
+      padding: 8px 8px 10px !important;
+      gap: 8px !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.42), rgba(247,253,244,.44)) !important;
+    }
+
+    #conversationList .conversation-card,
+    #conversationList .conversation-card.reference-conversation-card,
+    .conversation-list .conversation-card {
+      position: relative !important;
+      min-height: 76px !important;
+      padding: 10px 10px 10px 11px !important;
+      border-radius: 18px !important;
+      border: 1px solid var(--v105-card-border) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.92), rgba(250,253,248,.90)) !important;
+      box-shadow: 0 7px 17px rgba(15,23,42,.030) !important;
+      transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease !important;
+      overflow: hidden !important;
+    }
+
+    #conversationList .conversation-card::before,
+    #conversationList .conversation-card.reference-conversation-card::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 auto 0 0 !important;
+      width: 3px !important;
+      border-radius: 999px !important;
+      background: transparent !important;
+      opacity: 0 !important;
+      transition: opacity .16s ease, background .16s ease !important;
+    }
+
+    #conversationList .conversation-card:hover,
+    #conversationList .conversation-card.reference-conversation-card:hover {
+      transform: translateY(-1px) !important;
+      border-color: rgba(120,184,62,.42) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,255,244,.96)) !important;
+      box-shadow: var(--v105-card-shadow-hover) !important;
+    }
+
+    #conversationList .conversation-card.active,
+    #conversationList .conversation-card.reference-conversation-card.active {
+      border-color: rgba(120,184,62,.58) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(120,184,62,.18), transparent 34%),
+        linear-gradient(180deg, rgba(252,255,249,.99), rgba(255,255,255,.96)) !important;
+      box-shadow:
+        0 13px 28px rgba(73, 135, 45, .11),
+        inset 0 0 0 1px rgba(120,184,62,.12) !important;
+    }
+
+    #conversationList .conversation-card.active::before,
+    #conversationList .conversation-card.reference-conversation-card.active::before {
+      opacity: 1 !important;
+      background: linear-gradient(180deg, #25d366, #78b83e) !important;
+    }
+
+    #conversationList .conversation-card.unread,
+    #conversationList .conversation-card.reference-conversation-card.unread,
+    #conversationList .conversation-card.reference-conversation-card.card-live-alert {
+      border-color: rgba(37,211,102,.38) !important;
+      background:
+        linear-gradient(135deg, rgba(246,255,242,.98), rgba(255,255,255,.94)) !important;
+      box-shadow:
+        0 10px 22px rgba(37,211,102,.072),
+        inset 0 0 0 1px rgba(37,211,102,.075) !important;
+    }
+
+    #conversationList .conversation-card.unread::before,
+    #conversationList .conversation-card.reference-conversation-card.unread::before,
+    #conversationList .conversation-card.reference-conversation-card.card-live-alert::before {
+      opacity: 1 !important;
+      background: linear-gradient(180deg, #0fbe66, #8ddf55) !important;
+    }
+
+    /* Conversation list typography + badge softening */
+    #conversationList .conversation-name,
+    #conversationList .conversation-title,
+    #conversationList .reference-conversation-name,
+    #conversationList strong {
+      color: #102018 !important;
+      font-weight: 950 !important;
+      letter-spacing: -.01em !important;
+    }
+
+    #conversationList .conversation-preview,
+    #conversationList .reference-conversation-preview,
+    #conversationList .conversation-snippet {
+      color: rgba(64, 78, 68, .74) !important;
+      font-weight: 700 !important;
+      line-height: 1.25 !important;
+    }
+
+    #conversationList .conversation-time,
+    #conversationList .reference-conversation-time,
+    #conversationList time {
+      color: rgba(73, 88, 77, .68) !important;
+      font-size: 8.5px !important;
+      font-weight: 950 !important;
+      letter-spacing: .02em !important;
+    }
+
+    #conversationList .tag,
+    #conversationList .chip,
+    #conversationList .badge,
+    #conversationList .status-chip,
+    #conversationList .branch-chip,
+    #conversationList .reference-tag,
+    #conversationList [class*="tag"],
+    #conversationList [class*="badge"],
+    #conversationList [class*="chip"] {
+      min-height: 16px !important;
+      height: 16px !important;
+      padding: 0 6px !important;
+      border-radius: 999px !important;
+      font-size: 8px !important;
+      font-weight: 950 !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.76) !important;
+      border-width: 1px !important;
+    }
+
+    .reference-list-footer {
+      min-height: 34px !important;
+      padding: 7px 8px !important;
+      border-top: 1px solid rgba(205, 223, 199, .70) !important;
+      background: linear-gradient(180deg, rgba(255,255,255,.78), rgba(248,253,245,.86)) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.75) !important;
+    }
+
+    #conversationFooterText {
+      color: rgba(69, 83, 73, .74) !important;
+      font-size: 10px !important;
+      font-weight: 850 !important;
+    }
+
+    #refreshListBtn,
+    #toggleArchivedBtn {
+      border-color: rgba(198, 216, 193, .85) !important;
+      background: rgba(255,255,255,.86) !important;
+      box-shadow: 0 5px 12px rgba(15,23,42,.035) !important;
+    }
+
+    /* Right CRM profile polish */
+    .crm-panel,
+    .customer-profile-panel,
+    .customer-crm-profile,
+    .profile-panel,
+    aside .crm-card,
+    aside [class*="crm"],
+    aside [class*="profile"] {
+      -webkit-font-smoothing: antialiased !important;
+    }
+
+    .crm-panel,
+    .customer-crm-panel,
+    .customer-profile-panel,
+    .customer-crm-profile,
+    .profile-panel {
+      border-radius: 24px !important;
+      border: 1px solid rgba(203, 223, 197, .74) !important;
+      background:
+        radial-gradient(circle at 8% 0%, rgba(120,184,62,.15), transparent 30%),
+        linear-gradient(180deg, rgba(255,255,255,.96), rgba(249,253,247,.92)) !important;
+      box-shadow: 0 16px 36px rgba(15,23,42,.060) !important;
+    }
+
+    .crm-panel h2,
+    .crm-panel h3,
+    .customer-profile-panel h2,
+    .customer-profile-panel h3,
+    .customer-crm-profile h2,
+    .customer-crm-profile h3,
+    .profile-panel h2,
+    .profile-panel h3 {
+      color: #102018 !important;
+      font-size: 15px !important;
+      font-weight: 950 !important;
+      letter-spacing: -.015em !important;
+    }
+
+    .crm-panel .avatar,
+    .customer-profile-panel .avatar,
+    .customer-crm-profile .avatar,
+    .profile-panel .avatar,
+    .crm-profile-avatar,
+    .customer-profile-avatar {
+      box-shadow:
+        0 12px 24px rgba(14, 165, 96, .16),
+        inset 0 1px 0 rgba(255,255,255,.30) !important;
+      border: 1px solid rgba(255,255,255,.42) !important;
+    }
+
+    .crm-panel .profile-name,
+    .customer-profile-panel .profile-name,
+    .customer-crm-profile .profile-name,
+    .profile-panel .profile-name,
+    #customerProfileName,
+    #crmCustomerName {
+      color: #102018 !important;
+      font-size: 14px !important;
+      font-weight: 950 !important;
+      letter-spacing: -.01em !important;
+    }
+
+    .crm-panel .profile-phone,
+    .customer-profile-panel .profile-phone,
+    .customer-crm-profile .profile-phone,
+    .profile-panel .profile-phone,
+    #customerProfilePhone,
+    #crmCustomerPhone {
+      color: rgba(37, 58, 44, .78) !important;
+      font-size: 10.5px !important;
+      font-weight: 850 !important;
+    }
+
+    .crm-panel .privacy-card,
+    .customer-profile-panel .privacy-card,
+    .customer-crm-profile .privacy-card,
+    .profile-panel .privacy-card,
+    .privacy-profile-card,
+    .privacy-row {
+      border-radius: 14px !important;
+      border-color: rgba(124, 58, 237, .20) !important;
+      background:
+        linear-gradient(180deg, rgba(252,250,255,.92), rgba(255,255,255,.86)) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.86) !important;
+    }
+
+    .crm-panel dl,
+    .customer-profile-panel dl,
+    .customer-crm-profile dl,
+    .profile-panel dl,
+    .crm-details,
+    .profile-details,
+    .customer-profile-details {
+      display: grid !important;
+      gap: 6px !important;
+    }
+
+    .crm-panel dt,
+    .customer-profile-panel dt,
+    .customer-crm-profile dt,
+    .profile-panel dt,
+    .crm-label,
+    .profile-label {
+      color: rgba(77, 91, 80, .72) !important;
+      font-size: 10px !important;
+      font-weight: 850 !important;
+      letter-spacing: .01em !important;
+    }
+
+    .crm-panel dd,
+    .customer-profile-panel dd,
+    .customer-crm-profile dd,
+    .profile-panel dd,
+    .crm-value,
+    .profile-value {
+      color: #16271d !important;
+      font-size: 10.8px !important;
+      font-weight: 920 !important;
+    }
+
+    .crm-panel .status,
+    .customer-profile-panel .status,
+    .customer-crm-profile .status,
+    .profile-panel .status,
+    .crm-panel .badge,
+    .customer-profile-panel .badge,
+    .customer-crm-profile .badge,
+    .profile-panel .badge {
+      border-radius: 999px !important;
+      padding: 2px 8px !important;
+      min-height: 18px !important;
+      font-size: 9px !important;
+      font-weight: 950 !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.72) !important;
+    }
+
+    .staff-assignment,
+    .crm-panel .staff-assignment,
+    .customer-profile-panel .staff-assignment,
+    .customer-crm-profile .staff-assignment,
+    .profile-panel .staff-assignment,
+    .staff-assignment-card {
+      border-radius: 18px !important;
+      border: 1px solid rgba(203, 223, 197, .82) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.92), rgba(248,253,245,.92)) !important;
+      box-shadow: 0 9px 19px rgba(15,23,42,.035), inset 0 1px 0 rgba(255,255,255,.86) !important;
+    }
+
+    .staff-assignment select,
+    .staff-assignment-card select,
+    .crm-panel select,
+    .customer-profile-panel select,
+    .customer-crm-profile select,
+    .profile-panel select {
+      border-radius: 13px !important;
+      border: 1px solid rgba(120,184,62,.35) !important;
+      background: rgba(255,255,255,.94) !important;
+      min-height: 31px !important;
+      color: #18321f !important;
+      font-weight: 950 !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.88) !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V105" !important;
+    }
+
+    @media (max-width: 1180px) {
+      #conversationList .conversation-card,
+      #conversationList .conversation-card.reference-conversation-card,
+      .conversation-list .conversation-card {
+        min-height: 70px !important;
+        padding: 9px !important;
       }
     }
 
