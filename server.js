@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-111-premium-search-filters-polish";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-112-premium-sidebar-navigation-polish";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -29055,6 +29055,313 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       .stats-row > *,
       .counter-grid > * {
         min-height: 43px !important;
+      }
+    }
+
+
+    /* V31.5.8.60.3.9.112 - Premium Sidebar Navigation Polish.
+       UI-only staging refinement.
+       Scope: main left sidebar navigation, branch cards, creator/support card.
+       Does not touch navigation logic, history, /api/messages, Google Sheet, send logic,
+       status logic, notifications logic, media logic, webhook, booking logic, or chat background. */
+
+    :root {
+      --v112-sidebar-line: rgba(199, 219, 192, .72);
+      --v112-sidebar-green: #25b862;
+      --v112-sidebar-green-dark: #0f8f4f;
+      --v112-sidebar-soft: rgba(120, 184, 62, .12);
+      --v112-sidebar-ink: #102018;
+      --v112-sidebar-muted: #667568;
+      --v112-sidebar-shadow: 0 8px 18px rgba(15, 23, 42, .038);
+      --v112-sidebar-shadow-hover: 0 12px 24px rgba(15, 23, 42, .055);
+    }
+
+    .main-sidebar {
+      background:
+        radial-gradient(circle at 20% 0%, rgba(120,184,62,.14), transparent 28%),
+        linear-gradient(180deg, rgba(250,255,247,.98), rgba(244,251,241,.96)) !important;
+      border-right: 1px solid rgba(198, 218, 191, .72) !important;
+      box-shadow: inset -1px 0 0 rgba(255,255,255,.72) !important;
+      -webkit-font-smoothing: antialiased !important;
+    }
+
+    .sidebar-brand {
+      border-bottom: 1px solid rgba(198, 218, 191, .62) !important;
+      margin-bottom: 8px !important;
+    }
+
+    .sidebar-nav {
+      display: grid !important;
+      gap: 6px !important;
+      padding: 4px 10px 8px !important;
+    }
+
+    .sidebar-item {
+      position: relative !important;
+      min-height: 37px !important;
+      height: 37px !important;
+      padding: 0 10px !important;
+      border-radius: 14px !important;
+      border: 1px solid transparent !important;
+      background: transparent !important;
+      color: rgba(22, 37, 29, .82) !important;
+      font-size: 11px !important;
+      font-weight: 900 !important;
+      letter-spacing: -.006em !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 9px !important;
+      box-shadow: none !important;
+      transition: transform .14s ease, background .14s ease, border-color .14s ease, box-shadow .14s ease, color .14s ease !important;
+      overflow: hidden !important;
+    }
+
+    .sidebar-item::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 7px auto 7px 0 !important;
+      width: 3px !important;
+      border-radius: 999px !important;
+      background: transparent !important;
+      opacity: 0 !important;
+      transition: opacity .14s ease, background .14s ease !important;
+    }
+
+    .sidebar-item:hover {
+      transform: translateX(1px) !important;
+      border-color: rgba(199, 219, 192, .70) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.74), rgba(248,253,246,.62)) !important;
+      color: #102018 !important;
+      box-shadow:
+        0 8px 16px rgba(15,23,42,.032),
+        inset 0 1px 0 rgba(255,255,255,.72) !important;
+    }
+
+    .sidebar-item.active,
+    .sidebar-item[aria-current="page"] {
+      border-color: rgba(37, 211, 102, .32) !important;
+      background:
+        radial-gradient(circle at 0% 50%, rgba(37,211,102,.18), transparent 38%),
+        linear-gradient(180deg, rgba(255,255,255,.90), rgba(241,252,236,.82)) !important;
+      color: #0f2418 !important;
+      box-shadow:
+        0 11px 22px rgba(37,211,102,.085),
+        inset 0 1px 0 rgba(255,255,255,.82) !important;
+    }
+
+    .sidebar-item.active::before,
+    .sidebar-item[aria-current="page"]::before {
+      opacity: 1 !important;
+      background: linear-gradient(180deg, #25d366, #78b83e) !important;
+    }
+
+    .sidebar-item .nav-icon {
+      width: 25px !important;
+      height: 25px !important;
+      min-width: 25px !important;
+      min-height: 25px !important;
+      border-radius: 10px !important;
+      border: 1px solid rgba(199, 219, 192, .72) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.88), rgba(247,252,245,.72)) !important;
+      color: #2e5137 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      box-shadow:
+        0 4px 10px rgba(15,23,42,.030),
+        inset 0 1px 0 rgba(255,255,255,.76) !important;
+      transition: border-color .14s ease, background .14s ease, color .14s ease, box-shadow .14s ease !important;
+    }
+
+    .sidebar-item .nav-icon svg {
+      width: 14px !important;
+      height: 14px !important;
+      stroke-width: 2.05 !important;
+      opacity: .92 !important;
+    }
+
+    .sidebar-item:hover .nav-icon {
+      border-color: rgba(120,184,62,.38) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.96), rgba(240,252,236,.88)) !important;
+      color: #166534 !important;
+      box-shadow:
+        0 7px 14px rgba(37,211,102,.070),
+        inset 0 1px 0 rgba(255,255,255,.82) !important;
+    }
+
+    .sidebar-item.active .nav-icon,
+    .sidebar-item[aria-current="page"] .nav-icon {
+      border-color: rgba(37,211,102,.48) !important;
+      background:
+        radial-gradient(circle at 65% 20%, rgba(255,255,255,.28), transparent 30%),
+        linear-gradient(135deg, #0f8f4f, #25d366) !important;
+      color: #ffffff !important;
+      box-shadow:
+        0 10px 18px rgba(37,211,102,.20),
+        inset 0 1px 0 rgba(255,255,255,.24) !important;
+    }
+
+    .sidebar-item.active .nav-icon svg,
+    .sidebar-item[aria-current="page"] .nav-icon svg {
+      opacity: 1 !important;
+      stroke: currentColor !important;
+    }
+
+    .sidebar-item span:last-child {
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+    }
+
+    /* Branches / lower cards */
+    .branches-card,
+    .sidebar-branches,
+    .sidebar-section,
+    .sidebar-branch-card {
+      border-radius: 18px !important;
+      border: 1px solid rgba(199, 219, 192, .74) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(120,184,62,.10), transparent 34%),
+        linear-gradient(180deg, rgba(255,255,255,.82), rgba(247,253,245,.76)) !important;
+      box-shadow:
+        var(--v112-sidebar-shadow),
+        inset 0 1px 0 rgba(255,255,255,.78) !important;
+    }
+
+    .branches-card h3,
+    .sidebar-branches h3,
+    .sidebar-section h3,
+    .sidebar-section-title,
+    .branches-title {
+      color: rgba(16, 32, 24, .86) !important;
+      font-size: 10px !important;
+      font-weight: 950 !important;
+      letter-spacing: .08em !important;
+      text-transform: uppercase !important;
+    }
+
+    .branch-row,
+    .sidebar-branch-row,
+    .branch-item {
+      min-height: 36px !important;
+      padding: 7px 8px !important;
+      border-radius: 13px !important;
+      background: rgba(255,255,255,.44) !important;
+      border: 1px solid rgba(255,255,255,.40) !important;
+      transition: background .14s ease, border-color .14s ease, box-shadow .14s ease !important;
+    }
+
+    .branch-row:hover,
+    .sidebar-branch-row:hover,
+    .branch-item:hover {
+      background: rgba(255,255,255,.74) !important;
+      border-color: rgba(120,184,62,.30) !important;
+      box-shadow: 0 7px 14px rgba(15,23,42,.030) !important;
+    }
+
+    .branch-row .branch-dot,
+    .sidebar-branch-row .branch-dot,
+    .branch-item .branch-dot {
+      box-shadow: 0 0 0 4px rgba(37,211,102,.095) !important;
+    }
+
+    .branch-row .branch-count,
+    .sidebar-branch-row .branch-count,
+    .branch-item .branch-count,
+    .branches-card .count,
+    .sidebar-branches .count {
+      min-width: 34px !important;
+      height: 23px !important;
+      border-radius: 999px !important;
+      background:
+        linear-gradient(180deg, rgba(236,252,231,.94), rgba(255,255,255,.76)) !important;
+      color: #167243 !important;
+      font-size: 10px !important;
+      font-weight: 950 !important;
+      border: 1px solid rgba(120,184,62,.25) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.78) !important;
+    }
+
+    /* Creator/support card bottom */
+    .sidebar-footer,
+    .creator-card,
+    .created-by-card,
+    .support-card {
+      border-radius: 18px !important;
+      border: 1px solid rgba(199, 219, 192, .74) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(15,143,79,.10), transparent 35%),
+        linear-gradient(180deg, rgba(255,255,255,.84), rgba(247,253,245,.78)) !important;
+      box-shadow:
+        0 9px 20px rgba(15,23,42,.040),
+        inset 0 1px 0 rgba(255,255,255,.80) !important;
+    }
+
+    .sidebar-footer img,
+    .creator-card img,
+    .created-by-card img,
+    .support-card img {
+      border: 2px solid rgba(255,255,255,.88) !important;
+      box-shadow:
+        0 9px 18px rgba(15,23,42,.12),
+        0 0 0 1px rgba(120,184,62,.18) !important;
+    }
+
+    .sidebar-footer strong,
+    .creator-card strong,
+    .created-by-card strong,
+    .support-card strong {
+      color: #102018 !important;
+      font-weight: 950 !important;
+      letter-spacing: -.01em !important;
+    }
+
+    .sidebar-footer .badge,
+    .creator-card .badge,
+    .created-by-card .badge,
+    .support-card .badge {
+      border-radius: 999px !important;
+      border: 1px solid rgba(120,184,62,.24) !important;
+      background: rgba(236,252,231,.80) !important;
+      color: #167243 !important;
+      font-size: 8px !important;
+      font-weight: 950 !important;
+      letter-spacing: .08em !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V112" !important;
+    }
+
+    @media (min-width: 1181px) and (max-width: 1500px) {
+      .sidebar-item {
+        min-height: 35px !important;
+        height: 35px !important;
+        padding: 0 9px !important;
+        font-size: 10.5px !important;
+      }
+
+      .sidebar-item .nav-icon {
+        width: 24px !important;
+        height: 24px !important;
+        min-width: 24px !important;
+        min-height: 24px !important;
+      }
+    }
+
+    @media (max-width: 1180px) {
+      .sidebar-nav {
+        gap: 5px !important;
+        padding-inline: 8px !important;
+      }
+
+      .sidebar-item {
+        min-height: 36px !important;
+        height: 36px !important;
       }
     }
 
