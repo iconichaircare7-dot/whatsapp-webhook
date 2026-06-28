@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-108-premium-composer-final-polish";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-109-composer-icons-premium-refresh";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -28384,6 +28384,205 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
         min-height: 82px !important;
         height: 82px !important;
       }
+    }
+
+
+    /* V31.5.8.60.3.9.109 - Composer icons premium refresh.
+       UI-only staging refinement.
+       Scope: image / voice / send icons inside reply composer.
+       Does not touch send logic, media logic, history, /api/messages, Google Sheet,
+       webhook, booking logic, notifications logic, or chat background. */
+
+    :root {
+      --v109-icon-border: rgba(198, 218, 191, .86);
+      --v109-icon-green: #25b862;
+      --v109-icon-green-dark: #0f8f4f;
+      --v109-icon-ink: #17351f;
+      --v109-icon-shadow: 0 8px 18px rgba(15,23,42,.045);
+    }
+
+    .chat-panel .premium-composer .composer-media-actions,
+    .premium-composer .composer-media-actions {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 10px !important;
+      width: auto !important;
+      min-height: 44px !important;
+      padding: 6px 8px !important;
+      border-radius: 16px !important;
+      border: 1px solid rgba(205,223,198,.76) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.94), rgba(247,252,244,.88)) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.88),
+        0 8px 18px rgba(15,23,42,.040) !important;
+    }
+
+    .chat-panel .premium-composer .media-control,
+    .premium-composer .media-control {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      grid-template-columns: none !important;
+      min-height: auto !important;
+      width: auto !important;
+      padding: 0 !important;
+      gap: 0 !important;
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+    }
+
+    .chat-panel .premium-composer .composer-image-picker,
+    .chat-panel .premium-composer .composer-voice-picker,
+    .premium-composer .composer-image-picker,
+    .premium-composer .composer-voice-picker {
+      position: relative !important;
+      width: 42px !important;
+      height: 42px !important;
+      min-width: 42px !important;
+      min-height: 42px !important;
+      padding: 0 !important;
+      border-radius: 14px !important;
+      border: 1px solid var(--v109-icon-border) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(247,252,245,.92)) !important;
+      color: transparent !important;
+      font-size: 0 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      box-shadow:
+        var(--v109-icon-shadow),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+      transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease !important;
+      overflow: hidden !important;
+    }
+
+    .chat-panel .premium-composer .composer-image-picker:hover,
+    .chat-panel .premium-composer .composer-voice-picker:hover,
+    .chat-panel .premium-composer .composer-image-picker.has-selected-image,
+    .chat-panel .premium-composer .composer-voice-picker.has-selected-voice,
+    .premium-composer .composer-image-picker:hover,
+    .premium-composer .composer-voice-picker:hover,
+    .premium-composer .composer-image-picker.has-selected-image,
+    .premium-composer .composer-voice-picker.has-selected-voice {
+      transform: translateY(-1px) !important;
+      border-color: rgba(37,211,102,.48) !important;
+      background:
+        radial-gradient(circle at 75% 18%, rgba(220,252,231,.92), transparent 26%),
+        linear-gradient(180deg, rgba(255,255,255,1), rgba(240,252,236,.95)) !important;
+      box-shadow:
+        0 12px 24px rgba(37,211,102,.10),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    .chat-panel .premium-composer .composer-image-picker::before,
+    .premium-composer .composer-image-picker::before {
+      content: "" !important;
+      width: 19px !important;
+      height: 19px !important;
+      display: block !important;
+      background-repeat: no-repeat !important;
+      background-position: center !important;
+      background-size: 19px 19px !important;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2317351f' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21.44 11.05l-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l9.2-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.19 9.19a1.5 1.5 0 0 1-2.12-2.12l8.49-8.48'/%3E%3C/svg%3E") !important;
+    }
+
+    .chat-panel .premium-composer .composer-voice-picker::before,
+    .premium-composer .composer-voice-picker::before {
+      content: "" !important;
+      width: 19px !important;
+      height: 19px !important;
+      display: block !important;
+      background-repeat: no-repeat !important;
+      background-position: center !important;
+      background-size: 19px 19px !important;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2317351f' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 18a4 4 0 0 0 4-4V8a4 4 0 1 0-8 0v6a4 4 0 0 0 4 4Z'/%3E%3Cpath d='M19 10v4a7 7 0 0 1-14 0v-4'/%3E%3Cpath d='M12 21v-3'/%3E%3Cpath d='M8 21h8'/%3E%3C/svg%3E") !important;
+    }
+
+    .chat-panel .premium-composer .composer-image-picker .media-icon,
+    .chat-panel .premium-composer .composer-voice-picker .media-icon,
+    .chat-panel .premium-composer .composer-image-picker .media-text,
+    .chat-panel .premium-composer .composer-voice-picker .media-text,
+    .premium-composer .composer-image-picker .media-icon,
+    .premium-composer .composer-voice-picker .media-icon,
+    .premium-composer .composer-image-picker .media-text,
+    .premium-composer .composer-voice-picker .media-text {
+      display: none !important;
+    }
+
+    .chat-panel .premium-composer .composer-actions,
+    .premium-composer .composer-actions {
+      grid-template-columns: minmax(0, 1fr) 52px !important;
+      min-height: 56px !important;
+      padding: 7px 8px !important;
+      border-radius: 18px !important;
+    }
+
+    .chat-panel .premium-composer .result,
+    .premium-composer .result,
+    #result {
+      height: 36px !important;
+      min-height: 36px !important;
+      max-width: 230px !important;
+      padding: 0 12px !important;
+      border-radius: 12px !important;
+      border: 1px dashed rgba(198,218,191,.66) !important;
+      background: rgba(248,252,246,.88) !important;
+      color: rgba(77, 91, 82, .68) !important;
+      font-size: 9.4px !important;
+      font-weight: 900 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+    }
+
+    .chat-panel .premium-composer .send-btn,
+    .premium-composer .send-btn,
+    #sendBtn {
+      width: 44px !important;
+      min-width: 44px !important;
+      height: 44px !important;
+      min-height: 44px !important;
+      border-radius: 15px !important;
+      background:
+        radial-gradient(circle at 72% 16%, rgba(255,255,255,.34), transparent 28%),
+        linear-gradient(135deg, var(--v109-icon-green-dark), var(--v109-icon-green)) !important;
+      box-shadow:
+        0 14px 28px rgba(37,211,102,.28),
+        inset 0 1px 0 rgba(255,255,255,.25) !important;
+      font-size: 0 !important;
+      color: transparent !important;
+      position: relative !important;
+      overflow: hidden !important;
+    }
+
+    .chat-panel .premium-composer .send-btn::before,
+    .premium-composer .send-btn::before,
+    #sendBtn::before {
+      content: "" !important;
+      width: 20px !important;
+      height: 20px !important;
+      display: block !important;
+      background-repeat: no-repeat !important;
+      background-position: center !important;
+      background-size: 20px 20px !important;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m22 2-7 20-4-9-9-4Z'/%3E%3Cpath d='M22 2 11 13'/%3E%3C/svg%3E") !important;
+      transform: translateX(1px) !important;
+    }
+
+    .chat-panel .premium-composer .send-btn:hover,
+    .premium-composer .send-btn:hover,
+    #sendBtn:hover {
+      transform: translateY(-1px) scale(1.02) !important;
+      box-shadow:
+        0 18px 34px rgba(37,211,102,.33),
+        inset 0 1px 0 rgba(255,255,255,.28) !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V109" !important;
     }
 
   </style>
