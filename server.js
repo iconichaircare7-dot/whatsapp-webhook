@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-116-safe-enter-to-send";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-117-luxury-premium-theme-refresh";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -30109,6 +30109,629 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
         width: 100% !important;
         justify-content: center !important;
         margin: 0 0 6px !important;
+      }
+    }
+
+
+    /* V31.5.8.60.3.9.117 - Luxury Premium Theme Refresh.
+       Staging-only visual theme layer.
+       Scope: colors, surfaces, borders, shadows, cards, panels, buttons, composer, CRM, chat bubbles.
+       Does not touch history, /api/messages, Google Sheet, send logic, status logic,
+       notifications logic, media logic, webhook, booking logic, or chat background watermark logic. */
+
+    :root {
+      --lux-bg-0: #f8fbf5;
+      --lux-bg-1: #eef6ea;
+      --lux-bg-2: #e7f2e2;
+      --lux-ink: #0c1711;
+      --lux-ink-soft: #20352a;
+      --lux-muted: #667568;
+      --lux-line: rgba(185, 211, 177, .72);
+      --lux-line-strong: rgba(120, 184, 62, .32);
+      --lux-glass: rgba(255, 255, 255, .76);
+      --lux-glass-strong: rgba(255, 255, 255, .91);
+      --lux-green: #25b862;
+      --lux-green-bright: #25d366;
+      --lux-green-dark: #0f8f4f;
+      --lux-gold: #c9a227;
+      --lux-shadow-sm: 0 8px 20px rgba(15, 23, 42, .045);
+      --lux-shadow-md: 0 16px 38px rgba(15, 23, 42, .070);
+      --lux-shadow-lg: 0 24px 60px rgba(15, 23, 42, .095);
+      --lux-inner: inset 0 1px 0 rgba(255,255,255,.82);
+      --panel: rgba(255,255,255,.82);
+      --panel-solid: #ffffff;
+      --line: rgba(196, 218, 189, .76);
+      --muted: #667568;
+      --ink: #0c1711;
+      --shadow: var(--lux-shadow-lg);
+      --soft-shadow: var(--lux-shadow-md);
+    }
+
+    html {
+      background: var(--lux-bg-1) !important;
+    }
+
+    body {
+      color: var(--lux-ink) !important;
+      background:
+        radial-gradient(circle at 3% -2%, rgba(37,211,102,.18), transparent 30%),
+        radial-gradient(circle at 98% 2%, rgba(15,143,79,.12), transparent 28%),
+        radial-gradient(circle at 68% 112%, rgba(201,162,39,.08), transparent 34%),
+        linear-gradient(180deg, var(--lux-bg-0) 0%, var(--lux-bg-1) 48%, #edf6e9 100%) !important;
+    }
+
+    body::before {
+      opacity: .030 !important;
+      filter: saturate(.74) contrast(.86) brightness(1.06) !important;
+    }
+
+    body::after {
+      content: "" !important;
+      position: fixed !important;
+      inset: 0 !important;
+      pointer-events: none !important;
+      z-index: 0 !important;
+      background:
+        linear-gradient(115deg, rgba(255,255,255,.30), transparent 38%, rgba(255,255,255,.20)),
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,.26), transparent 48%) !important;
+      opacity: .72 !important;
+    }
+
+    .page {
+      position: relative !important;
+      z-index: 1 !important;
+    }
+
+    /* Global premium surfaces */
+    .topbar,
+    .v18-topbar,
+    .panel,
+    .chat-panel,
+    .main-sidebar,
+    .right-panel-summary,
+    .assign-team-card,
+    .tags-card,
+    .customer-profile-card,
+    .booking-request-card,
+    .composer-block,
+    .premium-composer,
+    .reply-panel,
+    .notifications-panel,
+    .notification-panel,
+    #notificationsPanel,
+    #notificationPanel {
+      border-color: var(--lux-line) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(120,184,62,.075), transparent 34%),
+        linear-gradient(180deg, rgba(255,255,255,.88), rgba(248,253,246,.76)) !important;
+      box-shadow:
+        var(--lux-shadow-md),
+        var(--lux-inner) !important;
+      backdrop-filter: blur(14px) saturate(1.08) !important;
+      -webkit-backdrop-filter: blur(14px) saturate(1.08) !important;
+    }
+
+    .topbar,
+    .v18-topbar {
+      border-radius: 28px !important;
+      background:
+        radial-gradient(circle at 3% 0%, rgba(37,211,102,.12), transparent 34%),
+        linear-gradient(180deg, rgba(255,255,255,.92), rgba(248,253,246,.82)) !important;
+      box-shadow:
+        0 18px 44px rgba(15,23,42,.064),
+        var(--lux-inner) !important;
+    }
+
+    .topbar-title,
+    .panel-title,
+    .chat-title,
+    .summary-title,
+    .assign-title,
+    .tags-title {
+      color: var(--lux-ink) !important;
+      letter-spacing: -.026em !important;
+    }
+
+    .topbar-sub,
+    .panel-sub,
+    .summary-sub,
+    .assign-sub,
+    .tags-sub,
+    .panel-badge,
+    .bubble-info {
+      color: rgba(83, 99, 87, .72) !important;
+    }
+
+    /* Hero: luxury dark green header */
+    .hero {
+      border: 1px solid rgba(255,255,255,.16) !important;
+      background:
+        radial-gradient(circle at 14% 0%, rgba(37,211,102,.28), transparent 30%),
+        radial-gradient(circle at 92% 2%, rgba(201,162,39,.16), transparent 28%),
+        linear-gradient(135deg, #07100c 0%, #0e261d 46%, #21452d 100%) !important;
+      box-shadow:
+        0 28px 68px rgba(10, 30, 20, .24),
+        inset 0 1px 0 rgba(255,255,255,.14) !important;
+    }
+
+    .hero::after {
+      opacity: .22 !important;
+      filter: blur(.2px) !important;
+    }
+
+    /* Sidebar */
+    .main-sidebar {
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.13), transparent 32%),
+        linear-gradient(180deg, rgba(255,255,255,.94), rgba(242,250,238,.88)) !important;
+      border-right-color: rgba(180, 208, 171, .76) !important;
+      box-shadow:
+        18px 0 50px rgba(15,23,42,.060),
+        inset -1px 0 0 rgba(255,255,255,.76) !important;
+    }
+
+    .sidebar-brand {
+      border-bottom-color: rgba(188,216,178,.70) !important;
+    }
+
+    .sidebar-logo,
+    .panel-brand-logo,
+    .topbar-logo {
+      background:
+        radial-gradient(circle at 30% 0%, rgba(255,255,255,.90), transparent 38%),
+        linear-gradient(145deg, rgba(255,255,255,.98), rgba(239,249,235,.88)) !important;
+      border-color: rgba(196,218,189,.88) !important;
+      box-shadow:
+        0 14px 30px rgba(15,23,42,.075),
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    .sidebar-item,
+    .sidebar-link,
+    .nav-link,
+    .nav-item {
+      border-radius: 18px !important;
+      border: 1px solid transparent !important;
+      color: rgba(20, 39, 28, .76) !important;
+      transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease !important;
+    }
+
+    .sidebar-item:hover,
+    .sidebar-link:hover,
+    .nav-link:hover,
+    .nav-item:hover {
+      transform: translateY(-1px) !important;
+      border-color: rgba(120,184,62,.22) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.88), rgba(247,253,245,.78)) !important;
+      box-shadow: 0 10px 24px rgba(15,23,42,.045) !important;
+    }
+
+    .sidebar-item.active,
+    .sidebar-link.active,
+    .nav-link.active,
+    .nav-item.active,
+    .sidebar-item[aria-current="page"],
+    .sidebar-link[aria-current="page"] {
+      color: #0c1711 !important;
+      border-color: rgba(37,211,102,.30) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.16), transparent 44%),
+        linear-gradient(180deg, rgba(255,255,255,.96), rgba(240,252,235,.88)) !important;
+      box-shadow:
+        0 14px 30px rgba(37,211,102,.095),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    /* Panels and headings */
+    .panel {
+      border-radius: 28px !important;
+      overflow: hidden !important;
+    }
+
+    .panel-head,
+    .chat-head {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.88), rgba(250,253,248,.74)) !important;
+      border-bottom-color: rgba(196,218,189,.66) !important;
+    }
+
+    .panel-badge,
+    .status,
+    .branch-badge,
+    .tag-chip,
+    .crm-code-pill {
+      border-color: rgba(120,184,62,.25) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.90), rgba(240,252,235,.78)) !important;
+      box-shadow:
+        0 8px 18px rgba(15,23,42,.035),
+        inset 0 1px 0 rgba(255,255,255,.84) !important;
+    }
+
+    /* Search and filters */
+    input,
+    textarea,
+    select,
+    .search-row input,
+    .inbox-search input,
+    input[placeholder*="Search conversations"] {
+      border-color: rgba(185,211,177,.82) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,253,246,.86)) !important;
+      color: var(--lux-ink) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.88),
+        0 8px 18px rgba(15,23,42,.026) !important;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus,
+    .search-row input:focus,
+    .inbox-search input:focus,
+    input[placeholder*="Search conversations"]:focus {
+      border-color: rgba(37,211,102,.52) !important;
+      box-shadow:
+        0 0 0 4px rgba(37,211,102,.105),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+      outline: none !important;
+    }
+
+    .filter-btn,
+    .quick-filter,
+    .reference-filter-btn,
+    .branch-filter,
+    .branch-btn,
+    .mini-btn,
+    .search-btn,
+    .search-icon-btn,
+    button {
+      transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease !important;
+    }
+
+    .filter-btn,
+    .quick-filter,
+    .reference-filter-btn,
+    .branch-filter,
+    .branch-btn,
+    .mini-btn,
+    .search-btn,
+    .search-icon-btn {
+      border-color: rgba(185,211,177,.82) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.92), rgba(247,253,245,.82)) !important;
+      color: rgba(18, 34, 25, .78) !important;
+      box-shadow:
+        0 8px 18px rgba(15,23,42,.030),
+        inset 0 1px 0 rgba(255,255,255,.84) !important;
+    }
+
+    .filter-btn:hover,
+    .quick-filter:hover,
+    .reference-filter-btn:hover,
+    .branch-filter:hover,
+    .branch-btn:hover,
+    .mini-btn:hover,
+    .search-btn:hover,
+    .search-icon-btn:hover {
+      transform: translateY(-1px) !important;
+      border-color: rgba(37,211,102,.32) !important;
+      box-shadow:
+        0 12px 24px rgba(15,23,42,.050),
+        inset 0 1px 0 rgba(255,255,255,.90) !important;
+    }
+
+    .filter-btn.active,
+    .quick-filter.active,
+    .reference-filter-btn.active,
+    .branch-filter.active,
+    .branch-btn.active,
+    .filter-btn[aria-pressed="true"],
+    .branch-btn[aria-pressed="true"] {
+      border-color: rgba(37,211,102,.44) !important;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(37,211,102,.16), transparent 45%),
+        linear-gradient(180deg, rgba(255,255,255,.96), rgba(238,252,232,.86)) !important;
+      color: #0f5132 !important;
+      box-shadow:
+        0 12px 26px rgba(37,211,102,.105),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    /* Conversation cards */
+    .conversation-list {
+      background:
+        radial-gradient(circle at 50% 0%, rgba(120,184,62,.06), transparent 42%) !important;
+    }
+
+    .conversation-card {
+      border-color: rgba(196,218,189,.72) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.84), rgba(249,253,247,.70)) !important;
+      box-shadow:
+        0 8px 20px rgba(15,23,42,.035),
+        inset 0 1px 0 rgba(255,255,255,.78) !important;
+      transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease !important;
+    }
+
+    .conversation-card:hover {
+      transform: translateY(-1px) !important;
+      border-color: rgba(37,211,102,.28) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.08), transparent 36%),
+        linear-gradient(180deg, rgba(255,255,255,.92), rgba(246,253,243,.80)) !important;
+      box-shadow:
+        0 14px 32px rgba(15,23,42,.055),
+        inset 0 1px 0 rgba(255,255,255,.86) !important;
+    }
+
+    .conversation-card.active,
+    .conversation-card.selected {
+      border-color: rgba(37,211,102,.46) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.16), transparent 42%),
+        linear-gradient(180deg, rgba(255,255,255,.96), rgba(239,252,234,.86)) !important;
+      box-shadow:
+        0 18px 38px rgba(37,211,102,.110),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    .avatar,
+    .conversation-avatar,
+    .chat-avatar,
+    #chatAvatar {
+      background:
+        radial-gradient(circle at 65% 18%, rgba(255,255,255,.28), transparent 30%),
+        linear-gradient(135deg, #0f8f4f, #25d366) !important;
+      box-shadow:
+        0 12px 28px rgba(37,211,102,.18),
+        inset 0 1px 0 rgba(255,255,255,.28) !important;
+    }
+
+    /* Chat area */
+    .chat-panel {
+      border-radius: 30px !important;
+      background:
+        radial-gradient(circle at 18% 8%, rgba(37,211,102,.055), transparent 30%),
+        linear-gradient(180deg, rgba(255,255,255,.84), rgba(245,252,242,.72)) !important;
+      overflow: hidden !important;
+    }
+
+    .chat-body {
+      background:
+        radial-gradient(circle at 18% 0%, rgba(255,255,255,.28), transparent 32%),
+        linear-gradient(180deg, rgba(236,246,231,.20), rgba(248,253,246,.10)) !important;
+    }
+
+    .chat-watermark {
+      opacity: .18 !important;
+    }
+
+    .bubble {
+      border-color: rgba(196,218,189,.70) !important;
+      box-shadow:
+        0 10px 24px rgba(15,23,42,.050),
+        inset 0 1px 0 rgba(255,255,255,.70) !important;
+    }
+
+    .bubble.customer {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.93), rgba(249,252,248,.84)) !important;
+    }
+
+    .bubble.bot {
+      background:
+        linear-gradient(180deg, rgba(222,250,208,.94), rgba(209,245,194,.86)) !important;
+      border-color: rgba(37,211,102,.30) !important;
+    }
+
+    .bubble.staff {
+      background:
+        linear-gradient(180deg, rgba(241,246,255,.94), rgba(232,239,255,.86)) !important;
+      border-color: rgba(101,114,255,.18) !important;
+    }
+
+    /* Composer */
+    .reply-panel,
+    .composer-block,
+    .premium-composer {
+      border-radius: 28px !important;
+      border-color: rgba(120,184,62,.28) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.10), transparent 35%),
+        linear-gradient(180deg, rgba(255,255,255,.94), rgba(248,253,246,.88)) !important;
+      box-shadow:
+        0 22px 54px rgba(15,23,42,.075),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+    }
+
+    .send-btn,
+    #sendBtn,
+    .primary-btn,
+    button[type="submit"] {
+      background:
+        radial-gradient(circle at 28% 0%, rgba(255,255,255,.26), transparent 38%),
+        linear-gradient(135deg, #0f8f4f, #25d366) !important;
+      color: #ffffff !important;
+      border-color: rgba(37,211,102,.40) !important;
+      box-shadow:
+        0 16px 32px rgba(37,211,102,.22),
+        inset 0 1px 0 rgba(255,255,255,.24) !important;
+    }
+
+    .send-btn:hover,
+    #sendBtn:hover,
+    .primary-btn:hover,
+    button[type="submit"]:hover {
+      transform: translateY(-1px) !important;
+      box-shadow:
+        0 20px 42px rgba(37,211,102,.26),
+        inset 0 1px 0 rgba(255,255,255,.28) !important;
+    }
+
+    /* CRM / right panel */
+    .right-panel-summary,
+    .assign-team-card,
+    .tags-card,
+    .customer-profile-card,
+    .profile-item,
+    .reference-detail-row,
+    .media-box,
+    .booking-request-card {
+      border-color: rgba(196,218,189,.76) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.88), rgba(248,253,246,.76)) !important;
+      box-shadow:
+        0 12px 28px rgba(15,23,42,.045),
+        inset 0 1px 0 rgba(255,255,255,.80) !important;
+    }
+
+    .summary-dot,
+    .assign-icon,
+    .tags-icon,
+    .moved-note-icon {
+      background:
+        radial-gradient(circle at 65% 16%, rgba(255,255,255,.30), transparent 32%),
+        linear-gradient(135deg, #0f8f4f, #25d366) !important;
+      box-shadow:
+        0 12px 26px rgba(37,211,102,.18),
+        inset 0 1px 0 rgba(255,255,255,.25) !important;
+    }
+
+    .profile-item span,
+    .reference-detail-row span,
+    .reference-detail-label {
+      color: rgba(82, 99, 86, .72) !important;
+    }
+
+    .profile-item strong,
+    .reference-detail-row strong,
+    .reference-detail-value {
+      color: rgba(14, 28, 20, .92) !important;
+    }
+
+    /* Notifications */
+    #notificationsPanel,
+    #notificationPanel,
+    .notifications-panel,
+    .notification-panel,
+    .notifications-dropdown,
+    .notification-dropdown {
+      border-radius: 24px !important;
+      border-color: rgba(196,218,189,.82) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.12), transparent 36%),
+        linear-gradient(180deg, rgba(255,255,255,.94), rgba(248,253,246,.90)) !important;
+      box-shadow:
+        0 24px 58px rgba(15,23,42,.12),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+    }
+
+    .notification-item,
+    .notification-card {
+      border-color: rgba(196,218,189,.72) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.90), rgba(249,253,247,.82)) !important;
+      box-shadow:
+        0 10px 24px rgba(15,23,42,.045),
+        inset 0 1px 0 rgba(255,255,255,.82) !important;
+    }
+
+    .notification-count {
+      background:
+        linear-gradient(135deg, #0f8f4f, #25d366) !important;
+      box-shadow:
+        0 8px 16px rgba(37,211,102,.22),
+        0 0 0 2px rgba(255,255,255,.92) !important;
+    }
+
+    /* Empty states: align with luxury theme */
+    .actual-empty-state,
+    .empty-state,
+    .no-results,
+    .no-conversations,
+    .no-messages,
+    .notifications-empty,
+    .notification-empty {
+      border-color: rgba(120,184,62,.30) !important;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(37,211,102,.13), transparent 42%),
+        linear-gradient(180deg, rgba(255,255,255,.88), rgba(248,253,246,.76)) !important;
+      box-shadow:
+        0 20px 48px rgba(15,23,42,.066),
+        inset 0 1px 0 rgba(255,255,255,.88) !important;
+    }
+
+    /* Premium scrollbar */
+    *::-webkit-scrollbar {
+      width: 10px !important;
+      height: 10px !important;
+    }
+
+    *::-webkit-scrollbar-track {
+      background: rgba(235,246,230,.48) !important;
+      border-radius: 999px !important;
+    }
+
+    *::-webkit-scrollbar-thumb {
+      background:
+        linear-gradient(180deg, rgba(120,184,62,.48), rgba(37,211,102,.38)) !important;
+      border: 2px solid rgba(248,253,246,.82) !important;
+      border-radius: 999px !important;
+    }
+
+    *::-webkit-scrollbar-thumb:hover {
+      background:
+        linear-gradient(180deg, rgba(120,184,62,.62), rgba(37,211,102,.52)) !important;
+    }
+
+    /* Keep V115 no-selected mode but make it match the new theme */
+    body.no-conversation-selected-mode .chat-head,
+    body.no-conversation-selected-mode .customer-crm-profile,
+    body.no-conversation-selected-mode .customer-profile-panel,
+    body.no-conversation-selected-mode .crm-panel,
+    body.no-conversation-selected-mode .profile-panel {
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.08), transparent 34%),
+        linear-gradient(180deg, rgba(255,255,255,.86), rgba(248,253,246,.76)) !important;
+    }
+
+    body.no-conversation-selected-mode .conversation-status-select,
+    body.no-conversation-selected-mode .chat-actions .mini-btn,
+    body.no-conversation-selected-mode .chat-head .mini-btn,
+    body.no-conversation-selected-mode #copyPhoneBtn,
+    body.no-conversation-selected-mode #markReadBtn,
+    body.no-conversation-selected-mode #nextCustomerBtn,
+    body.no-conversation-selected-mode #closeNextBtn,
+    body.no-conversation-selected-mode #archiveConversationBtn,
+    body.no-conversation-selected-mode #chatTagsMenuBtn {
+      opacity: .52 !important;
+      filter: saturate(.64) grayscale(.10) !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V117" !important;
+    }
+
+    @media (max-width: 1180px) {
+      .topbar,
+      .v18-topbar,
+      .panel,
+      .chat-panel,
+      .main-sidebar {
+        border-radius: 24px !important;
+      }
+
+      .conversation-card {
+        border-radius: 20px !important;
+      }
+
+      .reply-panel,
+      .composer-block,
+      .premium-composer {
+        border-radius: 24px !important;
       }
     }
 
