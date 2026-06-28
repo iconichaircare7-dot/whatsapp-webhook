@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-110-premium-status-select-polish";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-111-premium-search-filters-polish";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -28700,6 +28700,361 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
         min-width: 118px !important;
         height: 31px !important;
         min-height: 31px !important;
+      }
+    }
+
+
+    /* V31.5.8.60.3.9.111 - Premium Search + Filters Polish.
+       UI-only staging refinement.
+       Scope: search box, top filters, branch filters, status counters in the left inbox column.
+       Does not touch filter logic, history, /api/messages, Google Sheet, send logic,
+       status logic, notifications logic, media logic, webhook, booking logic, or chat background. */
+
+    :root {
+      --v111-line: rgba(199, 219, 192, .78);
+      --v111-green: #25b862;
+      --v111-soft-green: rgba(120, 184, 62, .12);
+      --v111-ink: #102018;
+      --v111-muted: #667568;
+      --v111-shadow: 0 8px 18px rgba(15, 23, 42, .040);
+      --v111-shadow-hover: 0 12px 24px rgba(15, 23, 42, .058);
+    }
+
+    input#searchInput,
+    #conversationSearch,
+    .conversation-search input,
+    .search-row input,
+    .inbox-search input,
+    input[placeholder*="Search conversations"] {
+      height: 36px !important;
+      min-height: 36px !important;
+      border-radius: 14px !important;
+      border: 1px solid rgba(199, 219, 192, .84) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(120,184,62,.08), transparent 35%),
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,253,246,.94)) !important;
+      color: #14251b !important;
+      font-size: 11px !important;
+      font-weight: 800 !important;
+      padding: 0 13px !important;
+      box-shadow:
+        var(--v111-shadow),
+        inset 0 1px 0 rgba(255,255,255,.88) !important;
+      outline: 0 !important;
+      transition: border-color .16s ease, box-shadow .16s ease, background .16s ease !important;
+    }
+
+    input#searchInput::placeholder,
+    #conversationSearch::placeholder,
+    .conversation-search input::placeholder,
+    .search-row input::placeholder,
+    .inbox-search input::placeholder,
+    input[placeholder*="Search conversations"]::placeholder {
+      color: rgba(82, 98, 86, .55) !important;
+      font-weight: 780 !important;
+    }
+
+    input#searchInput:focus,
+    #conversationSearch:focus,
+    .conversation-search input:focus,
+    .search-row input:focus,
+    .inbox-search input:focus,
+    input[placeholder*="Search conversations"]:focus {
+      border-color: rgba(37, 211, 102, .52) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(120,184,62,.12), transparent 35%),
+        linear-gradient(180deg, rgba(255,255,255,1), rgba(248,255,244,.98)) !important;
+      box-shadow:
+        0 0 0 4px rgba(37,211,102,.085),
+        0 10px 21px rgba(37,211,102,.052),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+    }
+
+    .search-btn,
+    .search-icon-btn,
+    .conversation-search button,
+    .search-row button,
+    .inbox-search button {
+      width: 36px !important;
+      height: 36px !important;
+      min-width: 36px !important;
+      min-height: 36px !important;
+      border-radius: 14px !important;
+      border: 1px solid rgba(199, 219, 192, .84) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(247,252,245,.92)) !important;
+      color: #17351f !important;
+      box-shadow:
+        var(--v111-shadow),
+        inset 0 1px 0 rgba(255,255,255,.88) !important;
+      transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease !important;
+    }
+
+    .search-btn:hover,
+    .search-icon-btn:hover,
+    .conversation-search button:hover,
+    .search-row button:hover,
+    .inbox-search button:hover {
+      transform: translateY(-1px) !important;
+      border-color: rgba(120,184,62,.45) !important;
+      box-shadow:
+        var(--v111-shadow-hover),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+    }
+
+    .filter-row,
+    .quick-filter-row,
+    .inbox-filters,
+    .reference-filters-row,
+    .branch-filter-row,
+    .status-filter-row {
+      gap: 7px !important;
+    }
+
+    .filter-btn,
+    .quick-filter,
+    .reference-filter-btn,
+    .branch-filter,
+    .branch-btn,
+    button[data-filter],
+    button[data-branch],
+    .inbox-filter-btn {
+      min-height: 28px !important;
+      height: 28px !important;
+      padding: 0 12px !important;
+      border-radius: 12px !important;
+      border: 1px solid rgba(199, 219, 192, .78) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,253,246,.90)) !important;
+      color: rgba(29, 48, 35, .82) !important;
+      font-size: 9.4px !important;
+      font-weight: 950 !important;
+      letter-spacing: -.004em !important;
+      box-shadow:
+        0 5px 12px rgba(15,23,42,.028),
+        inset 0 1px 0 rgba(255,255,255,.86) !important;
+      transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease, background .14s ease, color .14s ease !important;
+    }
+
+    .filter-btn:hover,
+    .quick-filter:hover,
+    .reference-filter-btn:hover,
+    .branch-filter:hover,
+    .branch-btn:hover,
+    button[data-filter]:hover,
+    button[data-branch]:hover,
+    .inbox-filter-btn:hover {
+      transform: translateY(-1px) !important;
+      border-color: rgba(120,184,62,.42) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,1), rgba(243,252,239,.94)) !important;
+      box-shadow:
+        0 9px 18px rgba(15,23,42,.046),
+        inset 0 1px 0 rgba(255,255,255,.90) !important;
+    }
+
+    .filter-btn.active,
+    .quick-filter.active,
+    .reference-filter-btn.active,
+    .branch-filter.active,
+    .branch-btn.active,
+    button[data-filter].active,
+    button[data-branch].active,
+    .inbox-filter-btn.active,
+    .filter-btn[aria-pressed="true"],
+    .branch-btn[aria-pressed="true"] {
+      border-color: rgba(37,211,102,.48) !important;
+      background:
+        radial-gradient(circle at 15% 0%, rgba(255,255,255,.30), transparent 32%),
+        linear-gradient(135deg, #129454, #25d366) !important;
+      color: #ffffff !important;
+      box-shadow:
+        0 10px 20px rgba(37,211,102,.20),
+        inset 0 1px 0 rgba(255,255,255,.22) !important;
+    }
+
+    .branch-tabs,
+    .branch-filter-row,
+    .branch-toggle-row {
+      padding: 8px 0 7px !important;
+      border-top: 1px solid rgba(205, 223, 198, .58) !important;
+      border-bottom: 1px solid rgba(205, 223, 198, .58) !important;
+      margin: 8px 0 !important;
+    }
+
+    .branch-filter,
+    .branch-btn,
+    button[data-branch] {
+      min-height: 34px !important;
+      height: 34px !important;
+      border-radius: 14px !important;
+      flex: 1 1 0 !important;
+      justify-content: center !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,253,246,.92)) !important;
+    }
+
+    .branch-filter .count,
+    .branch-btn .count,
+    button[data-branch] .count,
+    .branch-filter .badge,
+    .branch-btn .badge,
+    button[data-branch] .badge {
+      margin-left: 6px !important;
+      min-width: 23px !important;
+      height: 20px !important;
+      padding: 0 7px !important;
+      border-radius: 999px !important;
+      background: rgba(120,184,62,.16) !important;
+      color: #167243 !important;
+      font-size: 9px !important;
+      font-weight: 950 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.75) !important;
+    }
+
+    .branch-filter.active .count,
+    .branch-btn.active .count,
+    button[data-branch].active .count,
+    .branch-filter.active .badge,
+    .branch-btn.active .badge,
+    button[data-branch].active .badge {
+      background: rgba(255,255,255,.22) !important;
+      color: #ffffff !important;
+    }
+
+    .status-counters,
+    .reference-status-counters,
+    .counter-grid,
+    .inbox-counters,
+    .stats-row {
+      gap: 6px !important;
+      margin: 7px 0 8px !important;
+    }
+
+    .status-counter,
+    .counter-card,
+    .mini-stat,
+    .reference-counter-card,
+    .inbox-counter,
+    .stats-row > *,
+    .counter-grid > * {
+      min-height: 47px !important;
+      border-radius: 13px !important;
+      border: 1px solid rgba(201, 219, 195, .80) !important;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(120,184,62,.08), transparent 42%),
+        linear-gradient(180deg, rgba(255,255,255,.95), rgba(248,253,246,.90)) !important;
+      box-shadow:
+        0 5px 12px rgba(15,23,42,.030),
+        inset 0 1px 0 rgba(255,255,255,.84) !important;
+      overflow: hidden !important;
+    }
+
+    .status-counter:hover,
+    .counter-card:hover,
+    .mini-stat:hover,
+    .reference-counter-card:hover,
+    .inbox-counter:hover,
+    .stats-row > *:hover,
+    .counter-grid > *:hover {
+      border-color: rgba(120,184,62,.40) !important;
+      box-shadow:
+        0 9px 18px rgba(15,23,42,.045),
+        inset 0 1px 0 rgba(255,255,255,.88) !important;
+    }
+
+    .status-counter strong,
+    .counter-card strong,
+    .mini-stat strong,
+    .reference-counter-card strong,
+    .inbox-counter strong,
+    .stats-row strong,
+    .counter-grid strong {
+      color: #102018 !important;
+      font-size: 13px !important;
+      font-weight: 950 !important;
+      line-height: 1 !important;
+    }
+
+    .status-counter span,
+    .counter-card span,
+    .mini-stat span,
+    .reference-counter-card span,
+    .inbox-counter span,
+    .stats-row span,
+    .counter-grid span {
+      color: rgba(73, 89, 77, .68) !important;
+      font-size: 7.7px !important;
+      font-weight: 900 !important;
+      letter-spacing: .015em !important;
+      line-height: 1.05 !important;
+    }
+
+    #conversationList,
+    .conversation-list.reference-conversation-list {
+      border-top: 1px solid rgba(205,223,198,.60) !important;
+      margin-top: 8px !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V111" !important;
+    }
+
+    @media (min-width: 1181px) and (max-width: 1500px) {
+      input#searchInput,
+      #conversationSearch,
+      .conversation-search input,
+      .search-row input,
+      .inbox-search input,
+      input[placeholder*="Search conversations"] {
+        height: 34px !important;
+        min-height: 34px !important;
+      }
+
+      .search-btn,
+      .search-icon-btn,
+      .conversation-search button,
+      .search-row button,
+      .inbox-search button {
+        width: 34px !important;
+        height: 34px !important;
+        min-width: 34px !important;
+        min-height: 34px !important;
+      }
+
+      .filter-btn,
+      .quick-filter,
+      .reference-filter-btn,
+      .branch-filter,
+      .branch-btn,
+      button[data-filter],
+      button[data-branch],
+      .inbox-filter-btn {
+        min-height: 27px !important;
+        height: 27px !important;
+        padding: 0 10px !important;
+        font-size: 8.9px !important;
+      }
+
+      .branch-filter,
+      .branch-btn,
+      button[data-branch] {
+        min-height: 32px !important;
+        height: 32px !important;
+      }
+
+      .status-counter,
+      .counter-card,
+      .mini-stat,
+      .reference-counter-card,
+      .inbox-counter,
+      .stats-row > *,
+      .counter-grid > * {
+        min-height: 43px !important;
       }
     }
 
