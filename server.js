@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-109-composer-icons-premium-refresh";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-110-premium-status-select-polish";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -28583,6 +28583,124 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     .reply-panel::after,
     .reference-version-badge::after {
       content: "V109" !important;
+    }
+
+
+    /* V31.5.8.60.3.9.110 - Premium Status Select Polish.
+       UI-only staging refinement.
+       Scope: closed/native conversation status select visual polish only.
+       No custom dropdown, no JS changes, no status logic changes.
+       Does not touch history, /api/messages, Google Sheet, send logic, webhook,
+       booking logic, media logic, notifications logic, or chat background. */
+
+    :root {
+      --v110-status-green: #25b862;
+      --v110-status-dark: #102018;
+      --v110-status-muted: #637567;
+      --v110-status-line: rgba(120, 184, 62, .42);
+      --v110-status-shadow: 0 8px 18px rgba(15, 23, 42, .045);
+    }
+
+    .conversation-status-select,
+    #conversationStatusSelect,
+    #statusSelect,
+    select.conversation-status-select {
+      appearance: none !important;
+      -webkit-appearance: none !important;
+      -moz-appearance: none !important;
+      position: relative !important;
+      min-width: 124px !important;
+      height: 32px !important;
+      min-height: 32px !important;
+      max-height: 32px !important;
+      padding: 0 34px 0 13px !important;
+      border-radius: 13px !important;
+      border: 1px solid var(--v110-status-line) !important;
+      background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%2317351f' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center / 14px 14px,
+        radial-gradient(circle at 12% 0%, rgba(37,211,102,.12), transparent 32%),
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(241,251,236,.94)) !important;
+      color: #17351f !important;
+      font-size: 9.6px !important;
+      font-weight: 950 !important;
+      letter-spacing: -.004em !important;
+      box-shadow:
+        var(--v110-status-shadow),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+      outline: 0 !important;
+      cursor: pointer !important;
+      transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease, background .14s ease !important;
+    }
+
+    .conversation-status-select:hover,
+    #conversationStatusSelect:hover,
+    #statusSelect:hover,
+    select.conversation-status-select:hover {
+      transform: translateY(-1px) !important;
+      border-color: rgba(37, 211, 102, .56) !important;
+      background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23166534' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center / 14px 14px,
+        radial-gradient(circle at 12% 0%, rgba(37,211,102,.17), transparent 32%),
+        linear-gradient(180deg, rgba(255,255,255,1), rgba(236,252,231,.98)) !important;
+      box-shadow:
+        0 12px 24px rgba(37, 211, 102, .085),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    .conversation-status-select:focus,
+    #conversationStatusSelect:focus,
+    #statusSelect:focus,
+    select.conversation-status-select:focus {
+      border-color: rgba(37, 211, 102, .66) !important;
+      box-shadow:
+        0 0 0 4px rgba(37, 211, 102, .105),
+        0 12px 24px rgba(37, 211, 102, .070),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    .conversation-status-select option,
+    #conversationStatusSelect option,
+    #statusSelect option,
+    select.conversation-status-select option {
+      color: #102018 !important;
+      background: #ffffff !important;
+      font-weight: 750 !important;
+    }
+
+    .chat-actions .conversation-status-select {
+      margin-right: 2px !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V110" !important;
+    }
+
+    @media (min-width: 1181px) and (max-width: 1500px) {
+      .conversation-status-select,
+      #conversationStatusSelect,
+      #statusSelect,
+      select.conversation-status-select {
+        min-width: 112px !important;
+        height: 30px !important;
+        min-height: 30px !important;
+        max-height: 30px !important;
+        padding-left: 11px !important;
+        padding-right: 31px !important;
+        font-size: 9px !important;
+        background-position: right 9px center !important;
+      }
+    }
+
+    @media (max-width: 1180px) {
+      .conversation-status-select,
+      #conversationStatusSelect,
+      #statusSelect,
+      select.conversation-status-select {
+        min-width: 118px !important;
+        height: 31px !important;
+        min-height: 31px !important;
+      }
     }
 
   </style>
