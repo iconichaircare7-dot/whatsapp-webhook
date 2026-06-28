@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-106-premium-header-action-bar-polish";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-107-premium-notifications-panel-final-polish";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -27492,6 +27492,483 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       .chat-head .mini-btn {
         height: 30px !important;
         min-height: 30px !important;
+      }
+    }
+
+
+    /* V31.5.8.60.3.9.107 - Premium Notifications Panel Final Polish.
+       UI-only staging refinement.
+       Scope: notifications popover/panel visual sizing, position, cards, close button, scroll.
+       Does not touch notification logic, history, /api/messages, Google Sheet, send logic,
+       webhook, booking logic, media rendering, chat background, or branch logic. */
+
+    :root {
+      --v107-notif-border: rgba(201, 222, 195, .78);
+      --v107-notif-green: #25b862;
+      --v107-notif-soft: rgba(120, 184, 62, .13);
+      --v107-notif-text: #102018;
+      --v107-notif-muted: #667568;
+      --v107-notif-shadow: 0 18px 44px rgba(15, 23, 42, .115);
+      --v107-notif-soft-shadow: 0 10px 24px rgba(15, 23, 42, .060);
+    }
+
+    /* Notifications panel: smaller, cleaner, anchored feel */
+    #notificationsPanel,
+    #notificationPanel,
+    .notifications-panel,
+    .notification-panel,
+    .notifications-popover,
+    .notification-popover,
+    .notifications-dropdown,
+    .notification-dropdown {
+      width: 380px !important;
+      max-width: min(380px, calc(100vw - 28px)) !important;
+      max-height: min(560px, calc(100vh - 118px)) !important;
+      right: 24px !important;
+      top: 72px !important;
+      border-radius: 24px !important;
+      border: 1px solid var(--v107-notif-border) !important;
+      background:
+        radial-gradient(circle at 8% 0%, rgba(120,184,62,.16), transparent 30%),
+        linear-gradient(180deg, rgba(255,255,255,.97), rgba(247,253,244,.95)) !important;
+      box-shadow:
+        var(--v107-notif-shadow),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+      overflow: hidden !important;
+      backdrop-filter: blur(14px) saturate(1.05) !important;
+      -webkit-backdrop-filter: blur(14px) saturate(1.05) !important;
+      z-index: 90 !important;
+    }
+
+    #notificationsPanel::before,
+    #notificationPanel::before,
+    .notifications-panel::before,
+    .notification-panel::before,
+    .notifications-popover::before,
+    .notification-popover::before,
+    .notifications-dropdown::before,
+    .notification-dropdown::before {
+      content: "" !important;
+      position: absolute !important;
+      top: -7px !important;
+      right: 38px !important;
+      width: 14px !important;
+      height: 14px !important;
+      transform: rotate(45deg) !important;
+      border-left: 1px solid var(--v107-notif-border) !important;
+      border-top: 1px solid var(--v107-notif-border) !important;
+      background: rgba(255,255,255,.96) !important;
+      box-shadow: -4px -4px 12px rgba(15,23,42,.025) !important;
+    }
+
+    /* Header */
+    #notificationsPanel .notifications-header,
+    #notificationPanel .notifications-header,
+    .notifications-panel .notifications-header,
+    .notification-panel .notifications-header,
+    .notifications-popover .notifications-header,
+    .notification-popover .notifications-header,
+    .notifications-dropdown .notifications-header,
+    .notification-dropdown .notifications-header,
+    #notificationsPanel .notification-header,
+    #notificationPanel .notification-header,
+    .notifications-panel .notification-header,
+    .notification-panel .notification-header {
+      min-height: 66px !important;
+      padding: 14px 16px 12px !important;
+      border-bottom: 1px solid rgba(203, 223, 197, .72) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.74), rgba(248,253,245,.54)) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 12px !important;
+      position: relative !important;
+      z-index: 2 !important;
+    }
+
+    #notificationsPanel .notifications-title,
+    #notificationPanel .notifications-title,
+    .notifications-panel .notifications-title,
+    .notification-panel .notifications-title,
+    .notifications-popover .notifications-title,
+    .notification-popover .notifications-title,
+    .notifications-dropdown .notifications-title,
+    .notification-dropdown .notifications-title,
+    #notificationsPanel .notification-title,
+    #notificationPanel .notification-title,
+    .notifications-panel .notification-title,
+    .notification-panel .notification-title {
+      color: var(--v107-notif-text) !important;
+      font-size: 14px !important;
+      font-weight: 950 !important;
+      letter-spacing: -.015em !important;
+      line-height: 1.05 !important;
+      margin: 0 !important;
+    }
+
+    #notificationsPanel .notifications-subtitle,
+    #notificationPanel .notifications-subtitle,
+    .notifications-panel .notifications-subtitle,
+    .notification-panel .notifications-subtitle,
+    .notifications-popover .notifications-subtitle,
+    .notification-popover .notifications-subtitle,
+    .notifications-dropdown .notifications-subtitle,
+    .notification-dropdown .notifications-subtitle,
+    #notificationsPanel small,
+    #notificationPanel small,
+    .notifications-panel small,
+    .notification-panel small {
+      color: rgba(69, 83, 73, .76) !important;
+      font-size: 10.5px !important;
+      font-weight: 850 !important;
+      letter-spacing: -.002em !important;
+    }
+
+    /* Header icon / count polish */
+    #notificationsPanel .notifications-header .avatar,
+    #notificationPanel .notifications-header .avatar,
+    .notifications-panel .notifications-header .avatar,
+    .notification-panel .notifications-header .avatar,
+    #notificationsPanel .notification-icon,
+    #notificationPanel .notification-icon,
+    .notifications-panel .notification-icon,
+    .notification-panel .notification-icon {
+      width: 39px !important;
+      height: 39px !important;
+      min-width: 39px !important;
+      min-height: 39px !important;
+      border-radius: 15px !important;
+      background:
+        radial-gradient(circle at 65% 22%, rgba(255,236,153,.42), transparent 30%),
+        linear-gradient(135deg, #0f8f4f, #25d366) !important;
+      color: #ffffff !important;
+      box-shadow:
+        0 13px 27px rgba(37,211,102,.22),
+        inset 0 1px 0 rgba(255,255,255,.28) !important;
+    }
+
+    /* Close button */
+    #notificationsPanel .notifications-close,
+    #notificationPanel .notifications-close,
+    .notifications-panel .notifications-close,
+    .notification-panel .notifications-close,
+    .notifications-popover .notifications-close,
+    .notification-popover .notifications-close,
+    .notifications-dropdown .notifications-close,
+    .notification-dropdown .notifications-close,
+    #notificationsPanel .notification-close,
+    #notificationPanel .notification-close,
+    .notifications-panel .notification-close,
+    .notification-panel .notification-close,
+    #closeNotificationsBtn,
+    .close-notifications-btn {
+      width: 34px !important;
+      height: 34px !important;
+      min-width: 34px !important;
+      min-height: 34px !important;
+      border-radius: 14px !important;
+      border: 1px solid rgba(203, 223, 197, .82) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(246,252,243,.92)) !important;
+      color: #31533a !important;
+      font-size: 14px !important;
+      font-weight: 950 !important;
+      box-shadow:
+        0 7px 16px rgba(15,23,42,.045),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+      transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease !important;
+    }
+
+    #notificationsPanel .notifications-close:hover,
+    #notificationPanel .notifications-close:hover,
+    .notifications-panel .notifications-close:hover,
+    .notification-panel .notifications-close:hover,
+    #closeNotificationsBtn:hover,
+    .close-notifications-btn:hover {
+      transform: translateY(-1px) !important;
+      border-color: rgba(120,184,62,.44) !important;
+      box-shadow:
+        0 11px 22px rgba(15,23,42,.065),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+    }
+
+    /* Scroll/body */
+    #notificationsPanel .notifications-list,
+    #notificationPanel .notifications-list,
+    .notifications-panel .notifications-list,
+    .notification-panel .notifications-list,
+    .notifications-popover .notifications-list,
+    .notification-popover .notifications-list,
+    .notifications-dropdown .notifications-list,
+    .notification-dropdown .notifications-list,
+    #notificationsPanel .notification-list,
+    #notificationPanel .notification-list,
+    .notifications-panel .notification-list,
+    .notification-panel .notification-list {
+      max-height: 424px !important;
+      overflow-y: auto !important;
+      padding: 11px 12px 12px !important;
+      display: grid !important;
+      gap: 9px !important;
+      scrollbar-width: thin !important;
+      scrollbar-color: rgba(120,184,62,.48) rgba(236,248,231,.72) !important;
+      background: rgba(248,253,245,.36) !important;
+    }
+
+    #notificationsPanel .notifications-list::-webkit-scrollbar,
+    #notificationPanel .notifications-list::-webkit-scrollbar,
+    .notifications-panel .notifications-list::-webkit-scrollbar,
+    .notification-panel .notifications-list::-webkit-scrollbar,
+    .notifications-popover .notifications-list::-webkit-scrollbar,
+    .notification-popover .notifications-list::-webkit-scrollbar,
+    .notifications-dropdown .notifications-list::-webkit-scrollbar,
+    .notification-dropdown .notifications-list::-webkit-scrollbar {
+      width: 8px !important;
+    }
+
+    #notificationsPanel .notifications-list::-webkit-scrollbar-track,
+    #notificationPanel .notifications-list::-webkit-scrollbar-track,
+    .notifications-panel .notifications-list::-webkit-scrollbar-track,
+    .notification-panel .notifications-list::-webkit-scrollbar-track,
+    .notifications-popover .notifications-list::-webkit-scrollbar-track,
+    .notification-popover .notifications-list::-webkit-scrollbar-track {
+      background: rgba(236,248,231,.72) !important;
+      border-radius: 999px !important;
+    }
+
+    #notificationsPanel .notifications-list::-webkit-scrollbar-thumb,
+    #notificationPanel .notifications-list::-webkit-scrollbar-thumb,
+    .notifications-panel .notifications-list::-webkit-scrollbar-thumb,
+    .notification-panel .notifications-list::-webkit-scrollbar-thumb,
+    .notifications-popover .notifications-list::-webkit-scrollbar-thumb,
+    .notification-popover .notifications-list::-webkit-scrollbar-thumb {
+      background: rgba(120,184,62,.52) !important;
+      border-radius: 999px !important;
+      border: 2px solid rgba(236,248,231,.72) !important;
+    }
+
+    /* Notification cards */
+    #notificationsPanel .notification-item,
+    #notificationPanel .notification-item,
+    .notifications-panel .notification-item,
+    .notification-panel .notification-item,
+    .notifications-popover .notification-item,
+    .notification-popover .notification-item,
+    .notifications-dropdown .notification-item,
+    .notification-dropdown .notification-item,
+    #notificationsPanel .notification-card,
+    #notificationPanel .notification-card,
+    .notifications-panel .notification-card,
+    .notification-panel .notification-card,
+    #notificationsPanel .notification-row,
+    #notificationPanel .notification-row,
+    .notifications-panel .notification-row,
+    .notification-panel .notification-row {
+      min-height: 76px !important;
+      padding: 11px 12px !important;
+      border-radius: 18px !important;
+      border: 1px solid rgba(203, 223, 197, .76) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.94), rgba(250,254,248,.92)) !important;
+      box-shadow:
+        0 8px 18px rgba(15,23,42,.035),
+        inset 0 1px 0 rgba(255,255,255,.86) !important;
+      transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease !important;
+      overflow: hidden !important;
+    }
+
+    #notificationsPanel .notification-item:hover,
+    #notificationPanel .notification-item:hover,
+    .notifications-panel .notification-item:hover,
+    .notification-panel .notification-item:hover,
+    .notifications-popover .notification-item:hover,
+    .notification-popover .notification-item:hover,
+    .notifications-dropdown .notification-item:hover,
+    .notification-dropdown .notification-item:hover,
+    #notificationsPanel .notification-card:hover,
+    #notificationPanel .notification-card:hover,
+    .notifications-panel .notification-card:hover,
+    .notification-panel .notification-card:hover,
+    #notificationsPanel .notification-row:hover,
+    #notificationPanel .notification-row:hover,
+    .notifications-panel .notification-row:hover,
+    .notification-panel .notification-row:hover {
+      transform: translateY(-1px) !important;
+      border-color: rgba(120,184,62,.48) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(120,184,62,.12), transparent 34%),
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(247,255,243,.95)) !important;
+      box-shadow:
+        0 13px 27px rgba(15,23,42,.060),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+    }
+
+    #notificationsPanel .notification-item.unread,
+    #notificationPanel .notification-item.unread,
+    .notifications-panel .notification-item.unread,
+    .notification-panel .notification-item.unread,
+    #notificationsPanel .notification-card.unread,
+    #notificationPanel .notification-card.unread,
+    .notifications-panel .notification-card.unread,
+    .notification-panel .notification-card.unread {
+      border-color: rgba(37,211,102,.38) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.13), transparent 34%),
+        linear-gradient(180deg, rgba(250,255,247,.98), rgba(255,255,255,.94)) !important;
+      box-shadow:
+        0 11px 24px rgba(37,211,102,.075),
+        inset 0 0 0 1px rgba(37,211,102,.070) !important;
+    }
+
+    /* Notification card text */
+    #notificationsPanel .notification-name,
+    #notificationPanel .notification-name,
+    .notifications-panel .notification-name,
+    .notification-panel .notification-name,
+    .notifications-popover .notification-name,
+    .notification-popover .notification-name,
+    .notifications-dropdown .notification-name,
+    .notification-dropdown .notification-name,
+    #notificationsPanel .notification-title,
+    #notificationPanel .notification-title,
+    .notifications-panel .notification-title,
+    .notification-panel .notification-title,
+    #notificationsPanel strong,
+    #notificationPanel strong,
+    .notifications-panel strong,
+    .notification-panel strong {
+      color: var(--v107-notif-text) !important;
+      font-size: 12px !important;
+      font-weight: 950 !important;
+      letter-spacing: -.012em !important;
+      line-height: 1.12 !important;
+    }
+
+    #notificationsPanel .notification-preview,
+    #notificationPanel .notification-preview,
+    .notifications-panel .notification-preview,
+    .notification-panel .notification-preview,
+    .notifications-popover .notification-preview,
+    .notification-popover .notification-preview,
+    .notifications-dropdown .notification-preview,
+    .notification-dropdown .notification-preview,
+    #notificationsPanel .notification-message,
+    #notificationPanel .notification-message,
+    .notifications-panel .notification-message,
+    .notification-panel .notification-message,
+    #notificationsPanel p,
+    #notificationPanel p,
+    .notifications-panel p,
+    .notification-panel p {
+      color: rgba(64, 78, 68, .78) !important;
+      font-size: 10.2px !important;
+      font-weight: 750 !important;
+      line-height: 1.28 !important;
+      margin: 3px 0 0 !important;
+    }
+
+    #notificationsPanel .notification-time,
+    #notificationPanel .notification-time,
+    .notifications-panel .notification-time,
+    .notification-panel .notification-time,
+    .notifications-popover .notification-time,
+    .notification-popover .notification-time,
+    .notifications-dropdown .notification-time,
+    .notification-dropdown .notification-time,
+    #notificationsPanel time,
+    #notificationPanel time,
+    .notifications-panel time,
+    .notification-panel time {
+      color: rgba(61, 75, 65, .64) !important;
+      font-size: 8.8px !important;
+      font-weight: 950 !important;
+      letter-spacing: .02em !important;
+      white-space: nowrap !important;
+    }
+
+    /* Chips inside notifications */
+    #notificationsPanel .tag,
+    #notificationPanel .tag,
+    .notifications-panel .tag,
+    .notification-panel .tag,
+    #notificationsPanel .chip,
+    #notificationPanel .chip,
+    .notifications-panel .chip,
+    .notification-panel .chip,
+    #notificationsPanel .badge,
+    #notificationPanel .badge,
+    .notifications-panel .badge,
+    .notification-panel .badge,
+    #notificationsPanel [class*="tag"],
+    #notificationPanel [class*="tag"],
+    .notifications-panel [class*="tag"],
+    .notification-panel [class*="tag"],
+    #notificationsPanel [class*="badge"],
+    #notificationPanel [class*="badge"],
+    .notifications-panel [class*="badge"],
+    .notification-panel [class*="badge"] {
+      min-height: 17px !important;
+      height: 17px !important;
+      padding: 0 7px !important;
+      border-radius: 999px !important;
+      font-size: 8px !important;
+      font-weight: 950 !important;
+      border-width: 1px !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.72) !important;
+    }
+
+    /* Empty state */
+    #notificationsPanel .empty,
+    #notificationPanel .empty,
+    .notifications-panel .empty,
+    .notification-panel .empty,
+    .notifications-popover .empty,
+    .notification-popover .empty,
+    .notifications-dropdown .empty,
+    .notification-dropdown .empty,
+    #notificationsPanel .notifications-empty,
+    #notificationPanel .notifications-empty,
+    .notifications-panel .notifications-empty,
+    .notification-panel .notifications-empty {
+      margin: 12px !important;
+      padding: 24px 18px !important;
+      border-radius: 19px !important;
+      border: 1px dashed rgba(120,184,62,.32) !important;
+      background: rgba(255,255,255,.78) !important;
+      color: rgba(74, 89, 78, .72) !important;
+      font-size: 11px !important;
+      font-weight: 850 !important;
+      text-align: center !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V107" !important;
+    }
+
+    @media (max-width: 1180px) {
+      #notificationsPanel,
+      #notificationPanel,
+      .notifications-panel,
+      .notification-panel,
+      .notifications-popover,
+      .notification-popover,
+      .notifications-dropdown,
+      .notification-dropdown {
+        right: 12px !important;
+        top: 66px !important;
+        width: min(360px, calc(100vw - 24px)) !important;
+        max-height: min(520px, calc(100vh - 96px)) !important;
+      }
+
+      #notificationsPanel .notifications-list,
+      #notificationPanel .notifications-list,
+      .notifications-panel .notifications-list,
+      .notification-panel .notifications-list,
+      .notifications-popover .notifications-list,
+      .notification-popover .notifications-list {
+        max-height: 386px !important;
       }
     }
 
