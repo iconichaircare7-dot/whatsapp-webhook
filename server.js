@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-117-luxury-premium-theme-refresh";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-118-executive-emerald-luxury-theme";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -30732,6 +30732,735 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       .composer-block,
       .premium-composer {
         border-radius: 24px !important;
+      }
+    }
+
+
+    /* V31.5.8.60.3.9.118 - Executive Emerald Luxury Theme.
+       This is a stronger, visibly different premium theme pass.
+       Staging-only visual layer.
+       Scope: high-contrast executive sidebar, dark luxury chat header, premium panels/cards,
+       stronger depth, emerald/gold accents, better surface separation.
+       Does not touch history, /api/messages, Google Sheet, send logic, status logic,
+       notifications logic, media logic, webhook, booking logic, or chat background watermark logic. */
+
+    :root {
+      --v118-emerald-950: #06110c;
+      --v118-emerald-900: #0a1d14;
+      --v118-emerald-850: #0d271b;
+      --v118-emerald-800: #123522;
+      --v118-emerald-700: #0f8f4f;
+      --v118-emerald-600: #18b864;
+      --v118-emerald-500: #25d366;
+      --v118-cream: #fbfff8;
+      --v118-mist: #eef7e9;
+      --v118-line: rgba(145, 190, 130, .46);
+      --v118-line-strong: rgba(37, 211, 102, .36);
+      --v118-gold: #c8a33c;
+      --v118-gold-soft: rgba(200, 163, 60, .20);
+      --v118-text: #07130d;
+      --v118-muted: #5f7164;
+      --v118-shadow-soft: 0 16px 34px rgba(7, 19, 13, .070);
+      --v118-shadow-panel: 0 24px 60px rgba(7, 19, 13, .105);
+      --v118-shadow-dark: 0 26px 70px rgba(0, 0, 0, .20);
+    }
+
+    html,
+    body {
+      background:
+        radial-gradient(circle at 0% -8%, rgba(37,211,102,.22), transparent 32%),
+        radial-gradient(circle at 102% 0%, rgba(200,163,60,.14), transparent 31%),
+        linear-gradient(135deg, #f7fff3 0%, #edf8e8 44%, #f9fff7 100%) !important;
+    }
+
+    body::after {
+      background:
+        linear-gradient(115deg, rgba(255,255,255,.42), transparent 42%, rgba(37,211,102,.055)),
+        radial-gradient(circle at 48% -10%, rgba(255,255,255,.38), transparent 45%) !important;
+      opacity: .92 !important;
+    }
+
+    .workspace-shell {
+      background:
+        radial-gradient(circle at 18% 0%, rgba(37,211,102,.08), transparent 38%),
+        linear-gradient(135deg, rgba(255,255,255,.30), rgba(255,255,255,.08)) !important;
+    }
+
+    /* ===== EXECUTIVE DARK SIDEBAR - biggest visible theme shift ===== */
+    .main-sidebar {
+      background:
+        radial-gradient(circle at 18% 0%, rgba(37,211,102,.24), transparent 31%),
+        radial-gradient(circle at 0% 82%, rgba(200,163,60,.12), transparent 34%),
+        linear-gradient(180deg, var(--v118-emerald-950) 0%, var(--v118-emerald-900) 43%, #10281b 100%) !important;
+      border-right: 1px solid rgba(255,255,255,.10) !important;
+      box-shadow:
+        24px 0 60px rgba(7,19,13,.24),
+        inset -1px 0 0 rgba(255,255,255,.08) !important;
+    }
+
+    .main-sidebar::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      pointer-events: none !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.070), transparent 18%, transparent 78%, rgba(255,255,255,.030)),
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,.08), transparent 38%) !important;
+      opacity: 1 !important;
+    }
+
+    .main-sidebar .sidebar-brand {
+      border-bottom: 1px solid rgba(255,255,255,.10) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.080), rgba(255,255,255,.020)) !important;
+    }
+
+    .main-sidebar .sidebar-logo,
+    .main-sidebar .uploaded-top-left-logo {
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,.96), transparent 44%),
+        linear-gradient(180deg, #ffffff, #f2faee) !important;
+      border: 1px solid rgba(255,255,255,.24) !important;
+      box-shadow:
+        0 18px 38px rgba(0,0,0,.30),
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    .main-sidebar .sidebar-nav {
+      position: relative !important;
+      z-index: 1 !important;
+    }
+
+    .main-sidebar .sidebar-item {
+      color: rgba(238, 255, 243, .84) !important;
+      background: transparent !important;
+      border: 1px solid transparent !important;
+      box-shadow: none !important;
+      text-shadow: 0 1px 0 rgba(0,0,0,.28) !important;
+    }
+
+    .main-sidebar .sidebar-item .nav-icon {
+      color: rgba(238,255,243,.88) !important;
+      border-color: rgba(255,255,255,.13) !important;
+      background: rgba(255,255,255,.075) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.12),
+        0 8px 18px rgba(0,0,0,.12) !important;
+    }
+
+    .main-sidebar .sidebar-item svg {
+      stroke: currentColor !important;
+      color: inherit !important;
+    }
+
+    .main-sidebar .sidebar-item:hover {
+      color: #ffffff !important;
+      transform: translateX(3px) translateY(-1px) !important;
+      border-color: rgba(37,211,102,.28) !important;
+      background:
+        linear-gradient(90deg, rgba(37,211,102,.15), rgba(255,255,255,.045)) !important;
+      box-shadow:
+        0 12px 28px rgba(0,0,0,.18),
+        inset 0 1px 0 rgba(255,255,255,.11) !important;
+    }
+
+    .main-sidebar .sidebar-item:hover .nav-icon {
+      color: #ffffff !important;
+      border-color: rgba(37,211,102,.36) !important;
+      background: rgba(37,211,102,.18) !important;
+    }
+
+    .main-sidebar .sidebar-item.active,
+    .main-sidebar .sidebar-item[aria-current="page"] {
+      color: #06110c !important;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(255,255,255,.44), transparent 36%),
+        linear-gradient(135deg, #25d366 0%, #74e07b 54%, #c6e36d 100%) !important;
+      border-color: rgba(255,255,255,.36) !important;
+      box-shadow:
+        0 16px 34px rgba(37,211,102,.28),
+        inset 0 1px 0 rgba(255,255,255,.46) !important;
+      text-shadow: none !important;
+    }
+
+    .main-sidebar .sidebar-item.active .nav-icon,
+    .main-sidebar .sidebar-item[aria-current="page"] .nav-icon {
+      color: #07130d !important;
+      background: rgba(255,255,255,.48) !important;
+      border-color: rgba(7,19,13,.10) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.58),
+        0 8px 16px rgba(7,19,13,.12) !important;
+    }
+
+    .main-sidebar .sidebar-branches,
+    .main-sidebar .premium-branch-card,
+    .main-sidebar .sidebar-user {
+      position: relative !important;
+      z-index: 1 !important;
+      color: rgba(238,255,243,.86) !important;
+      border: 1px solid rgba(255,255,255,.13) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.13), transparent 38%),
+        linear-gradient(180deg, rgba(255,255,255,.090), rgba(255,255,255,.035)) !important;
+      box-shadow:
+        0 16px 34px rgba(0,0,0,.20),
+        inset 0 1px 0 rgba(255,255,255,.11) !important;
+      backdrop-filter: blur(12px) saturate(1.08) !important;
+      -webkit-backdrop-filter: blur(12px) saturate(1.08) !important;
+    }
+
+    .main-sidebar .sidebar-section-kicker,
+    .main-sidebar .sidebar-section-title,
+    .main-sidebar .sidebar-user-name,
+    .main-sidebar .branch-row strong {
+      color: rgba(255,255,255,.94) !important;
+    }
+
+    .main-sidebar .branch-row small,
+    .main-sidebar .sidebar-user-role,
+    .main-sidebar .sidebar-user-caret {
+      color: rgba(224, 245, 230, .62) !important;
+    }
+
+    .main-sidebar .branch-row {
+      color: rgba(238,255,243,.86) !important;
+      background: rgba(255,255,255,.050) !important;
+      border-color: rgba(255,255,255,.090) !important;
+    }
+
+    .main-sidebar .branch-row:hover {
+      background: rgba(37,211,102,.11) !important;
+      border-color: rgba(37,211,102,.24) !important;
+    }
+
+    .main-sidebar .branch-row b,
+    .main-sidebar #sideDubaiCount,
+    .main-sidebar #sideAbuCount {
+      color: #062014 !important;
+      background:
+        linear-gradient(135deg, #25d366, #c6e36d) !important;
+      box-shadow: 0 8px 18px rgba(37,211,102,.24) !important;
+    }
+
+    .main-sidebar .sidebar-branch-add {
+      color: #07130d !important;
+      background: rgba(255,255,255,.82) !important;
+      border-color: rgba(255,255,255,.32) !important;
+    }
+
+    /* ===== TOPBAR: clearer premium separation ===== */
+    .topbar,
+    .v18-topbar {
+      border: 1px solid rgba(37,211,102,.22) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.18), transparent 34%),
+        linear-gradient(180deg, rgba(255,255,255,.96), rgba(245,252,241,.88)) !important;
+      box-shadow:
+        0 22px 52px rgba(7,19,13,.105),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+    }
+
+    .topbar-title {
+      color: var(--v118-text) !important;
+      font-weight: 1000 !important;
+    }
+
+    .topbar-sub {
+      color: rgba(58,74,61,.72) !important;
+      font-weight: 760 !important;
+    }
+
+    .topbar-system,
+    .topbar-quick,
+    .topbar-notification,
+    .topbar-profile-avatar {
+      border: 1px solid rgba(37,211,102,.24) !important;
+      background:
+        linear-gradient(180deg, #ffffff, #f1faed) !important;
+      box-shadow:
+        0 12px 26px rgba(7,19,13,.060),
+        inset 0 1px 0 rgba(255,255,255,.90) !important;
+    }
+
+    .topbar-profile-avatar {
+      background:
+        radial-gradient(circle at 28% 0%, rgba(255,255,255,.18), transparent 34%),
+        linear-gradient(135deg, #050b08, #0c1d13) !important;
+      color: #dfffe7 !important;
+      border-color: rgba(37,211,102,.30) !important;
+      box-shadow:
+        0 16px 32px rgba(0,0,0,.22),
+        inset 0 1px 0 rgba(255,255,255,.12) !important;
+    }
+
+    /* ===== MAIN PANELS: stronger depth and borders ===== */
+    .app > .panel,
+    .app > aside.panel,
+    .app > section.panel,
+    .chat-panel,
+    .right-reference-panel {
+      border: 1px solid rgba(37,211,102,.22) !important;
+      background:
+        radial-gradient(circle at 8% 0%, rgba(37,211,102,.075), transparent 34%),
+        linear-gradient(180deg, rgba(255,255,255,.97), rgba(247,253,244,.88)) !important;
+      box-shadow:
+        0 26px 62px rgba(7,19,13,.105),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    .app > .panel::before,
+    .chat-panel::before,
+    .right-reference-panel::before {
+      content: "" !important;
+      position: absolute !important;
+      top: 0 !important;
+      left: 18px !important;
+      right: 18px !important;
+      height: 3px !important;
+      border-radius: 999px !important;
+      background:
+        linear-gradient(90deg, transparent, rgba(37,211,102,.70), rgba(200,163,60,.36), transparent) !important;
+      z-index: 3 !important;
+      pointer-events: none !important;
+    }
+
+    /* Conversation list panel */
+    .reference-search-row input,
+    #searchBox {
+      border: 1px solid rgba(37,211,102,.34) !important;
+      background:
+        linear-gradient(180deg, #ffffff, #f4fbf1) !important;
+      box-shadow:
+        0 10px 22px rgba(7,19,13,.050),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+    }
+
+    .reference-filter-icon {
+      border-color: rgba(37,211,102,.28) !important;
+      background:
+        linear-gradient(135deg, #ffffff, #edf9e7) !important;
+      box-shadow: 0 10px 22px rgba(7,19,13,.060) !important;
+    }
+
+    .reference-pill,
+    .reference-branch-tab,
+    .needs-action-card,
+    .reference-list-footer button {
+      border: 1px solid rgba(145,190,130,.50) !important;
+      background:
+        linear-gradient(180deg, #ffffff, #f4fbf1) !important;
+      color: rgba(17,34,24,.78) !important;
+      box-shadow:
+        0 8px 18px rgba(7,19,13,.040),
+        inset 0 1px 0 rgba(255,255,255,.88) !important;
+    }
+
+    .reference-pill.active,
+    .reference-branch-tab.active,
+    .needs-action-card.active,
+    .needs-action-card.is-active {
+      color: #06110c !important;
+      border-color: rgba(37,211,102,.48) !important;
+      background:
+        radial-gradient(circle at 22% 0%, rgba(255,255,255,.38), transparent 35%),
+        linear-gradient(135deg, #25d366, #a6df74) !important;
+      box-shadow:
+        0 16px 30px rgba(37,211,102,.20),
+        inset 0 1px 0 rgba(255,255,255,.36) !important;
+    }
+
+    .conversation-card {
+      border: 1px solid rgba(145,190,130,.40) !important;
+      border-left: 4px solid rgba(37,211,102,.55) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(244,251,241,.92)) !important;
+      box-shadow:
+        0 14px 30px rgba(7,19,13,.060),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    .conversation-card:hover {
+      transform: translateY(-2px) !important;
+      border-color: rgba(37,211,102,.40) !important;
+      border-left-color: var(--v118-gold) !important;
+      box-shadow:
+        0 20px 42px rgba(7,19,13,.095),
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    .conversation-card.active,
+    .conversation-card.selected {
+      border-color: rgba(37,211,102,.54) !important;
+      border-left-color: var(--v118-gold) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.16), transparent 36%),
+        linear-gradient(180deg, #ffffff, #eff9eb) !important;
+      box-shadow:
+        0 22px 48px rgba(37,211,102,.18),
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    .conv-name,
+    .conversation-card .conv-name {
+      color: #07130d !important;
+      font-weight: 1000 !important;
+    }
+
+    .conv-preview,
+    .conv-time {
+      color: rgba(69,86,73,.70) !important;
+    }
+
+    .message-count-badge {
+      color: #06110c !important;
+      background:
+        linear-gradient(135deg, #eefbe9, #cdeec2) !important;
+      border: 1px solid rgba(37,211,102,.20) !important;
+    }
+
+    /* ===== CHAT: dark executive header + premium message area ===== */
+    .chat-panel {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.96), rgba(245,252,242,.86)) !important;
+    }
+
+    .chat-head {
+      color: #ffffff !important;
+      border-bottom: 1px solid rgba(255,255,255,.12) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.28), transparent 36%),
+        radial-gradient(circle at 100% 0%, rgba(200,163,60,.16), transparent 30%),
+        linear-gradient(135deg, #07130d 0%, #10281b 55%, #193d28 100%) !important;
+      box-shadow:
+        0 18px 42px rgba(7,19,13,.18),
+        inset 0 1px 0 rgba(255,255,255,.10) !important;
+    }
+
+    .chat-title {
+      color: #ffffff !important;
+      text-shadow: 0 1px 0 rgba(0,0,0,.22) !important;
+    }
+
+    .chat-meta,
+    .chat-meta * {
+      color: rgba(227,249,231,.76) !important;
+    }
+
+    .chat-actions {
+      border-color: rgba(255,255,255,.13) !important;
+      background: rgba(255,255,255,.060) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.10) !important;
+    }
+
+    .chat-actions .mini-btn,
+    .chat-actions select,
+    #conversationStatusSelect {
+      border: 1px solid rgba(255,255,255,.20) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.95), rgba(235,248,229,.90)) !important;
+      color: #07130d !important;
+      box-shadow:
+        0 10px 22px rgba(0,0,0,.13),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+    }
+
+    .workflow-close-next-btn {
+      border-color: rgba(255,139,95,.52) !important;
+      color: #9f3412 !important;
+      background:
+        linear-gradient(180deg, #fff8f3, #fff1e8) !important;
+    }
+
+    .chat-body {
+      background:
+        radial-gradient(circle at 30% 8%, rgba(37,211,102,.075), transparent 31%),
+        radial-gradient(circle at 90% 22%, rgba(200,163,60,.070), transparent 26%),
+        linear-gradient(180deg, #fbfff8 0%, #f1f8ed 100%) !important;
+    }
+
+    .chat-watermark {
+      opacity: .22 !important;
+      filter: saturate(1.08) contrast(1.02) !important;
+    }
+
+    .bubble {
+      border-radius: 22px !important;
+      border: 1px solid rgba(145,190,130,.40) !important;
+      box-shadow:
+        0 16px 36px rgba(7,19,13,.075),
+        inset 0 1px 0 rgba(255,255,255,.82) !important;
+    }
+
+    .bubble.customer {
+      background:
+        linear-gradient(180deg, #ffffff, #eef8e8) !important;
+      border-left: 4px solid rgba(37,211,102,.55) !important;
+    }
+
+    .bubble.bot,
+    .bubble.team,
+    .bubble.staff {
+      background:
+        linear-gradient(180deg, #ffffff, #f8fff5) !important;
+      border-right: 4px solid rgba(37,211,102,.70) !important;
+    }
+
+    .bubble .badge,
+    .bubble-info,
+    .message-meta,
+    .bubble-meta {
+      color: rgba(63,82,67,.72) !important;
+    }
+
+    /* ===== COMPOSER: stronger luxury tray ===== */
+    .reply-panel,
+    .composer-block,
+    .premium-composer,
+    .composer-form {
+      border: 1px solid rgba(37,211,102,.30) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.11), transparent 36%),
+        linear-gradient(180deg, #ffffff, #f1faed) !important;
+      box-shadow:
+        0 -8px 40px rgba(7,19,13,.075),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    .composer-tabs button,
+    .composer-mode-toggle button,
+    .reply-mode-btn,
+    .note-mode-btn {
+      border-color: rgba(37,211,102,.24) !important;
+      background:
+        linear-gradient(180deg, #ffffff, #f4fbf1) !important;
+      color: rgba(18,34,24,.78) !important;
+    }
+
+    .composer-tabs button.active,
+    .composer-mode-toggle button.active,
+    .reply-mode-btn.active,
+    .note-mode-btn.active {
+      color: #06110c !important;
+      background:
+        linear-gradient(135deg, #25d366, #a6df74) !important;
+      border-color: rgba(255,255,255,.36) !important;
+      box-shadow: 0 12px 26px rgba(37,211,102,.22) !important;
+    }
+
+    #body,
+    textarea#body {
+      border: 1px solid rgba(37,211,102,.28) !important;
+      background:
+        linear-gradient(180deg, #ffffff, #f8fff5) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.94),
+        0 10px 22px rgba(7,19,13,.045) !important;
+    }
+
+    #sendBtn,
+    .send-btn {
+      border: 1px solid rgba(255,255,255,.28) !important;
+      background:
+        radial-gradient(circle at 28% 0%, rgba(255,255,255,.28), transparent 38%),
+        linear-gradient(135deg, #0f8f4f, #25d366 58%, #99df70) !important;
+      box-shadow:
+        0 18px 34px rgba(37,211,102,.30),
+        inset 0 1px 0 rgba(255,255,255,.30) !important;
+    }
+
+    /* ===== RIGHT CRM PANEL ===== */
+    .right-reference-panel {
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.10), transparent 32%),
+        linear-gradient(180deg, rgba(255,255,255,.97), rgba(244,251,241,.90)) !important;
+    }
+
+    .reference-card,
+    .customer-details-card,
+    .booking-request-card,
+    .assign-team-card,
+    .branch-team-assignment-card {
+      border: 1px solid rgba(37,211,102,.22) !important;
+      background:
+        linear-gradient(180deg, #ffffff, #f5fcf2) !important;
+      box-shadow:
+        0 16px 34px rgba(7,19,13,.070),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    .reference-card-head {
+      border-bottom: 1px solid rgba(37,211,102,.16) !important;
+    }
+
+    .reference-card-head h3 {
+      color: #07130d !important;
+      font-weight: 1000 !important;
+    }
+
+    .reference-avatar,
+    #customerProfileAvatar,
+    .avatar,
+    #chatAvatar,
+    .conversation-card .avatar {
+      background:
+        radial-gradient(circle at 65% 18%, rgba(255,255,255,.28), transparent 30%),
+        linear-gradient(135deg, #0f8f4f, #25d366) !important;
+      color: #ffffff !important;
+      box-shadow:
+        0 14px 28px rgba(37,211,102,.24),
+        inset 0 1px 0 rgba(255,255,255,.28) !important;
+    }
+
+    .crm-privacy-strip {
+      border: 1px solid rgba(115,86,220,.20) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.94), rgba(247,244,255,.88)) !important;
+      box-shadow:
+        0 10px 22px rgba(7,19,13,.035),
+        inset 0 1px 0 rgba(255,255,255,.90) !important;
+    }
+
+    .reference-detail-row {
+      border-bottom-color: rgba(37,211,102,.11) !important;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,.70), rgba(255,255,255,.22)) !important;
+    }
+
+    .reference-detail-row span {
+      color: rgba(70,87,74,.74) !important;
+      font-weight: 820 !important;
+    }
+
+    .reference-detail-row strong {
+      color: #07130d !important;
+      font-weight: 980 !important;
+    }
+
+    .branch-team-select,
+    #assigneeSelect {
+      border: 1px solid rgba(37,211,102,.24) !important;
+      background:
+        linear-gradient(180deg, #ffffff, #f2faee) !important;
+      box-shadow:
+        0 10px 22px rgba(7,19,13,.050),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+    }
+
+    /* Notifications / quick replies */
+    .quick-replies-menu,
+    .live-notification-panel,
+    #liveNotificationPanel,
+    #notificationsPanel,
+    .notifications-panel {
+      border: 1px solid rgba(37,211,102,.28) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.12), transparent 34%),
+        linear-gradient(180deg, #ffffff, #f3fbef) !important;
+      box-shadow:
+        0 28px 70px rgba(7,19,13,.20),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    .quick-reply-item,
+    .notification-item,
+    .notification-card {
+      border: 1px solid rgba(145,190,130,.34) !important;
+      background:
+        linear-gradient(180deg, #ffffff, #f7fff4) !important;
+      box-shadow:
+        0 12px 26px rgba(7,19,13,.055),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    /* Empty states */
+    .actual-empty-state,
+    .empty-state,
+    .no-results,
+    .no-conversations,
+    .no-messages {
+      border: 1px solid rgba(37,211,102,.30) !important;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(37,211,102,.18), transparent 42%),
+        linear-gradient(180deg, #ffffff, #f3fbef) !important;
+      box-shadow:
+        0 24px 58px rgba(7,19,13,.095),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    .empty-state-icon {
+      background:
+        radial-gradient(circle at 65% 18%, rgba(255,255,255,.30), transparent 30%),
+        linear-gradient(135deg, #0f8f4f, #25d366 60%, #a6df74) !important;
+      box-shadow:
+        0 18px 36px rgba(37,211,102,.30),
+        inset 0 1px 0 rgba(255,255,255,.30) !important;
+    }
+
+    /* Status/badges */
+    .status,
+    .reference-status-pill,
+    .crm-code-pill,
+    .branch-dubai,
+    .branch-abu,
+    .tag-chip,
+    .message-count-badge {
+      border-color: rgba(37,211,102,.22) !important;
+      background:
+        linear-gradient(180deg, #ffffff, #ecf9e7) !important;
+      color: #0f5132 !important;
+      box-shadow:
+        0 8px 18px rgba(7,19,13,.035),
+        inset 0 1px 0 rgba(255,255,255,.88) !important;
+    }
+
+    .status-closed,
+    .status.status-closed,
+    .reference-status-pill.status-closed {
+      color: #4b5563 !important;
+      background:
+        linear-gradient(180deg, #ffffff, #f3f4f6) !important;
+      border-color: rgba(148,163,184,.32) !important;
+    }
+
+    /* Scrollbar: more visible */
+    *::-webkit-scrollbar {
+      width: 11px !important;
+      height: 11px !important;
+    }
+
+    *::-webkit-scrollbar-track {
+      background: rgba(7,19,13,.050) !important;
+      border-radius: 999px !important;
+    }
+
+    *::-webkit-scrollbar-thumb {
+      background:
+        linear-gradient(180deg, #25d366, #0f8f4f) !important;
+      border: 2px solid rgba(250,255,247,.90) !important;
+      border-radius: 999px !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.25) !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V118" !important;
+    }
+
+    @media (max-width: 1180px) {
+      .main-sidebar {
+        background:
+          radial-gradient(circle at 18% 0%, rgba(37,211,102,.22), transparent 31%),
+          linear-gradient(180deg, #07130d, #10281b) !important;
+      }
+
+      .chat-head {
+        background:
+          linear-gradient(135deg, #07130d, #143522) !important;
+      }
+
+      .conversation-card {
+        border-left-width: 3px !important;
       }
     }
 
