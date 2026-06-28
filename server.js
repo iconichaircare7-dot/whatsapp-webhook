@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-96-professional-notifications-panel";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-99-premium-spacing-message-soft-polish";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -26167,6 +26167,234 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       .reply-panel::after,
       .reference-version-badge::after {
         content: "V95" !important;
+      }
+    }
+
+
+
+    /* V31.5.8.60.3.9.99 - Premium spacing + softer message polish.
+       UI/CSS-only refinement.
+       Keeps the chat watermark/logo background unchanged.
+       Does not touch history, /api/messages, loadMessagesFromGoogleSheet, Google Sheet logic,
+       webhook, WhatsApp send, archive, branch access, notifications logic, or booking logic. */
+    :root {
+      --premium-ink-99: #102018;
+      --premium-muted-99: #667568;
+      --premium-line-99: rgba(202, 222, 196, .68);
+      --premium-customer-bg-99-a: rgba(238, 255, 231, .88);
+      --premium-customer-bg-99-b: rgba(223, 249, 214, .82);
+      --premium-staff-bg-99-a: rgba(255, 255, 255, .97);
+      --premium-staff-bg-99-b: rgba(249, 252, 248, .94);
+    }
+
+    @media (min-width: 1181px) {
+      .chat-head {
+        min-height: 88px !important;
+        padding: 8px 12px 9px !important;
+        gap: 5px !important;
+        background: linear-gradient(180deg, rgba(255,255,255,.94), rgba(250,253,248,.90)) !important;
+        border-bottom: 1px solid var(--premium-line-99) !important;
+        box-shadow: 0 7px 18px rgba(15,23,42,.030) !important;
+      }
+
+      .chat-customer {
+        grid-template-columns: 38px minmax(0, 1fr) !important;
+        gap: 8px !important;
+      }
+
+      .chat-head .avatar,
+      .chat-customer .avatar {
+        width: 38px !important;
+        height: 38px !important;
+        min-width: 38px !important;
+        min-height: 38px !important;
+        box-shadow: 0 8px 17px rgba(9,146,96,.15) !important;
+      }
+
+      .chat-title {
+        font-size: 15.8px !important;
+        line-height: 1.04 !important;
+        margin-bottom: 3px !important;
+      }
+
+      .chat-meta {
+        max-height: 42px !important;
+        min-height: 20px !important;
+        gap: 4px !important;
+      }
+
+      .chat-meta .tag,
+      .chat-meta .chip,
+      .chat-meta span,
+      .chat-meta .branch,
+      .chat-meta .status,
+      .chat-meta .sender-badge,
+      .chat-meta .tag-chip,
+      .chat-meta .workflow-status-chip,
+      .chat-meta .assignee-chip {
+        height: 19px !important;
+        min-height: 19px !important;
+        line-height: 19px !important;
+        padding: 0 7px !important;
+        font-size: 8.6px !important;
+        border-color: rgba(255,255,255,.78) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.72) !important;
+      }
+
+      .chat-actions {
+        gap: 4px !important;
+        align-items: center !important;
+      }
+
+      .conversation-status-select {
+        height: 28px !important;
+        min-height: 28px !important;
+        max-height: 28px !important;
+        border-radius: 11px !important;
+        font-size: 9.1px !important;
+        box-shadow: 0 6px 14px rgba(15,23,42,.035), inset 0 1px 0 rgba(255,255,255,.86) !important;
+      }
+
+      .chat-actions .mini-btn,
+      .chat-head .mini-btn {
+        height: 28px !important;
+        min-height: 28px !important;
+        max-height: 28px !important;
+        padding: 0 8px !important;
+        border-radius: 11px !important;
+        font-size: 9.1px !important;
+        box-shadow: 0 6px 14px rgba(15,23,42,.035), inset 0 1px 0 rgba(255,255,255,.86) !important;
+      }
+
+      #chatBody,
+      .chat-body {
+        padding: 18px 24px !important;
+      }
+
+      #chatBody .bubble-row,
+      .chat-body .bubble-row {
+        margin-bottom: 10px !important;
+      }
+
+      #chatBody .bubble,
+      .chat-body .bubble,
+      .bubble {
+        max-width: min(660px, 76%) !important;
+        padding: 12px 14px 11px !important;
+        border-radius: 17px !important;
+        font-size: 13.2px !important;
+        line-height: 1.50 !important;
+        letter-spacing: -.002em !important;
+        border: 1px solid rgba(205,223,199,.72) !important;
+        box-shadow: 0 8px 18px rgba(15,23,42,.045), inset 0 1px 0 rgba(255,255,255,.60) !important;
+      }
+
+      #chatBody .bubble.customer,
+      .chat-body .bubble.customer,
+      .bubble.customer {
+        background: linear-gradient(180deg, var(--premium-customer-bg-99-a), var(--premium-customer-bg-99-b)) !important;
+        border-color: rgba(120,184,62,.26) !important;
+        color: #183522 !important;
+        box-shadow: 0 8px 18px rgba(39,180,95,.060), inset 0 1px 0 rgba(255,255,255,.54) !important;
+      }
+
+      #chatBody .bubble.bot,
+      .chat-body .bubble.bot,
+      .bubble.bot,
+      #chatBody .bubble.staff,
+      .chat-body .bubble.staff,
+      .bubble.staff {
+        background: linear-gradient(180deg, var(--premium-staff-bg-99-a), var(--premium-staff-bg-99-b)) !important;
+        border-color: rgba(193,209,189,.72) !important;
+        color: #15231b !important;
+      }
+
+      .bubble-info,
+      #chatBody .bubble-info,
+      .chat-body .bubble-info {
+        margin-top: 7px !important;
+        padding-top: 7px !important;
+        font-size: 10.1px !important;
+        color: rgba(82,100,86,.76) !important;
+        border-top-color: rgba(22,53,43,.065) !important;
+      }
+
+      #conversationList .conversation-card,
+      #conversationList .conversation-card.reference-conversation-card {
+        border-radius: 17px !important;
+        border-color: rgba(211,226,207,.70) !important;
+        background: rgba(255,255,255,.82) !important;
+        box-shadow: 0 6px 15px rgba(15,23,42,.030) !important;
+      }
+
+      #conversationList .conversation-card:hover,
+      #conversationList .conversation-card.reference-conversation-card:hover {
+        transform: translateY(-1px) !important;
+        background: rgba(255,255,255,.95) !important;
+        border-color: rgba(120,184,62,.34) !important;
+        box-shadow: 0 12px 24px rgba(15,23,42,.055) !important;
+      }
+
+      #conversationList .conversation-card.active,
+      #conversationList .conversation-card.reference-conversation-card.active {
+        background: linear-gradient(135deg, rgba(250,255,247,.98), rgba(255,255,255,.96)) !important;
+        border-color: rgba(120,184,62,.46) !important;
+        box-shadow: 0 12px 26px rgba(68,128,45,.095), inset 3px 0 0 rgba(120,184,62,.78) !important;
+      }
+
+      #conversationList .conversation-card.reference-conversation-card.unread,
+      #conversationList .conversation-card.reference-conversation-card.card-live-alert {
+        background: linear-gradient(135deg, rgba(248,255,245,.98), rgba(255,255,255,.95)) !important;
+        border-left: 3px solid rgba(39,180,95,.78) !important;
+        box-shadow: 0 10px 22px rgba(39,180,95,.075), inset 0 0 0 1px rgba(39,180,95,.09) !important;
+      }
+
+      .reply-panel::after,
+      .reference-version-badge::after {
+        content: "V99" !important;
+      }
+    }
+
+    @media (min-width: 1181px) and (max-width: 1500px) {
+      .chat-head {
+        min-height: 94px !important;
+      }
+
+      .chat-actions {
+        flex-wrap: wrap !important;
+        justify-content: flex-start !important;
+        gap: 4px !important;
+      }
+
+      .conversation-status-select {
+        height: 29px !important;
+        min-height: 29px !important;
+        max-height: 29px !important;
+      }
+
+      .chat-actions .mini-btn,
+      .chat-head .mini-btn {
+        height: 29px !important;
+        min-height: 29px !important;
+        max-height: 29px !important;
+        padding: 0 7px !important;
+        font-size: 8.9px !important;
+      }
+
+      #chatBody .bubble,
+      .chat-body .bubble,
+      .bubble {
+        max-width: min(610px, 80%) !important;
+        font-size: 12.8px !important;
+      }
+    }
+
+    @media (max-width: 1180px) {
+      #chatBody .bubble,
+      .chat-body .bubble,
+      .bubble {
+        font-size: 13px !important;
+        padding: 11px 13px !important;
       }
     }
 
