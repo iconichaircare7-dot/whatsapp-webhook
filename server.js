@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-118-executive-emerald-luxury-theme";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-119-executive-theme-balance-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -31462,6 +31462,321 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       .conversation-card {
         border-left-width: 3px !important;
       }
+    }
+
+
+    /* V31.5.8.60.3.9.119 - Executive Theme Balance Fix.
+       Staging-only visual balance layer.
+       Keeps the V118 dark executive chat header.
+       Fixes sidebar readability by switching the left navigation back to a premium light emerald surface
+       with strong text/icon contrast.
+       Does not touch history, /api/messages, Google Sheet, send logic, status logic,
+       notifications logic, media logic, webhook, booking logic, or chat background watermark logic. */
+
+    :root {
+      --v119-sidebar-bg-top: #fafff7;
+      --v119-sidebar-bg-bottom: #eef8e8;
+      --v119-sidebar-text: #102018;
+      --v119-sidebar-muted: #526553;
+      --v119-sidebar-line: rgba(172, 207, 160, .78);
+      --v119-sidebar-green: #25b862;
+      --v119-sidebar-green-bright: #25d366;
+      --v119-sidebar-shadow: 14px 0 42px rgba(7, 19, 13, .070);
+    }
+
+    html body .workspace-shell > aside.main-sidebar,
+    html body aside.main-sidebar,
+    html body .main-sidebar {
+      color: var(--v119-sidebar-text) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.18), transparent 34%),
+        radial-gradient(circle at 100% 100%, rgba(200,163,60,.070), transparent 34%),
+        linear-gradient(180deg, var(--v119-sidebar-bg-top) 0%, #f3fbef 46%, var(--v119-sidebar-bg-bottom) 100%) !important;
+      border-right: 1px solid var(--v119-sidebar-line) !important;
+      box-shadow:
+        var(--v119-sidebar-shadow),
+        inset -1px 0 0 rgba(255,255,255,.88) !important;
+      opacity: 1 !important;
+      filter: none !important;
+    }
+
+    html body .workspace-shell > aside.main-sidebar::before,
+    html body aside.main-sidebar::before,
+    html body .main-sidebar::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      pointer-events: none !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.62), transparent 18%, transparent 80%, rgba(255,255,255,.28)),
+        radial-gradient(circle at 20% 0%, rgba(255,255,255,.62), transparent 36%) !important;
+      opacity: .70 !important;
+      z-index: 0 !important;
+    }
+
+    html body .main-sidebar > * {
+      position: relative !important;
+      z-index: 1 !important;
+    }
+
+    html body .main-sidebar .sidebar-brand {
+      border: 1px solid rgba(177, 210, 166, .78) !important;
+      border-bottom-color: rgba(177, 210, 166, .78) !important;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,.96), transparent 42%),
+        linear-gradient(180deg, rgba(255,255,255,.95), rgba(243,251,239,.86)) !important;
+      box-shadow:
+        0 13px 28px rgba(7,19,13,.055),
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    html body .main-sidebar .sidebar-logo,
+    html body .main-sidebar .uploaded-top-left-logo {
+      background:
+        linear-gradient(180deg, #ffffff, #f6fcf3) !important;
+      border: 1px solid rgba(177, 210, 166, .86) !important;
+      box-shadow:
+        0 12px 26px rgba(7,19,13,.060),
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+      opacity: 1 !important;
+      filter: none !important;
+    }
+
+    html body .main-sidebar .sidebar-nav {
+      opacity: 1 !important;
+      filter: none !important;
+    }
+
+    html body .main-sidebar .sidebar-item,
+    html body .workspace-shell > aside.main-sidebar .sidebar-item {
+      color: var(--v119-sidebar-text) !important;
+      opacity: 1 !important;
+      filter: none !important;
+      background: rgba(255,255,255,.36) !important;
+      border: 1px solid transparent !important;
+      text-shadow: none !important;
+      box-shadow: none !important;
+      font-weight: 920 !important;
+    }
+
+    html body .main-sidebar .sidebar-item span,
+    html body .main-sidebar .sidebar-item strong,
+    html body .main-sidebar .sidebar-item .sidebar-item-label {
+      color: var(--v119-sidebar-text) !important;
+      opacity: 1 !important;
+      filter: none !important;
+    }
+
+    html body .main-sidebar .sidebar-item .nav-icon,
+    html body .workspace-shell > aside.main-sidebar .sidebar-item .nav-icon {
+      color: #0f5132 !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(238,250,232,.92)) !important;
+      border: 1px solid rgba(37,211,102,.22) !important;
+      box-shadow:
+        0 8px 18px rgba(7,19,13,.045),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+      opacity: 1 !important;
+      filter: none !important;
+    }
+
+    html body .main-sidebar .sidebar-item svg,
+    html body .main-sidebar .sidebar-item .nav-icon svg {
+      color: inherit !important;
+      stroke: currentColor !important;
+      opacity: 1 !important;
+      filter: none !important;
+    }
+
+    html body .main-sidebar .sidebar-item:hover,
+    html body .workspace-shell > aside.main-sidebar .sidebar-item:hover {
+      color: #07130d !important;
+      transform: translateX(2px) translateY(-1px) !important;
+      border-color: rgba(37,211,102,.28) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.12), transparent 42%),
+        linear-gradient(180deg, rgba(255,255,255,.96), rgba(239,251,234,.88)) !important;
+      box-shadow:
+        0 12px 24px rgba(7,19,13,.062),
+        inset 0 1px 0 rgba(255,255,255,.90) !important;
+    }
+
+    html body .main-sidebar .sidebar-item:hover .nav-icon {
+      color: #064e3b !important;
+      background:
+        linear-gradient(180deg, #ffffff, #e9f9e2) !important;
+      border-color: rgba(37,211,102,.35) !important;
+    }
+
+    html body .main-sidebar .sidebar-item.active,
+    html body .main-sidebar .sidebar-item[aria-current="page"],
+    html body .workspace-shell > aside.main-sidebar .sidebar-item.active,
+    html body .workspace-shell > aside.main-sidebar .sidebar-item[aria-current="page"] {
+      color: #06110c !important;
+      border-color: rgba(37,211,102,.46) !important;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(255,255,255,.42), transparent 38%),
+        linear-gradient(135deg, #25d366 0%, #a8e67a 100%) !important;
+      box-shadow:
+        0 15px 30px rgba(37,211,102,.20),
+        inset 0 1px 0 rgba(255,255,255,.46) !important;
+      text-shadow: none !important;
+    }
+
+    html body .main-sidebar .sidebar-item.active span,
+    html body .main-sidebar .sidebar-item.active strong,
+    html body .main-sidebar .sidebar-item[aria-current="page"] span,
+    html body .main-sidebar .sidebar-item[aria-current="page"] strong {
+      color: #06110c !important;
+      opacity: 1 !important;
+    }
+
+    html body .main-sidebar .sidebar-item.active .nav-icon,
+    html body .main-sidebar .sidebar-item[aria-current="page"] .nav-icon {
+      color: #06110c !important;
+      background: rgba(255,255,255,.56) !important;
+      border-color: rgba(7,19,13,.10) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.68),
+        0 8px 16px rgba(7,19,13,.10) !important;
+    }
+
+    html body .main-sidebar .sidebar-item.active::before,
+    html body .main-sidebar .sidebar-item[aria-current="page"]::before {
+      background: rgba(6, 17, 12, .58) !important;
+      box-shadow: 0 0 0 2px rgba(255,255,255,.32) !important;
+    }
+
+    html body .main-sidebar .sidebar-branches,
+    html body .main-sidebar .premium-branch-card,
+    html body .main-sidebar .sidebar-user {
+      color: var(--v119-sidebar-text) !important;
+      border: 1px solid rgba(177, 210, 166, .78) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.10), transparent 40%),
+        linear-gradient(180deg, rgba(255,255,255,.88), rgba(239,251,234,.78)) !important;
+      box-shadow:
+        0 12px 26px rgba(7,19,13,.055),
+        inset 0 1px 0 rgba(255,255,255,.90) !important;
+      opacity: 1 !important;
+      filter: none !important;
+    }
+
+    html body .main-sidebar .sidebar-section-kicker {
+      color: rgba(37, 74, 49, .68) !important;
+      opacity: 1 !important;
+      text-shadow: none !important;
+    }
+
+    html body .main-sidebar .sidebar-section-title,
+    html body .main-sidebar .sidebar-user-name,
+    html body .main-sidebar .branch-row strong {
+      color: #102018 !important;
+      opacity: 1 !important;
+      text-shadow: none !important;
+    }
+
+    html body .main-sidebar .branch-row small,
+    html body .main-sidebar .sidebar-user-role,
+    html body .main-sidebar .sidebar-user-caret {
+      color: rgba(82, 101, 83, .74) !important;
+      opacity: 1 !important;
+    }
+
+    html body .main-sidebar .branch-row {
+      color: var(--v119-sidebar-text) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.74), rgba(244,252,240,.62)) !important;
+      border: 1px solid rgba(177, 210, 166, .58) !important;
+      opacity: 1 !important;
+      filter: none !important;
+    }
+
+    html body .main-sidebar .branch-row:hover {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.94), rgba(235,250,229,.84)) !important;
+      border-color: rgba(37,211,102,.30) !important;
+    }
+
+    html body .main-sidebar .branch-dot {
+      box-shadow:
+        0 0 0 4px rgba(37,211,102,.10),
+        0 8px 16px rgba(37,211,102,.16) !important;
+    }
+
+    html body .main-sidebar .branch-row b,
+    html body .main-sidebar #sideDubaiCount,
+    html body .main-sidebar #sideAbuCount {
+      color: #064e3b !important;
+      background:
+        linear-gradient(180deg, #ecfdf3, #d1f8c9) !important;
+      border: 1px solid rgba(37,211,102,.18) !important;
+      box-shadow:
+        0 8px 16px rgba(37,211,102,.12),
+        inset 0 1px 0 rgba(255,255,255,.82) !important;
+    }
+
+    html body .main-sidebar .sidebar-branch-add {
+      color: #064e3b !important;
+      background:
+        linear-gradient(180deg, #ffffff, #f0faec) !important;
+      border: 1px solid rgba(37,211,102,.22) !important;
+      box-shadow:
+        0 8px 16px rgba(7,19,13,.040),
+        inset 0 1px 0 rgba(255,255,255,.90) !important;
+      opacity: 1 !important;
+    }
+
+    html body .main-sidebar .sidebar-user-avatar {
+      border: 1px solid rgba(255,255,255,.70) !important;
+      box-shadow:
+        0 10px 22px rgba(7,19,13,.12),
+        0 0 0 3px rgba(37,211,102,.10) !important;
+      opacity: 1 !important;
+      filter: none !important;
+    }
+
+    html body .main-sidebar .creator-pill,
+    html body .main-sidebar .iconic-team-pill {
+      color: #064e3b !important;
+      background:
+        linear-gradient(180deg, #f7fff4, #eaf9e4) !important;
+      border-color: rgba(37,211,102,.22) !important;
+      opacity: 1 !important;
+    }
+
+    /* Keep V118 executive chat header, but improve action contrast slightly */
+    html body .chat-head {
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.30), transparent 36%),
+        radial-gradient(circle at 100% 0%, rgba(200,163,60,.18), transparent 30%),
+        linear-gradient(135deg, #07130d 0%, #10281b 55%, #193d28 100%) !important;
+      border-bottom-color: rgba(255,255,255,.14) !important;
+    }
+
+    html body .chat-actions .mini-btn,
+    html body .chat-actions select,
+    html body #conversationStatusSelect {
+      font-weight: 950 !important;
+      opacity: 1 !important;
+      filter: none !important;
+    }
+
+    /* Restore readable text if any V118 dark-sidebar rules leaked into mobile/desktop */
+    @media (min-width: 1181px) {
+      html body .workspace-shell > aside.main-sidebar,
+      html body aside.main-sidebar,
+      html body .main-sidebar {
+        background:
+          radial-gradient(circle at 0% 0%, rgba(37,211,102,.18), transparent 34%),
+          radial-gradient(circle at 100% 100%, rgba(200,163,60,.070), transparent 34%),
+          linear-gradient(180deg, var(--v119-sidebar-bg-top) 0%, #f3fbef 46%, var(--v119-sidebar-bg-bottom) 100%) !important;
+      }
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V119" !important;
     }
 
   </style>
