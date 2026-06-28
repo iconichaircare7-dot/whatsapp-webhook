@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-95-notifications-appointment-polish";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-96-professional-notifications-panel";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -18849,6 +18849,252 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     }
 
 
+    /* V31.5.8.60.3.9.96 - Professional open-notifications panel.
+       UI-only: improves the bell click experience without touching history, /api/messages, Google Sheet loading, webhook, media, send, or booking logic. */
+    .live-notification-panel {
+      position: fixed !important;
+      top: 72px !important;
+      right: 22px !important;
+      z-index: 100000 !important;
+      width: min(430px, calc(100vw - 28px)) !important;
+      max-height: min(620px, calc(100vh - 92px)) !important;
+      display: none !important;
+      grid-template-rows: auto minmax(0, 1fr) !important;
+      overflow: hidden !important;
+      border: 1px solid rgba(120, 184, 62, .25) !important;
+      border-radius: 24px !important;
+      background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(246,252,243,.98)) !important;
+      box-shadow: 0 26px 70px rgba(15, 23, 42, .22), inset 0 1px 0 rgba(255,255,255,.82) !important;
+      backdrop-filter: blur(16px) !important;
+      -webkit-backdrop-filter: blur(16px) !important;
+    }
+
+    .live-notification-panel.is-open {
+      display: grid !important;
+      animation: liveNotificationPanelIn .18s ease-out !important;
+    }
+
+    @keyframes liveNotificationPanelIn {
+      from { opacity: 0; transform: translateY(-6px) scale(.985); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .live-notification-panel-head {
+      padding: 16px 16px 13px !important;
+      border-bottom: 1px solid rgba(120,184,62,.16) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 12px !important;
+      background: linear-gradient(135deg, rgba(242,250,238,.96), rgba(255,255,255,.92)) !important;
+    }
+
+    .live-notification-panel-title {
+      display: flex !important;
+      align-items: center !important;
+      gap: 10px !important;
+      min-width: 0 !important;
+    }
+
+    .live-notification-panel-icon {
+      width: 38px !important;
+      height: 38px !important;
+      border-radius: 15px !important;
+      display: grid !important;
+      place-items: center !important;
+      background: #16352b !important;
+      color: #fff !important;
+      box-shadow: 0 12px 26px rgba(22,53,43,.20) !important;
+    }
+
+    .live-notification-panel-title strong {
+      display: block !important;
+      color: #11251d !important;
+      font-size: 14px !important;
+      line-height: 1.2 !important;
+      letter-spacing: -.01em !important;
+    }
+
+    .live-notification-panel-title span {
+      display: block !important;
+      margin-top: 2px !important;
+      color: #64748b !important;
+      font-size: 11px !important;
+      font-weight: 800 !important;
+    }
+
+    .live-notification-panel-close {
+      width: 34px !important;
+      height: 34px !important;
+      border-radius: 13px !important;
+      border: 1px solid rgba(15,23,42,.10) !important;
+      background: rgba(255,255,255,.88) !important;
+      color: #334155 !important;
+      cursor: pointer !important;
+      font-size: 18px !important;
+      line-height: 1 !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.88) !important;
+    }
+
+    .live-notification-panel-body {
+      overflow-y: auto !important;
+      padding: 10px !important;
+      display: grid !important;
+      gap: 9px !important;
+    }
+
+    .live-notification-card {
+      width: 100% !important;
+      border: 1px solid rgba(120,184,62,.18) !important;
+      border-radius: 18px !important;
+      background: rgba(255,255,255,.92) !important;
+      padding: 12px !important;
+      display: grid !important;
+      grid-template-columns: 42px minmax(0,1fr) auto !important;
+      gap: 11px !important;
+      text-align: left !important;
+      cursor: pointer !important;
+      box-shadow: 0 12px 24px rgba(15,23,42,.055) !important;
+      transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease !important;
+    }
+
+    .live-notification-card:hover {
+      transform: translateY(-1px) !important;
+      border-color: rgba(120,184,62,.38) !important;
+      box-shadow: 0 18px 34px rgba(15,23,42,.10) !important;
+    }
+
+    .live-notification-avatar {
+      width: 42px !important;
+      height: 42px !important;
+      border-radius: 16px !important;
+      display: grid !important;
+      place-items: center !important;
+      background: linear-gradient(135deg, #f2faee, #e3f6d9) !important;
+      color: #16352b !important;
+      font-size: 12px !important;
+      font-weight: 950 !important;
+      border: 1px solid rgba(120,184,62,.25) !important;
+    }
+
+    .live-notification-main {
+      min-width: 0 !important;
+    }
+
+    .live-notification-name-row {
+      display: flex !important;
+      align-items: center !important;
+      gap: 8px !important;
+      min-width: 0 !important;
+    }
+
+    .live-notification-name {
+      color: #111827 !important;
+      font-size: 12.5px !important;
+      font-weight: 950 !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+    }
+
+    .live-notification-unread-pill {
+      flex: 0 0 auto !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      min-width: 22px !important;
+      height: 20px !important;
+      padding: 0 7px !important;
+      border-radius: 999px !important;
+      background: #25d366 !important;
+      color: #fff !important;
+      font-size: 10px !important;
+      font-weight: 950 !important;
+      box-shadow: 0 8px 16px rgba(37,211,102,.20) !important;
+    }
+
+    .live-notification-preview {
+      margin-top: 4px !important;
+      color: #334155 !important;
+      font-size: 11.5px !important;
+      line-height: 1.42 !important;
+      max-height: 34px !important;
+      overflow: hidden !important;
+    }
+
+    .live-notification-meta {
+      margin-top: 8px !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      flex-wrap: wrap !important;
+    }
+
+    .live-notification-meta span {
+      display: inline-flex !important;
+      align-items: center !important;
+      min-height: 20px !important;
+      padding: 0 7px !important;
+      border-radius: 999px !important;
+      background: rgba(242,250,238,.95) !important;
+      color: #35563d !important;
+      border: 1px solid rgba(120,184,62,.18) !important;
+      font-size: 10px !important;
+      font-weight: 850 !important;
+    }
+
+    .live-notification-time {
+      color: #64748b !important;
+      font-size: 10px !important;
+      font-weight: 850 !important;
+      white-space: nowrap !important;
+      align-self: start !important;
+      padding-top: 2px !important;
+    }
+
+    .live-notification-empty {
+      padding: 24px 18px 26px !important;
+      text-align: center !important;
+      border: 1px dashed rgba(120,184,62,.26) !important;
+      border-radius: 20px !important;
+      background: rgba(255,255,255,.72) !important;
+      color: #475569 !important;
+    }
+
+    .live-notification-empty strong {
+      display: block !important;
+      margin-bottom: 6px !important;
+      color: #16352b !important;
+      font-size: 14px !important;
+    }
+
+    .live-notification-empty span {
+      display: block !important;
+      font-size: 11.5px !important;
+      line-height: 1.45 !important;
+      font-weight: 750 !important;
+    }
+
+    @media (max-width: 720px) {
+      .live-notification-panel {
+        top: 66px !important;
+        right: 12px !important;
+        left: 12px !important;
+        width: auto !important;
+        max-height: calc(100vh - 82px) !important;
+      }
+
+      .live-notification-card {
+        grid-template-columns: 38px minmax(0,1fr) !important;
+      }
+
+      .live-notification-time {
+        grid-column: 2 !important;
+        padding-top: 0 !important;
+      }
+    }
+
+
 
     /* V31.5.8.38 - Team Inbox Fullscreen Desktop Fit
        Scope: UI layout only.
@@ -25996,7 +26242,8 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
               </div>
             </div>
           </div>
-          <button type="button" class="topbar-notification notifications-disabled" id="liveNotificationBtn" aria-label="Live inbox notifications" title="Click to enable live notification sound">🔔<span class="notification-count" id="liveNotificationCount">0</span></button>
+          <button type="button" class="topbar-notification notifications-disabled" id="liveNotificationBtn" aria-label="Live inbox notifications" aria-expanded="false" aria-controls="liveNotificationPanel" title="Open live notifications">🔔<span class="notification-count" id="liveNotificationCount">0</span></button>
+          <div class="live-notification-panel" id="liveNotificationPanel" role="dialog" aria-label="Open live notifications"></div>
           <div class="topbar-profile-avatar" aria-label="Iconic profile">ICONIC</div>
         </div>
       </section>
@@ -26423,6 +26670,8 @@ const resultBox = document.getElementById("result");
 const liveNotificationBtn = document.getElementById("liveNotificationBtn");
 const liveNotificationCount = document.getElementById("liveNotificationCount");
 const liveNotificationStatus = document.getElementById("liveNotificationStatus");
+const liveNotificationPanel = document.getElementById("liveNotificationPanel");
+let liveNotificationPanelOpen = false;
 const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
 const customerProfilePhone = document.getElementById("customerProfilePhone");
 const customerProfileBranch = document.getElementById("customerProfileBranch");
@@ -27803,11 +28052,13 @@ function updateLiveNotificationUi() {
     liveNotificationBtn.classList.toggle("notifications-enabled", liveNotificationsEnabled);
     liveNotificationBtn.classList.toggle("notifications-disabled", !liveNotificationsEnabled);
     liveNotificationBtn.title = liveNotificationsEnabled
-      ? "Live notifications are ON. Click to clear the tab counter."
-      : "Click to enable live notification sound.";
+      ? "Open live notifications"
+      : "Enable live alerts and open notifications";
+    liveNotificationBtn.setAttribute("aria-expanded", liveNotificationPanelOpen ? "true" : "false");
   }
 
   setLiveNotificationStatusText(liveNotificationsEnabled ? "Live alerts ON" : "Live alerts ready");
+  renderLiveNotificationPanel();
   updatePageNotificationTitle();
 }
 
@@ -27827,6 +28078,114 @@ function getLiveToastStack() {
 function clearLiveNotificationToasts() {
   const stack = document.getElementById("liveToastStack");
   if (stack) stack.innerHTML = "";
+}
+
+
+function getOpenLiveNotificationConversations() {
+  return buildConversations().filter(function(conversation) {
+    if (!conversation) return false;
+    if (typeof isClosedOrArchivedConversation === "function" && isClosedOrArchivedConversation(conversation)) return false;
+    return getUnreadCustomerMessageCount(conversation) > 0;
+  }).sort(function(a, b) {
+    const unreadDiff = getUnreadCustomerMessageCount(b) - getUnreadCustomerMessageCount(a);
+    if (unreadDiff) return unreadDiff;
+    return getMessageTimeValue(b.latest || {}) - getMessageTimeValue(a.latest || {});
+  });
+}
+
+function getOpenLiveNotificationTotals(conversations) {
+  const list = conversations || getOpenLiveNotificationConversations();
+  return list.reduce(function(total, conversation) {
+    return total + getUnreadCustomerMessageCount(conversation);
+  }, 0);
+}
+
+function closeLiveNotificationPanel() {
+  liveNotificationPanelOpen = false;
+  if (liveNotificationPanel) {
+    liveNotificationPanel.classList.remove("is-open");
+  }
+  if (liveNotificationBtn) {
+    liveNotificationBtn.setAttribute("aria-expanded", "false");
+  }
+}
+
+function openLiveNotificationPanel() {
+  liveNotificationPanelOpen = true;
+  renderLiveNotificationPanel();
+  if (liveNotificationPanel) {
+    liveNotificationPanel.classList.add("is-open");
+  }
+  if (liveNotificationBtn) {
+    liveNotificationBtn.setAttribute("aria-expanded", "true");
+  }
+}
+
+function toggleLiveNotificationPanel() {
+  if (liveNotificationPanelOpen) {
+    closeLiveNotificationPanel();
+  } else {
+    openLiveNotificationPanel();
+  }
+}
+
+function renderLiveNotificationPanel() {
+  if (!liveNotificationPanel) return;
+
+  const conversations = getOpenLiveNotificationConversations();
+  const unreadTotal = getOpenLiveNotificationTotals(conversations);
+  const headerSubtitle = unreadTotal > 0
+    ? unreadTotal + " unread customer message" + (unreadTotal === 1 ? "" : "s")
+    : "No open unread notifications";
+
+  const header =
+    '<div class="live-notification-panel-head">' +
+      '<div class="live-notification-panel-title">' +
+        '<div class="live-notification-panel-icon">🔔</div>' +
+        '<div>' +
+          '<strong>Open Notifications</strong>' +
+          '<span>' + escapeHtml(headerSubtitle) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<button type="button" class="live-notification-panel-close" id="liveNotificationPanelClose" aria-label="Close notifications">×</button>' +
+    '</div>';
+
+  if (!conversations.length) {
+    liveNotificationPanel.innerHTML = header +
+      '<div class="live-notification-panel-body">' +
+        '<div class="live-notification-empty">' +
+          '<strong>All clear</strong>' +
+          '<span>No unread open customer notifications right now. Closed and archived conversations stay hidden from this panel.</span>' +
+        '</div>' +
+      '</div>';
+    return;
+  }
+
+  liveNotificationPanel.innerHTML = header +
+    '<div class="live-notification-panel-body">' +
+      conversations.slice(0, 12).map(function(conversation) {
+        const latest = conversation.latest || (conversation.messages || [])[0] || {};
+        const unreadCount = getUnreadCustomerMessageCount(conversation);
+        const displayName = formatConversationDisplayName(conversation);
+        const preview = formatConversationPreview(latest) || "New customer message";
+        const status = conversation.status || conversation.replyFilterStatus || "Open";
+        return '<button type="button" class="live-notification-card" data-live-notification-key="' + escapeHtml(conversation.key) + '">' +
+          '<div class="live-notification-avatar">' + escapeHtml(avatarText(displayName || conversation.phone || "IC")) + '</div>' +
+          '<div class="live-notification-main">' +
+            '<div class="live-notification-name-row">' +
+              '<div class="live-notification-name">' + escapeHtml(displayName) + '</div>' +
+              '<span class="live-notification-unread-pill">' + escapeHtml(String(unreadCount > 99 ? "99+" : unreadCount)) + '</span>' +
+            '</div>' +
+            '<div class="live-notification-preview">' + escapeHtml(shortText(preview, 96)) + '</div>' +
+            '<div class="live-notification-meta">' +
+              '<span>' + escapeHtml(conversation.branch || "Dubai") + '</span>' +
+              '<span>' + escapeHtml(status) + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="live-notification-time">' + escapeHtml(latest.time || "") + '</div>' +
+        '</button>';
+      }).join("") +
+    '</div>';
 }
 
 function resetVisibleLiveNotifications() {
@@ -27851,6 +28210,7 @@ function openConversationFromLiveMessage(message) {
   selectedPhoneNumberId = message.phoneNumberId || selectedPhoneNumberId || "";
   markConversationRead(key);
   resetLiveAlertCounter();
+  closeLiveNotificationPanel();
   renderAll();
 }
 
@@ -29470,7 +29830,9 @@ if (clearFiltersBtn) {
 }
 
 if (liveNotificationBtn) {
-  liveNotificationBtn.addEventListener("click", function() {
+  liveNotificationBtn.addEventListener("click", function(event) {
+    event.stopPropagation();
+
     if (!liveNotificationsEnabled) {
       liveNotificationsEnabled = true;
       localStorage.setItem("iconic_live_notifications_enabled", "yes");
@@ -29484,12 +29846,56 @@ if (liveNotificationBtn) {
         body: "Live inbox alerts are enabled for this browser.",
         phoneNumberId: ""
       }, 1);
-    } else {
-      resetVisibleLiveNotifications();
-      updateLiveNotificationUi();
     }
+
+    toggleLiveNotificationPanel();
+    updateLiveNotificationUi();
   });
 }
+
+if (liveNotificationPanel) {
+  liveNotificationPanel.addEventListener("click", function(event) {
+    event.stopPropagation();
+
+    const closeBtn = event.target.closest("#liveNotificationPanelClose");
+    if (closeBtn) {
+      closeLiveNotificationPanel();
+      return;
+    }
+
+    const card = event.target.closest(".live-notification-card[data-live-notification-key]");
+    if (!card) return;
+
+    const key = card.getAttribute("data-live-notification-key") || "";
+    const conversation = buildConversations().find(function(item) { return item.key === key; });
+    if (!conversation) return;
+
+    selectedConversationKey = conversation.key;
+    selectedPhone = conversation.phone || selectedPhone;
+    selectedPhoneNumberId = conversation.phoneNumberId || selectedPhoneNumberId || "";
+    if (inputTo) inputTo.value = selectedPhone;
+    if (inputLine) inputLine.value = selectedPhoneNumberId;
+    markConversationRead(conversation.key);
+    resetLiveAlertCounter();
+    closeLiveNotificationPanel();
+    renderAll();
+    if (inputBody) inputBody.focus();
+  });
+}
+
+document.addEventListener("click", function(event) {
+  if (!liveNotificationPanelOpen) return;
+  const target = event.target;
+  if (liveNotificationPanel && liveNotificationPanel.contains(target)) return;
+  if (liveNotificationBtn && liveNotificationBtn.contains(target)) return;
+  closeLiveNotificationPanel();
+});
+
+document.addEventListener("keydown", function(event) {
+  if (event.key === "Escape" && liveNotificationPanelOpen) {
+    closeLiveNotificationPanel();
+  }
+});
 
 window.addEventListener("focus", function() {
   resetVisibleLiveNotifications();
