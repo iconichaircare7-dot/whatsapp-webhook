@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-103-transparent-wide-sidebar-logo";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-104-larger-left-logo-fit";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -26724,6 +26724,71 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
         height: 48px !important;
         min-height: 48px !important;
         max-height: 48px !important;
+      }
+    }
+
+
+    /* V31.5.8.60.3.9.104 - Larger top-left logo fit.
+       UI-only sizing adjustment based on staging screenshot.
+       Does not touch history, /api/messages, Google Sheet, send logic, webhook, booking logic, or chat background. */
+    .sidebar-brand {
+      min-height: 82px !important;
+      padding: 9px 10px 9px !important;
+      align-items: center !important;
+      justify-content: center !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+
+    .sidebar-brand .uploaded-top-left-logo,
+    .sidebar-brand .sidebar-logo.uploaded-top-left-logo {
+      width: 166px !important;
+      height: 64px !important;
+      min-height: 64px !important;
+      max-height: 64px !important;
+      max-width: calc(100% - 2px) !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+      background: transparent !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      overflow: visible !important;
+    }
+
+    .sidebar-brand .uploaded-top-left-logo img,
+    .sidebar-brand .sidebar-logo.uploaded-top-left-logo img {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: contain !important;
+      object-position: center center !important;
+      transform: scale(1.18) !important;
+      transform-origin: center center !important;
+      background: transparent !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      filter: none !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V104" !important;
+    }
+
+    @media (max-width: 1180px) {
+      .sidebar-brand {
+        min-height: 74px !important;
+        padding: 8px 9px 8px !important;
+      }
+
+      .sidebar-brand .uploaded-top-left-logo,
+      .sidebar-brand .sidebar-logo.uploaded-top-left-logo {
+        width: 152px !important;
+        height: 58px !important;
+        min-height: 58px !important;
+        max-height: 58px !important;
       }
     }
 
