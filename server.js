@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-112-premium-sidebar-navigation-polish";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-113-premium-empty-loading-states";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -29362,6 +29362,352 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       .sidebar-item {
         min-height: 36px !important;
         height: 36px !important;
+      }
+    }
+
+
+    /* V31.5.8.60.3.9.113 - Premium Empty + Loading States.
+       UI-only staging refinement.
+       Scope: empty states, no-results states, loading/skeleton states, notification empty state.
+       Does not touch history, /api/messages, Google Sheet, send logic, status logic,
+       notifications logic, media logic, webhook, booking logic, or chat background. */
+
+    :root {
+      --v113-empty-line: rgba(198, 218, 191, .74);
+      --v113-empty-green: #25b862;
+      --v113-empty-green-dark: #0f8f4f;
+      --v113-empty-soft: rgba(120, 184, 62, .12);
+      --v113-empty-ink: #102018;
+      --v113-empty-muted: #667568;
+      --v113-empty-shadow: 0 16px 36px rgba(15, 23, 42, .060);
+    }
+
+    .empty-state,
+    .no-results,
+    .no-conversations,
+    .no-messages,
+    .loading-state,
+    .messages-loading,
+    .conversation-loading,
+    .notifications-empty,
+    .notification-empty,
+    .chat-empty-state,
+    .inbox-empty-state {
+      position: relative !important;
+      border-radius: 24px !important;
+      border: 1px solid var(--v113-empty-line) !important;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(120,184,62,.16), transparent 36%),
+        linear-gradient(180deg, rgba(255,255,255,.92), rgba(248,253,246,.84)) !important;
+      box-shadow:
+        var(--v113-empty-shadow),
+        inset 0 1px 0 rgba(255,255,255,.84) !important;
+      color: var(--v113-empty-ink) !important;
+      overflow: hidden !important;
+      -webkit-font-smoothing: antialiased !important;
+    }
+
+    .empty-state::before,
+    .no-results::before,
+    .no-conversations::before,
+    .no-messages::before,
+    .loading-state::before,
+    .messages-loading::before,
+    .conversation-loading::before,
+    .notifications-empty::before,
+    .notification-empty::before,
+    .chat-empty-state::before,
+    .inbox-empty-state::before {
+      content: "" !important;
+      display: block !important;
+      width: 42px !important;
+      height: 42px !important;
+      margin: 0 auto 12px !important;
+      border-radius: 16px !important;
+      border: 1px solid rgba(120,184,62,.24) !important;
+      background:
+        radial-gradient(circle at 70% 18%, rgba(255,255,255,.38), transparent 28%),
+        linear-gradient(135deg, #0f8f4f, #25d366) !important;
+      box-shadow:
+        0 14px 28px rgba(37,211,102,.20),
+        inset 0 1px 0 rgba(255,255,255,.24) !important;
+    }
+
+    .empty-state h2,
+    .empty-state h3,
+    .no-results h2,
+    .no-results h3,
+    .no-conversations h2,
+    .no-conversations h3,
+    .no-messages h2,
+    .no-messages h3,
+    .loading-state h2,
+    .loading-state h3,
+    .messages-loading h2,
+    .messages-loading h3,
+    .conversation-loading h2,
+    .conversation-loading h3,
+    .notifications-empty h2,
+    .notifications-empty h3,
+    .notification-empty h2,
+    .notification-empty h3,
+    .chat-empty-state h2,
+    .chat-empty-state h3,
+    .inbox-empty-state h2,
+    .inbox-empty-state h3 {
+      color: #102018 !important;
+      font-size: 16px !important;
+      font-weight: 950 !important;
+      letter-spacing: -.018em !important;
+      line-height: 1.15 !important;
+      margin: 0 0 7px !important;
+      text-align: center !important;
+    }
+
+    .empty-state p,
+    .no-results p,
+    .no-conversations p,
+    .no-messages p,
+    .loading-state p,
+    .messages-loading p,
+    .conversation-loading p,
+    .notifications-empty p,
+    .notification-empty p,
+    .chat-empty-state p,
+    .inbox-empty-state p {
+      color: rgba(74, 89, 78, .74) !important;
+      font-size: 11px !important;
+      font-weight: 780 !important;
+      line-height: 1.45 !important;
+      max-width: 360px !important;
+      margin: 0 auto !important;
+      text-align: center !important;
+    }
+
+    .empty-state button,
+    .no-results button,
+    .no-conversations button,
+    .no-messages button,
+    .loading-state button,
+    .messages-loading button,
+    .conversation-loading button,
+    .notifications-empty button,
+    .notification-empty button,
+    .chat-empty-state button,
+    .inbox-empty-state button {
+      margin-top: 14px !important;
+      min-height: 32px !important;
+      padding: 0 13px !important;
+      border-radius: 13px !important;
+      border: 1px solid rgba(120,184,62,.36) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(241,252,236,.92)) !important;
+      color: #166534 !important;
+      font-size: 10px !important;
+      font-weight: 950 !important;
+      box-shadow:
+        0 8px 17px rgba(37,211,102,.075),
+        inset 0 1px 0 rgba(255,255,255,.88) !important;
+    }
+
+    /* Chat center empty state / initial state */
+    .chat-body .empty-state,
+    .chat-body .chat-empty-state,
+    #chatBody .empty-state,
+    #chatBody .chat-empty-state,
+    #chatBody .no-messages,
+    .chat-body .no-messages {
+      width: min(440px, 86%) !important;
+      margin: 72px auto !important;
+      padding: 28px 24px !important;
+      text-align: center !important;
+      backdrop-filter: blur(10px) saturate(1.04) !important;
+      -webkit-backdrop-filter: blur(10px) saturate(1.04) !important;
+    }
+
+    /* Conversation list no-results state */
+    #conversationList .empty-state,
+    #conversationList .no-results,
+    #conversationList .no-conversations,
+    .conversation-list .empty-state,
+    .conversation-list .no-results,
+    .conversation-list .no-conversations {
+      margin: 12px 8px !important;
+      padding: 24px 16px !important;
+      min-height: 150px !important;
+      box-shadow:
+        0 12px 27px rgba(15,23,42,.045),
+        inset 0 1px 0 rgba(255,255,255,.84) !important;
+    }
+
+    #conversationList .empty-state::before,
+    #conversationList .no-results::before,
+    #conversationList .no-conversations::before,
+    .conversation-list .empty-state::before,
+    .conversation-list .no-results::before,
+    .conversation-list .no-conversations::before {
+      width: 36px !important;
+      height: 36px !important;
+      border-radius: 14px !important;
+      margin-bottom: 10px !important;
+    }
+
+    #conversationList .empty-state h2,
+    #conversationList .empty-state h3,
+    #conversationList .no-results h2,
+    #conversationList .no-results h3,
+    #conversationList .no-conversations h2,
+    #conversationList .no-conversations h3 {
+      font-size: 13px !important;
+    }
+
+    #conversationList .empty-state p,
+    #conversationList .no-results p,
+    #conversationList .no-conversations p {
+      font-size: 10px !important;
+      max-width: 220px !important;
+    }
+
+    /* Loading skeletons if the app renders loading cards/rows */
+    .skeleton,
+    .skeleton-card,
+    .loading-card,
+    .conversation-skeleton,
+    .message-skeleton,
+    .loading-placeholder {
+      position: relative !important;
+      overflow: hidden !important;
+      border-radius: 18px !important;
+      border: 1px solid rgba(203,223,197,.66) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.78), rgba(247,253,245,.70)) !important;
+      box-shadow:
+        0 8px 18px rgba(15,23,42,.030),
+        inset 0 1px 0 rgba(255,255,255,.78) !important;
+    }
+
+    .skeleton::after,
+    .skeleton-card::after,
+    .loading-card::after,
+    .conversation-skeleton::after,
+    .message-skeleton::after,
+    .loading-placeholder::after {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      transform: translateX(-100%) !important;
+      background:
+        linear-gradient(90deg, transparent, rgba(255,255,255,.58), transparent) !important;
+      animation: v113-skeleton-shimmer 1.35s ease-in-out infinite !important;
+    }
+
+    @keyframes v113-skeleton-shimmer {
+      100% {
+        transform: translateX(100%);
+      }
+    }
+
+    .conversation-skeleton,
+    .skeleton-card.conversation-skeleton,
+    .loading-card.conversation-skeleton {
+      min-height: 76px !important;
+      margin: 8px !important;
+    }
+
+    .message-skeleton,
+    .skeleton-card.message-skeleton,
+    .loading-card.message-skeleton {
+      min-height: 64px !important;
+      width: min(430px, 72%) !important;
+      margin: 10px 22px !important;
+    }
+
+    .message-skeleton:nth-child(even),
+    .skeleton-card.message-skeleton:nth-child(even),
+    .loading-card.message-skeleton:nth-child(even) {
+      margin-left: auto !important;
+      margin-right: 22px !important;
+    }
+
+    /* Generic text loading indicators */
+    .loading,
+    .loading-text,
+    .spinner-label {
+      color: rgba(74, 89, 78, .74) !important;
+      font-weight: 850 !important;
+      letter-spacing: -.002em !important;
+    }
+
+    .spinner,
+    .loading-spinner {
+      border-color: rgba(120,184,62,.18) !important;
+      border-top-color: #25d366 !important;
+      box-shadow: 0 0 0 4px rgba(37,211,102,.055) !important;
+    }
+
+    /* Notifications empty state */
+    #notificationsPanel .notifications-empty,
+    #notificationPanel .notifications-empty,
+    .notifications-panel .notifications-empty,
+    .notification-panel .notifications-empty,
+    .notifications-dropdown .notifications-empty,
+    .notification-dropdown .notifications-empty,
+    #notificationsPanel .empty,
+    #notificationPanel .empty,
+    .notifications-panel .empty,
+    .notification-panel .empty {
+      margin: 12px !important;
+      padding: 26px 18px !important;
+      border-radius: 20px !important;
+      border: 1px dashed rgba(120,184,62,.34) !important;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(120,184,62,.12), transparent 40%),
+        rgba(255,255,255,.78) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.76) !important;
+    }
+
+    #notificationsPanel .notifications-empty::before,
+    #notificationPanel .notifications-empty::before,
+    .notifications-panel .notifications-empty::before,
+    .notification-panel .notifications-empty::before,
+    .notifications-dropdown .notifications-empty::before,
+    .notification-dropdown .notifications-empty::before,
+    #notificationsPanel .empty::before,
+    #notificationPanel .empty::before,
+    .notifications-panel .empty::before,
+    .notification-panel .empty::before {
+      width: 38px !important;
+      height: 38px !important;
+      border-radius: 15px !important;
+      margin-bottom: 11px !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V113" !important;
+    }
+
+    @media (max-width: 1180px) {
+      .chat-body .empty-state,
+      .chat-body .chat-empty-state,
+      #chatBody .empty-state,
+      #chatBody .chat-empty-state,
+      #chatBody .no-messages,
+      .chat-body .no-messages {
+        width: min(380px, 88%) !important;
+        margin: 42px auto !important;
+        padding: 24px 18px !important;
+      }
+
+      .empty-state h2,
+      .empty-state h3,
+      .no-results h2,
+      .no-results h3,
+      .no-conversations h2,
+      .no-conversations h3,
+      .no-messages h2,
+      .no-messages h3 {
+        font-size: 14px !important;
       }
     }
 
