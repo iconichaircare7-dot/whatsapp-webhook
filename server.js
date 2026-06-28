@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-113-premium-empty-loading-states";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-114-actual-empty-states-polish-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -10452,7 +10452,7 @@ function buildInboxBootstrapConversations(messages = []) {
 
 function renderInboxBootstrapConversationListHtml(conversations = []) {
   if (!Array.isArray(conversations) || conversations.length === 0) {
-    return '<div class="empty">No conversations yet.</div>';
+    return '<div class="empty inbox-empty-state actual-empty-state"><div class="empty-state-icon empty-state-icon-search" aria-hidden="true"></div><h3>No conversations found</h3><p>Try another name, phone number, or keyword.</p></div>';
   }
 
   return conversations.map((conversation) => {
@@ -29711,6 +29711,214 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       }
     }
 
+
+    /* V31.5.8.60.3.9.114 - Actual Empty States Polish Fix.
+       UI-only staging refinement.
+       Scope: real No conversations found / Select a conversation states shown in the app.
+       Also improves CRM placeholder copy when no conversation is selected.
+       Does not touch history, /api/messages, Google Sheet, send logic, status logic,
+       notifications logic, media logic, webhook, booking logic, or chat background. */
+
+    :root {
+      --v114-empty-line: rgba(196, 218, 189, .82);
+      --v114-empty-green: #25b862;
+      --v114-empty-dark: #102018;
+      --v114-empty-muted: #667568;
+      --v114-empty-shadow: 0 18px 42px rgba(15,23,42,.072);
+    }
+
+    .actual-empty-state {
+      position: relative !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: center !important;
+      text-align: center !important;
+      border-radius: 24px !important;
+      border: 1px solid var(--v114-empty-line) !important;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(120,184,62,.18), transparent 38%),
+        linear-gradient(180deg, rgba(255,255,255,.93), rgba(247,253,245,.86)) !important;
+      box-shadow:
+        var(--v114-empty-shadow),
+        inset 0 1px 0 rgba(255,255,255,.88) !important;
+      color: var(--v114-empty-dark) !important;
+      overflow: hidden !important;
+      -webkit-font-smoothing: antialiased !important;
+    }
+
+    .actual-empty-state::before {
+      display: none !important;
+      content: none !important;
+    }
+
+    .actual-empty-state::after {
+      content: "" !important;
+      position: absolute !important;
+      inset: auto 18% -44px 18% !important;
+      height: 92px !important;
+      border-radius: 999px !important;
+      background: rgba(120,184,62,.08) !important;
+      filter: blur(18px) !important;
+      pointer-events: none !important;
+    }
+
+    .empty-state-icon {
+      width: 46px !important;
+      height: 46px !important;
+      min-width: 46px !important;
+      min-height: 46px !important;
+      border-radius: 18px !important;
+      border: 1px solid rgba(120,184,62,.26) !important;
+      background:
+        radial-gradient(circle at 70% 18%, rgba(255,255,255,.36), transparent 30%),
+        linear-gradient(135deg, #0f8f4f, #25d366) !important;
+      box-shadow:
+        0 15px 30px rgba(37,211,102,.22),
+        inset 0 1px 0 rgba(255,255,255,.26) !important;
+      margin: 0 0 13px !important;
+      position: relative !important;
+      z-index: 1 !important;
+    }
+
+    .empty-state-icon::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      margin: auto !important;
+      width: 22px !important;
+      height: 22px !important;
+      background-repeat: no-repeat !important;
+      background-position: center !important;
+      background-size: 22px 22px !important;
+    }
+
+    .empty-state-icon-search::before {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 21l-4.35-4.35'/%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M8 11h6'/%3E%3C/svg%3E") !important;
+    }
+
+    .empty-state-icon-chat::before {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v5A2.5 2.5 0 0 1 16.5 14H10l-4 4v-4.5A2.5 2.5 0 0 1 5 11.5v-5Z'/%3E%3Cpath d='M8 8h8M8 11h5'/%3E%3C/svg%3E") !important;
+    }
+
+    .actual-empty-state h3 {
+      position: relative !important;
+      z-index: 1 !important;
+      margin: 0 0 7px !important;
+      color: #102018 !important;
+      font-size: 15px !important;
+      font-weight: 950 !important;
+      letter-spacing: -.018em !important;
+      line-height: 1.14 !important;
+    }
+
+    .actual-empty-state p {
+      position: relative !important;
+      z-index: 1 !important;
+      margin: 0 !important;
+      max-width: 320px !important;
+      color: rgba(74,89,78,.76) !important;
+      font-size: 11px !important;
+      font-weight: 800 !important;
+      line-height: 1.45 !important;
+    }
+
+    #conversationList .actual-empty-state,
+    .conversation-list .actual-empty-state,
+    .inbox-empty-state.actual-empty-state {
+      min-height: 158px !important;
+      margin: 12px 8px !important;
+      padding: 24px 18px !important;
+      border-style: solid !important;
+      box-shadow:
+        0 13px 30px rgba(15,23,42,.052),
+        inset 0 1px 0 rgba(255,255,255,.86) !important;
+    }
+
+    #conversationList .actual-empty-state .empty-state-icon,
+    .conversation-list .actual-empty-state .empty-state-icon,
+    .inbox-empty-state.actual-empty-state .empty-state-icon {
+      width: 40px !important;
+      height: 40px !important;
+      min-width: 40px !important;
+      min-height: 40px !important;
+      border-radius: 16px !important;
+      margin-bottom: 11px !important;
+    }
+
+    #conversationList .actual-empty-state .empty-state-icon::before,
+    .conversation-list .actual-empty-state .empty-state-icon::before,
+    .inbox-empty-state.actual-empty-state .empty-state-icon::before {
+      width: 19px !important;
+      height: 19px !important;
+      background-size: 19px 19px !important;
+    }
+
+    #conversationList .actual-empty-state h3,
+    .conversation-list .actual-empty-state h3,
+    .inbox-empty-state.actual-empty-state h3 {
+      font-size: 13px !important;
+    }
+
+    #conversationList .actual-empty-state p,
+    .conversation-list .actual-empty-state p,
+    .inbox-empty-state.actual-empty-state p {
+      max-width: 230px !important;
+      font-size: 10.2px !important;
+    }
+
+    #chatBody .actual-chat-empty,
+    .chat-body .actual-chat-empty {
+      width: min(470px, 86%) !important;
+      min-height: 172px !important;
+      margin: 58px auto 0 !important;
+      padding: 30px 26px !important;
+      backdrop-filter: blur(10px) saturate(1.04) !important;
+      -webkit-backdrop-filter: blur(10px) saturate(1.04) !important;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(120,184,62,.18), transparent 42%),
+        linear-gradient(180deg, rgba(255,255,255,.70), rgba(248,253,245,.62)) !important;
+    }
+
+    #chatBody .actual-chat-empty h3,
+    .chat-body .actual-chat-empty h3 {
+      font-size: 17px !important;
+    }
+
+    #chatBody .actual-chat-empty p,
+    .chat-body .actual-chat-empty p {
+      font-size: 11.4px !important;
+      max-width: 350px !important;
+    }
+
+    .crm-code-pill {
+      min-width: 56px !important;
+      justify-content: center !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V114" !important;
+    }
+
+    @media (max-width: 1180px) {
+      #chatBody .actual-chat-empty,
+      .chat-body .actual-chat-empty {
+        width: min(390px, 88%) !important;
+        margin-top: 38px !important;
+        padding: 25px 18px !important;
+      }
+
+      #chatBody .actual-chat-empty h3,
+      .chat-body .actual-chat-empty h3 {
+        font-size: 15px !important;
+      }
+
+      .actual-empty-state p {
+        font-size: 10.6px !important;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -31068,12 +31276,12 @@ function updateCustomerProfile(c) {
     setProfileText(conversationInfoStatus, "—");
     setProfileText(customerProfileAssigned, "—");
     setProfileText(customerProfileTags, "No tags");
-    setProfileText(customerProfileSummary, "Select a conversation to view customer details.");
+    setProfileText(customerProfileSummary, "Choose a customer from the inbox to view profile details.");
     setProfileText(customerProfileLongSummary, "No customer selected yet.");
-    setProfileText(customerProfileHeaderName, "Customer");
+    setProfileText(customerProfileHeaderName, "No customer selected");
     setProfileText(customerProfileHeaderPhone, "—");
-    setProfileText(customerProfileCode, "IC-000000");
-    setProfileText(customerProfileName, "Customer");
+    setProfileText(customerProfileCode, "—");
+    setProfileText(customerProfileName, "No customer selected");
     setProfileText(customerProfilePrivacy, "Discreet");
     setProfileText(customerProfilePrivacyBadge, "Discreet");
     setProfileText(customerProfileLeadSource, "WhatsApp");
@@ -32524,7 +32732,13 @@ function renderConversationList() {
   const conversations = filteredConversations();
 
   if (!conversations.length) {
-    conversationList.innerHTML = '<div class="empty">' + (showArchivedConversations ? 'No archived conversations.' : 'No conversations yet.') + '</div>';
+    var emptyTitle = showArchivedConversations ? 'No archived conversations' : 'No conversations found';
+    var emptyHint = showArchivedConversations ? 'Archived chats will appear here after you archive them.' : 'Try another name, phone number, or keyword.';
+    conversationList.innerHTML = '<div class="empty inbox-empty-state actual-empty-state">'
+      + '<div class="empty-state-icon empty-state-icon-search" aria-hidden="true"></div>'
+      + '<h3>' + emptyTitle + '</h3>'
+      + '<p>' + emptyHint + '</p>'
+      + '</div>';
     selectedPhone = "";
     selectedConversationKey = "";
     renderChat();
@@ -32694,7 +32908,12 @@ function renderChat() {
     syncTagPicker([]);
     updateCustomerProfile(null);
     lastRenderedConversationKeyForScroll = null;
-    chatBody.innerHTML = '<div class="chat-watermark"><img src="/assets/iconic-chat-background-logo.png" alt="Iconic Hair Care watermark" /></div><div class="empty">Choose a customer from the left to view the conversation.</div>';
+    chatBody.innerHTML = '<div class="chat-watermark"><img src="/assets/iconic-chat-background-logo.png" alt="Iconic Hair Care watermark" /></div>'
+      + '<div class="empty chat-empty-state actual-empty-state actual-chat-empty">'
+      + '<div class="empty-state-icon empty-state-icon-chat" aria-hidden="true"></div>'
+      + '<h3>Select a conversation</h3>'
+      + '<p>Choose a customer from the left list to view the full chat history and CRM profile.</p>'
+      + '</div>';
     return;
   }
 
