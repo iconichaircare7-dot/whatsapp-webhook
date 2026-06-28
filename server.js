@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-114-actual-empty-states-polish-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-115-no-conversation-selected-mode-polish";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -29919,6 +29919,162 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       }
     }
 
+
+    /* V31.5.8.60.3.9.115 - No Conversation Selected Mode Polish.
+       UI-only staging refinement.
+       Scope: visual inactive styling when no conversation is selected.
+       Adds/removes body class only for visual styling. Does not disable buttons or change logic.
+       Does not touch history, /api/messages, Google Sheet, send logic, status logic,
+       notifications logic, media logic, webhook, booking logic, or chat background. */
+
+    :root {
+      --v115-idle-line: rgba(196, 218, 189, .72);
+      --v115-idle-soft: rgba(120, 184, 62, .10);
+      --v115-idle-muted: rgba(88, 103, 92, .58);
+      --v115-idle-ink: rgba(16, 32, 24, .82);
+    }
+
+    body.no-conversation-selected-mode .chat-head {
+      background:
+        radial-gradient(circle at 0% 0%, rgba(120,184,62,.10), transparent 30%),
+        linear-gradient(180deg, rgba(255,255,255,.90), rgba(248,253,246,.84)) !important;
+    }
+
+    body.no-conversation-selected-mode .chat-title {
+      color: rgba(16, 32, 24, .88) !important;
+    }
+
+    body.no-conversation-selected-mode .chat-meta {
+      opacity: .72 !important;
+    }
+
+    body.no-conversation-selected-mode .chat-actions {
+      background: rgba(255,255,255,.18) !important;
+      border-color: rgba(205,223,198,.38) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.50) !important;
+    }
+
+    body.no-conversation-selected-mode .conversation-status-select,
+    body.no-conversation-selected-mode .chat-actions .mini-btn,
+    body.no-conversation-selected-mode .chat-head .mini-btn,
+    body.no-conversation-selected-mode #copyPhoneBtn,
+    body.no-conversation-selected-mode #markReadBtn,
+    body.no-conversation-selected-mode #nextCustomerBtn,
+    body.no-conversation-selected-mode #closeNextBtn,
+    body.no-conversation-selected-mode #archiveConversationBtn,
+    body.no-conversation-selected-mode #chatTagsMenuBtn {
+      opacity: .48 !important;
+      filter: saturate(.58) grayscale(.14) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.78), rgba(246,250,244,.66)) !important;
+      border-color: rgba(201,219,195,.56) !important;
+      color: rgba(55, 72, 60, .56) !important;
+      box-shadow:
+        0 4px 10px rgba(15,23,42,.018),
+        inset 0 1px 0 rgba(255,255,255,.62) !important;
+      transform: none !important;
+    }
+
+    body.no-conversation-selected-mode .conversation-status-select:hover,
+    body.no-conversation-selected-mode .chat-actions .mini-btn:hover,
+    body.no-conversation-selected-mode .chat-head .mini-btn:hover,
+    body.no-conversation-selected-mode #copyPhoneBtn:hover,
+    body.no-conversation-selected-mode #markReadBtn:hover,
+    body.no-conversation-selected-mode #nextCustomerBtn:hover,
+    body.no-conversation-selected-mode #closeNextBtn:hover,
+    body.no-conversation-selected-mode #archiveConversationBtn:hover {
+      transform: none !important;
+      border-color: rgba(201,219,195,.56) !important;
+      box-shadow:
+        0 4px 10px rgba(15,23,42,.018),
+        inset 0 1px 0 rgba(255,255,255,.62) !important;
+    }
+
+    body.no-conversation-selected-mode .chat-customer .avatar,
+    body.no-conversation-selected-mode #chatAvatar {
+      background:
+        linear-gradient(135deg, #0f8f4f, #25d366) !important;
+      box-shadow:
+        0 12px 24px rgba(37,211,102,.18),
+        inset 0 1px 0 rgba(255,255,255,.24) !important;
+    }
+
+    body.no-conversation-selected-mode .actual-chat-empty {
+      margin-top: 66px !important;
+      border-color: rgba(120,184,62,.28) !important;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(37,211,102,.13), transparent 42%),
+        linear-gradient(180deg, rgba(255,255,255,.72), rgba(248,253,245,.64)) !important;
+      box-shadow:
+        0 20px 48px rgba(15,23,42,.070),
+        inset 0 1px 0 rgba(255,255,255,.84) !important;
+    }
+
+    body.no-conversation-selected-mode .customer-crm-profile,
+    body.no-conversation-selected-mode .customer-profile-panel,
+    body.no-conversation-selected-mode .crm-panel,
+    body.no-conversation-selected-mode .profile-panel {
+      background:
+        radial-gradient(circle at 8% 0%, rgba(120,184,62,.12), transparent 30%),
+        linear-gradient(180deg, rgba(255,255,255,.92), rgba(248,253,246,.86)) !important;
+    }
+
+    body.no-conversation-selected-mode #customerProfileHeaderName,
+    body.no-conversation-selected-mode #customerProfileName {
+      color: rgba(16, 32, 24, .90) !important;
+    }
+
+    body.no-conversation-selected-mode #customerProfileHeaderPhone,
+    body.no-conversation-selected-mode #customerProfilePhone {
+      color: rgba(80, 96, 84, .62) !important;
+      font-weight: 850 !important;
+    }
+
+    body.no-conversation-selected-mode #customerProfileCode,
+    body.no-conversation-selected-mode #customerProfileStatus {
+      opacity: .72 !important;
+    }
+
+    body.no-conversation-selected-mode .staff-assignment,
+    body.no-conversation-selected-mode .staff-assignment-card {
+      opacity: .82 !important;
+    }
+
+    body.no-conversation-selected-mode .reply-panel,
+    body.no-conversation-selected-mode .chat-panel .premium-composer,
+    body.no-conversation-selected-mode .composer-block.premium-composer {
+      opacity: .74 !important;
+      filter: saturate(.80) !important;
+    }
+
+    body.no-conversation-selected-mode .reply-panel::before,
+    body.no-conversation-selected-mode .chat-panel .premium-composer::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      border-radius: inherit !important;
+      background: rgba(255,255,255,.18) !important;
+      pointer-events: none !important;
+      z-index: 1 !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V115" !important;
+    }
+
+    @media (max-width: 1180px) {
+      body.no-conversation-selected-mode .actual-chat-empty {
+        margin-top: 42px !important;
+      }
+
+      body.no-conversation-selected-mode .conversation-status-select,
+      body.no-conversation-selected-mode .chat-actions .mini-btn,
+      body.no-conversation-selected-mode .chat-head .mini-btn {
+        opacity: .55 !important;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -32906,6 +33062,7 @@ function renderChat() {
       assigneeDisplay.textContent = "Assigned: —";
     }
     syncTagPicker([]);
+    document.body.classList.add("no-conversation-selected-mode");
     updateCustomerProfile(null);
     lastRenderedConversationKeyForScroll = null;
     chatBody.innerHTML = '<div class="chat-watermark"><img src="/assets/iconic-chat-background-logo.png" alt="Iconic Hair Care watermark" /></div>'
@@ -32917,6 +33074,7 @@ function renderChat() {
     return;
   }
 
+  document.body.classList.remove("no-conversation-selected-mode");
   const displayName = formatConversationDisplayName(c);
   chatTitle.textContent = displayName;
   chatAvatar.textContent = avatarText(displayName || c.phone);
