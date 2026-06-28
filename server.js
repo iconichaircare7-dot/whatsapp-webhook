@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-105-premium-crm-conversation-list-polish";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-106-premium-header-action-bar-polish";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -27131,6 +27131,367 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       .conversation-list .conversation-card {
         min-height: 70px !important;
         padding: 9px !important;
+      }
+    }
+
+
+    /* V31.5.8.60.3.9.106 - Premium Header + Action Bar Polish.
+       UI-only staging refinement.
+       Scope: top-right header controls, live alerts indicator, quick replies button,
+       notification bell, Iconic avatar, conversation action bar buttons.
+       Does not touch history, /api/messages, Google Sheet, send logic, webhook,
+       booking logic, media rendering, chat background, or branch logic. */
+
+    :root {
+      --v106-line: rgba(202, 222, 196, .76);
+      --v106-soft-green: rgba(120, 184, 62, .135);
+      --v106-green: #25b862;
+      --v106-dark: #102018;
+      --v106-muted: #667568;
+      --v106-shadow: 0 10px 24px rgba(15, 23, 42, .055);
+      --v106-soft-shadow: 0 6px 16px rgba(15, 23, 42, .040);
+    }
+
+    /* Global top bar right controls */
+    .topbar,
+    .v18-topbar,
+    .workspace-topbar,
+    .app-topbar,
+    header {
+      -webkit-font-smoothing: antialiased !important;
+    }
+
+    .topbar-actions,
+    .header-actions,
+    .workspace-actions,
+    .v18-topbar-actions,
+    .topbar-right,
+    .header-right {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 9px !important;
+    }
+
+    /* Live alerts ON indicator */
+    .live-alerts,
+    .live-alerts-pill,
+    .live-alerts-toggle,
+    .live-alert-indicator,
+    [class*="live-alert"],
+    #liveAlertsToggle,
+    #liveAlertsStatus {
+      min-height: 30px !important;
+      padding: 0 11px !important;
+      border-radius: 999px !important;
+      border: 1px solid rgba(203, 223, 197, .78) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.88), rgba(248,253,245,.80)) !important;
+      color: rgba(39, 55, 44, .80) !important;
+      font-size: 10.5px !important;
+      font-weight: 900 !important;
+      letter-spacing: -.005em !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.86) !important;
+    }
+
+    .live-alerts::before,
+    .live-alerts-pill::before,
+    .live-alerts-toggle::before,
+    .live-alert-indicator::before,
+    [class*="live-alert"]::before {
+      box-shadow:
+        0 0 0 4px rgba(37, 211, 102, .105),
+        0 0 12px rgba(37, 211, 102, .34) !important;
+    }
+
+    /* Quick Replies button */
+    #quickRepliesBtn,
+    .quick-replies-btn,
+    .quick-reply-launcher,
+    button[title*="Quick"],
+    button[aria-label*="Quick"] {
+      height: 38px !important;
+      min-height: 38px !important;
+      padding: 0 15px !important;
+      border-radius: 14px !important;
+      border: 1px solid rgba(203, 213, 225, .78) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(255, 214, 102, .18), transparent 35%),
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.94)) !important;
+      color: #14251b !important;
+      font-size: 11px !important;
+      font-weight: 950 !important;
+      letter-spacing: -.005em !important;
+      box-shadow:
+        0 9px 20px rgba(15, 23, 42, .055),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+      transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease !important;
+    }
+
+    #quickRepliesBtn:hover,
+    .quick-replies-btn:hover,
+    .quick-reply-launcher:hover,
+    button[title*="Quick"]:hover,
+    button[aria-label*="Quick"]:hover {
+      transform: translateY(-1px) !important;
+      border-color: rgba(120, 184, 62, .42) !important;
+      box-shadow:
+        0 14px 28px rgba(15, 23, 42, .075),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+    }
+
+    /* Notification bell */
+    #notificationsBtn,
+    #notificationBell,
+    .notification-btn,
+    .notification-bell,
+    .bell-btn,
+    button[aria-label*="notification"],
+    button[aria-label*="Notification"],
+    button[title*="notification"],
+    button[title*="Notification"] {
+      width: 40px !important;
+      height: 40px !important;
+      min-width: 40px !important;
+      min-height: 40px !important;
+      border-radius: 16px !important;
+      border: 1px solid rgba(120,184,62,.42) !important;
+      background:
+        radial-gradient(circle at 70% 18%, rgba(255, 236, 153, .42), transparent 26%),
+        linear-gradient(180deg, rgba(250,255,247,.98), rgba(235,249,229,.94)) !important;
+      color: #17351f !important;
+      box-shadow:
+        0 12px 25px rgba(73, 135, 45, .13),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+      transition: transform .16s ease, box-shadow .16s ease !important;
+    }
+
+    #notificationsBtn:hover,
+    #notificationBell:hover,
+    .notification-btn:hover,
+    .notification-bell:hover,
+    .bell-btn:hover {
+      transform: translateY(-1px) scale(1.01) !important;
+      box-shadow:
+        0 16px 32px rgba(73, 135, 45, .17),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    #notificationsBtn svg,
+    #notificationBell svg,
+    .notification-btn svg,
+    .notification-bell svg,
+    .bell-btn svg {
+      width: 18px !important;
+      height: 18px !important;
+      stroke-width: 2.2 !important;
+      filter: drop-shadow(0 1px 0 rgba(255,255,255,.8)) !important;
+    }
+
+    #notificationsBadge,
+    .notification-badge,
+    .bell-badge,
+    [class*="notification"] .badge,
+    [class*="bell"] .badge {
+      min-width: 17px !important;
+      height: 17px !important;
+      padding: 0 5px !important;
+      border-radius: 999px !important;
+      border: 2px solid #f8fff4 !important;
+      background: linear-gradient(135deg, #25d366, #78b83e) !important;
+      color: #ffffff !important;
+      font-size: 8px !important;
+      font-weight: 950 !important;
+      box-shadow: 0 7px 13px rgba(37,211,102,.24) !important;
+    }
+
+    /* Top-right Iconic round avatar */
+    .topbar .brand-avatar,
+    .topbar .iconic-avatar,
+    .topbar .user-avatar,
+    .topbar-right .avatar,
+    .header-right .avatar,
+    .workspace-actions .avatar,
+    .v18-topbar-actions .avatar,
+    .iconic-round-logo,
+    .user-menu-avatar {
+      width: 42px !important;
+      height: 42px !important;
+      min-width: 42px !important;
+      min-height: 42px !important;
+      border-radius: 999px !important;
+      border: 2px solid rgba(255,255,255,.88) !important;
+      box-shadow:
+        0 13px 28px rgba(15, 23, 42, .13),
+        0 0 0 1px rgba(120,184,62,.18) !important;
+      overflow: hidden !important;
+    }
+
+    /* Conversation header action bar */
+    .chat-head {
+      min-height: 84px !important;
+      border-bottom: 1px solid rgba(190, 214, 183, .70) !important;
+      background:
+        radial-gradient(circle at 2% 0%, rgba(120,184,62,.10), transparent 28%),
+        linear-gradient(180deg, rgba(255,255,255,.95), rgba(250,253,248,.91)) !important;
+      box-shadow: 0 10px 22px rgba(15,23,42,.032) !important;
+    }
+
+    .chat-customer {
+      gap: 9px !important;
+    }
+
+    .chat-title {
+      color: #102018 !important;
+      letter-spacing: -.012em !important;
+    }
+
+    .chat-meta,
+    #chatMeta {
+      gap: 5px !important;
+    }
+
+    .chat-actions {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: flex-end !important;
+      gap: 6px !important;
+      padding: 4px !important;
+      border-radius: 18px !important;
+      background: rgba(255,255,255,.30) !important;
+      border: 1px solid rgba(255,255,255,.50) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.72) !important;
+    }
+
+    .conversation-status-select,
+    .chat-actions .mini-btn,
+    .chat-head .mini-btn,
+    #copyPhoneBtn,
+    #markReadBtn,
+    #nextCustomerBtn,
+    #closeNextBtn,
+    #archiveConversationBtn,
+    #chatTagsMenuBtn {
+      height: 31px !important;
+      min-height: 31px !important;
+      max-height: 31px !important;
+      padding: 0 11px !important;
+      border-radius: 12px !important;
+      border: 1px solid rgba(199, 216, 194, .86) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(249,252,247,.92)) !important;
+      color: #172b1f !important;
+      font-size: 9.2px !important;
+      font-weight: 950 !important;
+      letter-spacing: -.004em !important;
+      box-shadow:
+        0 6px 14px rgba(15,23,42,.035),
+        inset 0 1px 0 rgba(255,255,255,.90) !important;
+      transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease !important;
+    }
+
+    .conversation-status-select {
+      min-width: 118px !important;
+      padding-right: 26px !important;
+      color: #194221 !important;
+      border-color: rgba(120,184,62,.45) !important;
+      background:
+        linear-gradient(180deg, rgba(250,255,247,.98), rgba(240,250,235,.94)) !important;
+    }
+
+    .chat-actions .mini-btn:hover,
+    .chat-head .mini-btn:hover,
+    #copyPhoneBtn:hover,
+    #markReadBtn:hover,
+    #nextCustomerBtn:hover,
+    #archiveConversationBtn:hover,
+    #chatTagsMenuBtn:hover {
+      transform: translateY(-1px) !important;
+      border-color: rgba(120,184,62,.45) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,1), rgba(244,252,240,.96)) !important;
+      box-shadow:
+        0 10px 20px rgba(15,23,42,.055),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+    }
+
+    #closeNextBtn,
+    .workflow-close-next-btn {
+      border-color: rgba(239, 135, 82, .38) !important;
+      color: #9a3412 !important;
+      background:
+        linear-gradient(180deg, rgba(255,253,250,.98), rgba(255,247,237,.92)) !important;
+    }
+
+    #closeNextBtn:hover,
+    .workflow-close-next-btn:hover {
+      border-color: rgba(249, 115, 22, .52) !important;
+      box-shadow:
+        0 10px 22px rgba(249, 115, 22, .10),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+    }
+
+    #nextCustomerBtn,
+    .workflow-next-btn {
+      border-color: rgba(37, 211, 102, .34) !important;
+      color: #166534 !important;
+    }
+
+    #archiveConversationBtn {
+      color: #334155 !important;
+    }
+
+    #chatTagsMenuBtn,
+    .more-btn {
+      width: 31px !important;
+      min-width: 31px !important;
+      padding: 0 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V106" !important;
+    }
+
+    @media (min-width: 1181px) and (max-width: 1500px) {
+      .chat-actions {
+        gap: 4px !important;
+        padding: 3px !important;
+      }
+
+      .conversation-status-select,
+      .chat-actions .mini-btn,
+      .chat-head .mini-btn,
+      #copyPhoneBtn,
+      #markReadBtn,
+      #nextCustomerBtn,
+      #closeNextBtn,
+      #archiveConversationBtn {
+        height: 29px !important;
+        min-height: 29px !important;
+        max-height: 29px !important;
+        padding: 0 8px !important;
+        font-size: 8.9px !important;
+      }
+
+      .conversation-status-select {
+        min-width: 106px !important;
+      }
+    }
+
+    @media (max-width: 1180px) {
+      .chat-actions {
+        flex-wrap: wrap !important;
+        justify-content: flex-start !important;
+      }
+
+      .conversation-status-select,
+      .chat-actions .mini-btn,
+      .chat-head .mini-btn {
+        height: 30px !important;
+        min-height: 30px !important;
       }
     }
 
