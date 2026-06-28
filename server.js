@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-115-no-conversation-selected-mode-polish";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-116-safe-enter-to-send";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -30075,6 +30075,43 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       }
     }
 
+
+    /* V31.5.8.60.3.9.116 - Safe Enter-to-send hint.
+       UI-only hint for the isolated Enter-to-send behavior.
+       Does not affect send logic, history, /api/messages, Google Sheet, media, or notifications. */
+
+    .premium-composer .composer-bottom-row::before,
+    .chat-panel .premium-composer .composer-bottom-row::before {
+      content: "Enter to send · Shift+Enter new line" !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      height: 26px !important;
+      padding: 0 10px !important;
+      border-radius: 999px !important;
+      border: 1px solid rgba(203,223,197,.72) !important;
+      background: rgba(255,255,255,.74) !important;
+      color: rgba(75, 91, 79, .62) !important;
+      font-size: 8.8px !important;
+      font-weight: 900 !important;
+      letter-spacing: .01em !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.76) !important;
+      margin-right: auto !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V116" !important;
+    }
+
+    @media (max-width: 1180px) {
+      .premium-composer .composer-bottom-row::before,
+      .chat-panel .premium-composer .composer-bottom-row::before {
+        width: 100% !important;
+        justify-content: center !important;
+        margin: 0 0 6px !important;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -33519,6 +33556,32 @@ async function updateStatus(status, options) {
 document.getElementById("sendBtn").addEventListener("click", sendReply);
 document.getElementById("sendImageBtn").addEventListener("click", sendImage);
 document.getElementById("sendVoiceBtn").addEventListener("click", sendVoice);
+
+// V31.5.8.60.3.9.116 - Safe Enter-to-send for reply composer only.
+// Scope is intentionally isolated to #body textarea.
+// Enter sends the WhatsApp reply.
+// Shift+Enter keeps normal newline behavior.
+// Does not bind to internal notes, search, quick replies, status dropdowns, or document-level keydown.
+// Does not touch history rendering, /api/messages, Google Sheet loading, or message merge logic.
+if (inputBody) {
+  inputBody.addEventListener("keydown", function(event) {
+    if (event.key !== "Enter") return;
+    if (event.shiftKey) return;
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    if (event.isComposing || event.keyCode === 229) return;
+    if (event.repeat) return;
+
+    event.preventDefault();
+
+    const draftBody = inputBody.value.trim();
+    if (!draftBody) {
+      resultBox.textContent = "Type a reply first. Shift+Enter adds a new line.";
+      return;
+    }
+
+    sendReply();
+  });
+}
 
 if (imageFileInput) {
   imageFileInput.addEventListener("change", function() {
