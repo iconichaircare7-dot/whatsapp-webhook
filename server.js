@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-131-loading-logo-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-132-luxury-loading-polish";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -34046,6 +34046,223 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       html body .iconic-loading-logo {
         max-width: 122px !important;
         max-height: 64px !important;
+      }
+    }
+
+
+    /* V31.5.8.60.3.9.132 - Luxury Loading Polish.
+       Staging-only visual upgrade for the initial loading screen.
+       Scope: loading overlay only.
+       Does not touch loading data logic, history, /api/messages, Google Sheet,
+       send logic, status logic, media logic, notifications logic, webhook,
+       booking logic, or main/server.js. */
+
+    html body .reply-panel::after,
+    html body .reference-version-badge::after,
+    html body .right-reference-panel .reference-version-badge::after,
+    html body .customer-crm-profile .reference-version-badge::after {
+      content: "V132" !important;
+    }
+
+    html body .iconic-loading-overlay {
+      background:
+        radial-gradient(circle at 16% 10%, rgba(37,211,102,.22), transparent 32%),
+        radial-gradient(circle at 86% 12%, rgba(200,163,60,.16), transparent 30%),
+        radial-gradient(circle at 50% 112%, rgba(15,143,79,.14), transparent 42%),
+        linear-gradient(135deg, #fafff7 0%, #eef9e9 46%, #f7fff4 100%) !important;
+    }
+
+    html body .iconic-loading-overlay::before {
+      background:
+        linear-gradient(115deg, rgba(255,255,255,.58), transparent 38%, rgba(37,211,102,.075)),
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,.62), transparent 46%),
+        repeating-linear-gradient(
+          90deg,
+          rgba(15,143,79,.018) 0px,
+          rgba(15,143,79,.018) 1px,
+          transparent 1px,
+          transparent 34px
+        ) !important;
+      opacity: .95 !important;
+    }
+
+    html body .iconic-loading-overlay::after {
+      content: "" !important;
+      position: absolute !important;
+      width: 520px !important;
+      height: 520px !important;
+      border-radius: 999px !important;
+      background:
+        radial-gradient(circle, rgba(37,211,102,.12), transparent 62%) !important;
+      filter: blur(8px) !important;
+      animation: iconicLuxuryAura 4.6s ease-in-out infinite !important;
+      pointer-events: none !important;
+    }
+
+    @keyframes iconicLuxuryAura {
+      0%, 100% {
+        transform: translate3d(-6px, -4px, 0) scale(.96);
+        opacity: .62;
+      }
+      50% {
+        transform: translate3d(8px, 6px, 0) scale(1.04);
+        opacity: .90;
+      }
+    }
+
+    html body .iconic-loading-card {
+      width: min(470px, calc(100vw - 40px)) !important;
+      border-radius: 38px !important;
+      border: 1px solid rgba(37,211,102,.32) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.18), transparent 34%),
+        radial-gradient(circle at 100% 0%, rgba(200,163,60,.14), transparent 32%),
+        linear-gradient(180deg, rgba(255,255,255,.985), rgba(236,249,230,.94)) !important;
+      box-shadow:
+        0 46px 110px rgba(7,19,13,.18),
+        0 18px 42px rgba(37,211,102,.085),
+        0 0 0 1px rgba(255,255,255,.78) inset,
+        inset 0 1px 0 rgba(255,255,255,.98) !important;
+      padding: 38px 34px 32px !important;
+    }
+
+    html body .iconic-loading-card::before {
+      left: 26px !important;
+      right: 26px !important;
+      height: 5px !important;
+      background:
+        linear-gradient(
+          90deg,
+          transparent,
+          rgba(37,211,102,.98),
+          rgba(200,163,60,.64),
+          rgba(37,211,102,.82),
+          transparent
+        ) !important;
+      box-shadow:
+        0 9px 22px rgba(37,211,102,.20),
+        0 0 28px rgba(200,163,60,.12) !important;
+    }
+
+    html body .iconic-loading-card::after {
+      content: "" !important;
+      position: absolute !important;
+      inset: 14px !important;
+      border-radius: 30px !important;
+      border: 1px solid rgba(37,211,102,.085) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.54),
+        inset 0 0 46px rgba(37,211,102,.030) !important;
+      pointer-events: none !important;
+    }
+
+    html body .iconic-loading-logo-wrap {
+      width: 172px !important;
+      height: 100px !important;
+      border-radius: 30px !important;
+      margin-bottom: 22px !important;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,1), transparent 48%),
+        linear-gradient(180deg, #ffffff, #eef9e8) !important;
+      box-shadow:
+        0 24px 48px rgba(7,19,13,.12),
+        0 0 0 5px rgba(37,211,102,.055),
+        0 0 0 1px rgba(37,211,102,.15) inset,
+        inset 0 1px 0 rgba(255,255,255,1) !important;
+    }
+
+    html body .iconic-loading-logo {
+      max-width: 146px !important;
+      max-height: 76px !important;
+      opacity: .98 !important;
+      filter:
+        saturate(1.12)
+        contrast(1.06)
+        brightness(1.03)
+        drop-shadow(0 12px 20px rgba(7,19,13,.14)) !important;
+    }
+
+    html body .iconic-loading-kicker {
+      color: rgba(46, 73, 51, .66) !important;
+      font-size: 10.5px !important;
+      letter-spacing: .20em !important;
+      margin-bottom: 9px !important;
+    }
+
+    html body .iconic-loading-title {
+      color: #06110c !important;
+      font-size: 27px !important;
+      font-weight: 1000 !important;
+      letter-spacing: -.040em !important;
+      line-height: 1.04 !important;
+      text-shadow: 0 1px 0 rgba(255,255,255,.72) !important;
+      margin-bottom: 10px !important;
+    }
+
+    html body .iconic-loading-subtitle {
+      max-width: 360px !important;
+      color: rgba(55, 74, 60, .78) !important;
+      font-size: 12.5px !important;
+      font-weight: 850 !important;
+      line-height: 1.58 !important;
+    }
+
+    html body .iconic-loading-progress {
+      height: 10px !important;
+      border-radius: 999px !important;
+      border: 1px solid rgba(37,211,102,.20) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.92), rgba(232,247,226,.78)) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.96),
+        0 11px 20px rgba(7,19,13,.052) !important;
+      margin: 25px 0 18px !important;
+    }
+
+    html body .iconic-loading-progress span {
+      width: 42% !important;
+      background:
+        linear-gradient(90deg, #0f8f4f, #25d366 58%, #c3e66f) !important;
+      box-shadow:
+        0 0 20px rgba(37,211,102,.34),
+        inset 0 1px 0 rgba(255,255,255,.34) !important;
+      animation-duration: 1.24s !important;
+    }
+
+    html body .iconic-loading-dots {
+      gap: 10px !important;
+      height: 20px !important;
+    }
+
+    html body .iconic-loading-dots i {
+      width: 8px !important;
+      height: 8px !important;
+      background:
+        linear-gradient(135deg, #25d366, #9fde64) !important;
+      box-shadow:
+        0 7px 15px rgba(37,211,102,.30),
+        inset 0 1px 0 rgba(255,255,255,.30) !important;
+    }
+
+    @media (max-width: 700px) {
+      html body .iconic-loading-card {
+        width: min(420px, calc(100vw - 34px)) !important;
+        border-radius: 32px !important;
+        padding: 32px 24px 26px !important;
+      }
+
+      html body .iconic-loading-title {
+        font-size: 23px !important;
+      }
+
+      html body .iconic-loading-logo-wrap {
+        width: 152px !important;
+        height: 92px !important;
+      }
+
+      html body .iconic-loading-logo {
+        max-width: 132px !important;
+        max-height: 70px !important;
       }
     }
 
