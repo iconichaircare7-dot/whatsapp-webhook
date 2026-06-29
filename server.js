@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-134-loading-true-data-ready";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-135-loading-logo-wide-transparent";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -34301,6 +34301,56 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
 
     html body .iconic-loading-subtitle::after {
       content: " Waiting for inbox data." !important;
+    }
+
+
+    /* V31.5.8.60.3.9.135 - Loading logo wider + transparent.
+       Staging-only visual tweak for loading overlay logo area.
+       Scope: logo box only. Does not touch loading logic, history, APIs, or message logic. */
+
+    html body .reply-panel::after,
+    html body .reference-version-badge::after,
+    html body .right-reference-panel .reference-version-badge::after,
+    html body .customer-crm-profile .reference-version-badge::after {
+      content: "V135" !important;
+    }
+
+    html body .iconic-loading-logo-wrap {
+      width: 230px !important;
+      height: 86px !important;
+      border-radius: 0 !important;
+      margin-bottom: 20px !important;
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      outline: none !important;
+    }
+
+    html body .iconic-loading-logo {
+      max-width: 214px !important;
+      max-height: 74px !important;
+      width: auto !important;
+      height: auto !important;
+      object-fit: contain !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      filter:
+        saturate(1.12)
+        contrast(1.06)
+        brightness(1.03)
+        drop-shadow(0 8px 14px rgba(7,19,13,.10)) !important;
+    }
+
+    @media (max-width: 700px) {
+      html body .iconic-loading-logo-wrap {
+        width: 200px !important;
+        height: 78px !important;
+      }
+
+      html body .iconic-loading-logo {
+        max-width: 188px !important;
+        max-height: 66px !important;
+      }
     }
 
   </style>
