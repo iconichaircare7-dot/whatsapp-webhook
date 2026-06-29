@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-120-luxury-depth-polish-no-chat-background-touch";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-121-message-cards-composer-final-luxury";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -32418,6 +32418,450 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       html body .send-btn {
         width: 44px !important;
         height: 44px !important;
+      }
+    }
+
+
+    /* V31.5.8.60.3.9.121 - Message Cards & Composer Final Luxury.
+       Staging-only visual layer.
+       Scope: message cards, status badges, composer tray, send/media controls,
+       selected conversation card and right CRM micro-polish.
+       Does not target the conversation background or watermark selectors.
+       Does not touch history, /api/messages, Google Sheet, send logic, status logic,
+       notifications logic, media logic, webhook, booking logic, or main/server.js. */
+
+    :root {
+      --v121-ink: #06110c;
+      --v121-ink-soft: #17291d;
+      --v121-muted: #5a6f5f;
+      --v121-green: #25d366;
+      --v121-green-dark: #0f8f4f;
+      --v121-gold: #c8a33c;
+      --v121-red: #ef4444;
+      --v121-line: rgba(37, 211, 102, .30);
+      --v121-line-soft: rgba(167, 207, 156, .64);
+      --v121-shadow: 0 20px 48px rgba(7, 19, 13, .115);
+      --v121-shadow-strong: 0 30px 72px rgba(7, 19, 13, .155);
+      --v121-inner: inset 0 1px 0 rgba(255, 255, 255, .96);
+    }
+
+    /* Selected conversation card: make the chosen customer unmistakable */
+    html body .conversation-card.active,
+    html body .conversation-card.selected {
+      transform: translateX(2px) !important;
+      border-width: 1px !important;
+      border-left: 6px solid var(--v121-gold) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.23), transparent 42%),
+        radial-gradient(circle at 100% 0%, rgba(200,163,60,.12), transparent 28%),
+        linear-gradient(180deg, #ffffff 0%, #eaf9e3 100%) !important;
+      box-shadow:
+        0 28px 60px rgba(37,211,102,.235),
+        0 0 0 3px rgba(37,211,102,.115),
+        inset 0 1px 0 rgba(255,255,255,.98) !important;
+    }
+
+    html body .conversation-card.active .avatar,
+    html body .conversation-card.selected .avatar,
+    html body .conversation-card.active .conversation-avatar,
+    html body .conversation-card.selected .conversation-avatar {
+      box-shadow:
+        0 16px 32px rgba(37,211,102,.30),
+        0 0 0 4px rgba(37,211,102,.12),
+        inset 0 1px 0 rgba(255,255,255,.30) !important;
+    }
+
+    html body .conversation-card.active .conv-name,
+    html body .conversation-card.selected .conv-name {
+      color: #06110c !important;
+      font-weight: 1000 !important;
+      letter-spacing: -.016em !important;
+    }
+
+    html body .conversation-card.active .conv-preview,
+    html body .conversation-card.selected .conv-preview {
+      color: rgba(25, 48, 32, .82) !important;
+      font-weight: 840 !important;
+    }
+
+    /* Message spacing / presentation */
+    html body .message-row,
+    html body .bubble-row,
+    html body .chat-row {
+      margin-top: 13px !important;
+      margin-bottom: 13px !important;
+    }
+
+    html body .bubble,
+    html body .message-bubble,
+    html body .chat-message {
+      position: relative !important;
+      border-radius: 26px !important;
+      border: 1px solid rgba(37,211,102,.24) !important;
+      min-width: 210px !important;
+      box-shadow:
+        0 22px 48px rgba(7,19,13,.115),
+        0 0 0 1px rgba(255,255,255,.66) inset,
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+      backdrop-filter: blur(8px) saturate(1.04) !important;
+      -webkit-backdrop-filter: blur(8px) saturate(1.04) !important;
+    }
+
+    html body .bubble::after,
+    html body .message-bubble::after,
+    html body .chat-message::after {
+      content: "" !important;
+      position: absolute !important;
+      inset: 1px 1px auto 1px !important;
+      height: 38px !important;
+      border-radius: 25px 25px 16px 16px !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.38), transparent) !important;
+      pointer-events: none !important;
+      opacity: .65 !important;
+    }
+
+    html body .bubble.customer,
+    html body .message-bubble.customer,
+    html body .chat-message.customer {
+      border-left: 6px solid rgba(37,211,102,.78) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.15), transparent 38%),
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(236,249,230,.94)) !important;
+    }
+
+    html body .bubble.bot,
+    html body .bubble.staff,
+    html body .bubble.team,
+    html body .message-bubble.bot,
+    html body .message-bubble.staff,
+    html body .message-bubble.team,
+    html body .chat-message.bot,
+    html body .chat-message.staff,
+    html body .chat-message.team {
+      border-right: 6px solid rgba(37,211,102,.84) !important;
+      background:
+        radial-gradient(circle at 100% 0%, rgba(37,211,102,.13), transparent 38%),
+        linear-gradient(180deg, rgba(255,255,255,.99), rgba(249,255,245,.95)) !important;
+    }
+
+    html body .bubble.failed,
+    html body .message-bubble.failed,
+    html body .chat-message.failed {
+      border-color: rgba(239,68,68,.26) !important;
+      border-right-color: rgba(239,68,68,.72) !important;
+      background:
+        radial-gradient(circle at 100% 0%, rgba(239,68,68,.070), transparent 36%),
+        linear-gradient(180deg, #ffffff, #fff7f7) !important;
+      box-shadow:
+        0 22px 48px rgba(127,29,29,.115),
+        0 0 0 1px rgba(255,255,255,.66) inset,
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    html body .bubble p,
+    html body .bubble .message-text,
+    html body .message-bubble p,
+    html body .message-bubble .message-text,
+    html body .chat-message p,
+    html body .chat-message .message-text {
+      color: #07130d !important;
+      font-weight: 760 !important;
+      line-height: 1.50 !important;
+      letter-spacing: -.004em !important;
+    }
+
+    html body .bubble strong,
+    html body .message-bubble strong,
+    html body .chat-message strong {
+      color: #06110c !important;
+      font-weight: 1000 !important;
+    }
+
+    html body .bubble-info,
+    html body .message-meta,
+    html body .bubble-meta {
+      color: rgba(46, 65, 51, .72) !important;
+      font-weight: 860 !important;
+      letter-spacing: -.002em !important;
+    }
+
+    html body .bubble .badge,
+    html body .message-bubble .badge,
+    html body .chat-message .badge {
+      border-radius: 999px !important;
+      border: 1px solid rgba(37,211,102,.24) !important;
+      background:
+        linear-gradient(180deg, #ffffff, #eaf9e4) !important;
+      color: #0f5132 !important;
+      box-shadow:
+        0 8px 16px rgba(7,19,13,.045),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+      font-weight: 950 !important;
+    }
+
+    /* Sent / Failed badges */
+    html body .status-sent,
+    html body .sent-badge,
+    html body .message-status-sent {
+      border-radius: 999px !important;
+      border: 1px solid rgba(37,211,102,.28) !important;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(255,255,255,.58), transparent 34%),
+        linear-gradient(180deg, #f0fff4, #d6f9cd) !important;
+      color: #0f5132 !important;
+      box-shadow:
+        0 10px 18px rgba(37,211,102,.15),
+        inset 0 1px 0 rgba(255,255,255,.90) !important;
+      font-weight: 1000 !important;
+    }
+
+    html body .status-failed,
+    html body .failed-badge,
+    html body .message-status-failed {
+      border-radius: 999px !important;
+      border: 1px solid rgba(239,68,68,.30) !important;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(255,255,255,.56), transparent 34%),
+        linear-gradient(180deg, #fff7f7, #ffe4e6) !important;
+      color: #b91c1c !important;
+      box-shadow:
+        0 10px 18px rgba(239,68,68,.14),
+        inset 0 1px 0 rgba(255,255,255,.90) !important;
+      font-weight: 1000 !important;
+    }
+
+    /* Media links/cards inside messages */
+    html body .bubble a,
+    html body .message-bubble a,
+    html body .chat-message a {
+      color: #0f8f4f !important;
+      font-weight: 950 !important;
+      text-decoration-thickness: 2px !important;
+      text-underline-offset: 3px !important;
+    }
+
+    html body .media-box,
+    html body .message-media,
+    html body .attachment-card {
+      border-radius: 18px !important;
+      border: 1px solid rgba(37,211,102,.24) !important;
+      background:
+        linear-gradient(180deg, #ffffff, #f3fbef) !important;
+      box-shadow:
+        0 14px 30px rgba(7,19,13,.070),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    /* Composer final luxury tray */
+    html body .reply-panel,
+    html body .composer-block,
+    html body .premium-composer,
+    html body .composer-form {
+      border-radius: 32px !important;
+      border: 1px solid rgba(37,211,102,.38) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.16), transparent 38%),
+        radial-gradient(circle at 100% 0%, rgba(200,163,60,.10), transparent 32%),
+        linear-gradient(180deg, rgba(255,255,255,.99), rgba(236,249,230,.94)) !important;
+      box-shadow:
+        0 -12px 46px rgba(7,19,13,.090),
+        0 28px 64px rgba(7,19,13,.105),
+        0 0 0 1px rgba(255,255,255,.76) inset,
+        inset 0 1px 0 rgba(255,255,255,.98) !important;
+    }
+
+    html body .composer-tabs,
+    html body .composer-mode-toggle {
+      padding: 5px !important;
+      border-radius: 999px !important;
+      border: 1px solid rgba(37,211,102,.25) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.92), rgba(240,250,235,.78)) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.90),
+        0 10px 20px rgba(7,19,13,.045) !important;
+    }
+
+    html body .composer-tabs button,
+    html body .composer-mode-toggle button,
+    html body .reply-mode-btn,
+    html body .note-mode-btn {
+      border-radius: 999px !important;
+      min-height: 30px !important;
+      font-weight: 1000 !important;
+      letter-spacing: -.006em !important;
+    }
+
+    html body .composer-tabs button.active,
+    html body .composer-mode-toggle button.active,
+    html body .reply-mode-btn.active,
+    html body .note-mode-btn.active {
+      background:
+        radial-gradient(circle at 25% 0%, rgba(255,255,255,.52), transparent 34%),
+        linear-gradient(135deg, #25d366 0%, #b8e870 100%) !important;
+      color: #06110c !important;
+      border-color: rgba(255,255,255,.40) !important;
+      box-shadow:
+        0 14px 28px rgba(37,211,102,.24),
+        inset 0 1px 0 rgba(255,255,255,.56) !important;
+    }
+
+    html body #body,
+    html body textarea#body {
+      min-height: 82px !important;
+      border-radius: 22px !important;
+      border: 1px solid rgba(37,211,102,.34) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.045), transparent 34%),
+        linear-gradient(180deg, #ffffff, #f8fff5) !important;
+      color: #07130d !important;
+      font-weight: 780 !important;
+      line-height: 1.48 !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.98),
+        0 15px 34px rgba(7,19,13,.070) !important;
+    }
+
+    html body #body:focus,
+    html body textarea#body:focus {
+      border-color: rgba(37,211,102,.62) !important;
+      box-shadow:
+        0 0 0 5px rgba(37,211,102,.13),
+        inset 0 1px 0 rgba(255,255,255,.98),
+        0 18px 38px rgba(7,19,13,.090) !important;
+      outline: none !important;
+    }
+
+    html body .composer-icon-btn,
+    html body #sendImageBtn,
+    html body #sendVoiceBtn {
+      width: 44px !important;
+      height: 44px !important;
+      border-radius: 17px !important;
+      border: 1px solid rgba(37,211,102,.28) !important;
+      background:
+        radial-gradient(circle at 26% 0%, rgba(255,255,255,.52), transparent 34%),
+        linear-gradient(180deg, #ffffff, #eff9ea) !important;
+      color: #0f5132 !important;
+      box-shadow:
+        0 14px 28px rgba(7,19,13,.080),
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    html body .composer-icon-btn:hover,
+    html body #sendImageBtn:hover,
+    html body #sendVoiceBtn:hover {
+      transform: translateY(-2px) !important;
+      border-color: rgba(37,211,102,.48) !important;
+      box-shadow:
+        0 20px 38px rgba(7,19,13,.105),
+        0 0 0 4px rgba(37,211,102,.09),
+        inset 0 1px 0 rgba(255,255,255,.98) !important;
+    }
+
+    html body #sendBtn,
+    html body .send-btn {
+      width: 52px !important;
+      height: 52px !important;
+      border-radius: 20px !important;
+      border: 1px solid rgba(255,255,255,.38) !important;
+      background:
+        radial-gradient(circle at 28% 0%, rgba(255,255,255,.38), transparent 38%),
+        linear-gradient(135deg, #0f8f4f 0%, #25d366 56%, #b8e870 100%) !important;
+      box-shadow:
+        0 24px 48px rgba(37,211,102,.38),
+        0 0 0 4px rgba(37,211,102,.10),
+        inset 0 1px 0 rgba(255,255,255,.38) !important;
+    }
+
+    html body #sendBtn:hover,
+    html body .send-btn:hover {
+      transform: translateY(-2px) scale(1.03) !important;
+      box-shadow:
+        0 30px 58px rgba(37,211,102,.45),
+        0 0 0 5px rgba(37,211,102,.13),
+        inset 0 1px 0 rgba(255,255,255,.42) !important;
+    }
+
+    html body #sendBtn:active,
+    html body .send-btn:active {
+      transform: translateY(0) scale(.98) !important;
+    }
+
+    html body .premium-composer .composer-bottom-row::before,
+    html body .chat-panel .premium-composer .composer-bottom-row::before {
+      min-height: 29px !important;
+      border-radius: 999px !important;
+      border-color: rgba(37,211,102,.27) !important;
+      background:
+        linear-gradient(180deg, #ffffff, #edf9e7) !important;
+      color: rgba(43,63,49,.74) !important;
+      font-weight: 950 !important;
+      box-shadow:
+        0 10px 18px rgba(7,19,13,.045),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    /* CRM final micro polish */
+    html body .right-reference-panel {
+      box-shadow:
+        0 32px 76px rgba(7,19,13,.120),
+        0 0 0 1px rgba(255,255,255,.74) inset,
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    html body .reference-card,
+    html body .customer-details-card,
+    html body .assign-team-card,
+    html body .branch-team-assignment-card,
+    html body .crm-privacy-strip {
+      border-radius: 24px !important;
+      border-color: rgba(37,211,102,.27) !important;
+      box-shadow:
+        0 20px 42px rgba(7,19,13,.090),
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    html body .reference-detail-row {
+      border-radius: 12px !important;
+      margin: 1px 0 !important;
+      padding-left: 4px !important;
+      padding-right: 4px !important;
+    }
+
+    html body .branch-team-select,
+    html body #assigneeSelect {
+      height: 44px !important;
+      border-radius: 17px !important;
+      border-color: rgba(37,211,102,.34) !important;
+      font-weight: 1000 !important;
+      box-shadow:
+        0 15px 30px rgba(7,19,13,.075),
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V121" !important;
+    }
+
+    @media (max-width: 1180px) {
+      html body .bubble,
+      html body .message-bubble,
+      html body .chat-message {
+        border-radius: 22px !important;
+      }
+
+      html body #sendBtn,
+      html body .send-btn {
+        width: 48px !important;
+        height: 48px !important;
+      }
+
+      html body #body,
+      html body textarea#body {
+        min-height: 74px !important;
       }
     }
 
