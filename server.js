@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-127-send-button-softer-badge-lock";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-128-smaller-send-button-notification-mark-all";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -33425,6 +33425,95 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
         inset 0 1px 0 rgba(255,255,255,.26) !important;
     }
 
+
+    /* V31.5.8.60.3.9.128 - Smaller send button + notification mark-all action.
+       Staging-only UI polish.
+       Scope: send button size + live notification panel action button + version badge.
+       Does not touch chat background, watermark, history, APIs, media, or send logic. */
+
+    html body .reply-panel::after,
+    html body .reference-version-badge::after,
+    html body .right-reference-panel .reference-version-badge::after,
+    html body .customer-crm-profile .reference-version-badge::after {
+      content: "V128" !important;
+    }
+
+    html body #sendBtn,
+    html body .send-btn,
+    html body .premium-composer #sendBtn,
+    html body .composer-form #sendBtn {
+      width: 46px !important;
+      height: 46px !important;
+      min-width: 46px !important;
+      border-radius: 16px !important;
+      border: 1px solid rgba(255,255,255,.30) !important;
+      background:
+        radial-gradient(circle at 28% 0%, rgba(255,255,255,.25), transparent 42%),
+        linear-gradient(135deg, #17945a 0%, #26c768 62%, #8fd660 100%) !important;
+      box-shadow:
+        0 10px 20px rgba(37,211,102,.18),
+        0 0 0 2px rgba(37,211,102,.05),
+        inset 0 1px 0 rgba(255,255,255,.26) !important;
+      filter: saturate(.95) brightness(.99) !important;
+    }
+
+    html body #sendBtn:hover,
+    html body .send-btn:hover,
+    html body .premium-composer #sendBtn:hover,
+    html body .composer-form #sendBtn:hover {
+      transform: translateY(-1px) scale(1.01) !important;
+      box-shadow:
+        0 14px 26px rgba(37,211,102,.23),
+        0 0 0 3px rgba(37,211,102,.07),
+        inset 0 1px 0 rgba(255,255,255,.30) !important;
+    }
+
+    html body #sendBtn:active,
+    html body .send-btn:active,
+    html body .premium-composer #sendBtn:active,
+    html body .composer-form #sendBtn:active {
+      transform: translateY(0) scale(.985) !important;
+      box-shadow:
+        0 8px 14px rgba(37,211,102,.16),
+        0 0 0 2px rgba(37,211,102,.05),
+        inset 0 1px 0 rgba(255,255,255,.24) !important;
+    }
+
+    html body .live-notification-panel-actions {
+      display: flex !important;
+      align-items: center !important;
+      gap: 8px !important;
+      margin-left: auto !important;
+      flex-shrink: 0 !important;
+    }
+
+    html body .live-notification-mark-all {
+      height: 34px !important;
+      padding: 0 12px !important;
+      border-radius: 12px !important;
+      border: 1px solid rgba(22,53,43,.12) !important;
+      background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(244,250,241,.96)) !important;
+      color: #174a34 !important;
+      font-size: 11px !important;
+      font-weight: 900 !important;
+      letter-spacing: .01em !important;
+      cursor: pointer !important;
+      box-shadow: 0 8px 18px rgba(15,23,42,.08), inset 0 1px 0 rgba(255,255,255,.8) !important;
+      transition: transform .14s ease, box-shadow .14s ease, background .14s ease !important;
+      white-space: nowrap !important;
+    }
+
+    html body .live-notification-mark-all:hover {
+      transform: translateY(-1px) !important;
+      background: linear-gradient(180deg, rgba(248,253,246,.98), rgba(236,247,232,.98)) !important;
+      box-shadow: 0 12px 24px rgba(15,23,42,.10), inset 0 1px 0 rgba(255,255,255,.88) !important;
+    }
+
+    html body .live-notification-mark-all:active {
+      transform: translateY(0) scale(.99) !important;
+      box-shadow: 0 6px 12px rgba(15,23,42,.08), inset 0 1px 0 rgba(255,255,255,.72) !important;
+    }
+
   </style>
 </head>
 <body>
@@ -35398,7 +35487,12 @@ function renderLiveNotificationPanel() {
           '<span>' + escapeHtml(headerSubtitle) + '</span>' +
         '</div>' +
       '</div>' +
-      '<button type="button" class="live-notification-panel-close" id="liveNotificationPanelClose" aria-label="Close notifications">×</button>' +
+      '<div class="live-notification-panel-actions">' +
+        (conversations.length
+          ? '<button type="button" class="live-notification-mark-all" id="liveNotificationMarkAll">Mark all as read</button>'
+          : '') +
+        '<button type="button" class="live-notification-panel-close" id="liveNotificationPanelClose" aria-label="Close notifications">×</button>' +
+      '</div>' +
     '</div>';
 
   if (!conversations.length) {
@@ -35439,9 +35533,26 @@ function renderLiveNotificationPanel() {
     '</div>';
 }
 
+
 function resetVisibleLiveNotifications() {
   resetLiveAlertCounter();
   clearLiveNotificationToasts();
+}
+
+function markAllLiveNotificationConversationsRead() {
+  const conversations = getOpenLiveNotificationConversations();
+  if (!conversations.length) return;
+
+  conversations.forEach(function(conversation) {
+    if (conversation && conversation.key) {
+      markConversationRead(conversation.key);
+    }
+  });
+
+  resetLiveAlertCounter();
+  renderConversationList();
+  renderLiveNotificationPanel();
+  updateLiveNotificationUi();
 }
 
 function getMessageConversationKey(message) {
@@ -37150,6 +37261,12 @@ if (liveNotificationPanel) {
     const closeBtn = event.target.closest("#liveNotificationPanelClose");
     if (closeBtn) {
       closeLiveNotificationPanel();
+      return;
+    }
+
+    const markAllBtn = event.target.closest("#liveNotificationMarkAll");
+    if (markAllBtn) {
+      markAllLiveNotificationConversationsRead();
       return;
     }
 
