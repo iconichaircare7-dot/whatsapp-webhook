@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-133-loading-waits-for-inbox-ready";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-134-loading-true-data-ready";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -34284,6 +34284,25 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       content: " Please wait a moment." !important;
     }
 
+
+    /* V31.5.8.60.3.9.134 - Loading true data ready.
+       Staging-only timing improvement for the luxury loading screen.
+       Overlay now waits for successful /api/messages data application + DOM render.
+       Safety timeout remains only as backup.
+       Does not change data loading, history, /api/messages endpoint, Google Sheet,
+       send logic, status logic, media logic, notifications logic, webhook, booking logic, or main/server.js. */
+
+    html body .reply-panel::after,
+    html body .reference-version-badge::after,
+    html body .right-reference-panel .reference-version-badge::after,
+    html body .customer-crm-profile .reference-version-badge::after {
+      content: "V134" !important;
+    }
+
+    html body .iconic-loading-subtitle::after {
+      content: " Waiting for inbox data." !important;
+    }
+
   </style>
 </head>
 <body>
@@ -37527,7 +37546,10 @@ async function loadMessages(options) {
     } else {
       // Keep live counters/title fresh without rebuilding the open chat DOM.
       updateLiveNotificationUi();
+      scheduleIconicLoadingOverlayHide("messages-api-ready-no-render");
     }
+
+    markIconicInboxDataReady("messages-api-ready");
   } catch (error) {
     console.log("Failed to load messages:", error);
     // Do not clear the visible conversation list on temporary network/API delay.
@@ -38263,23 +38285,32 @@ setInterval(function() {
 }, 8000);
 
 
-// V31.5.8.60.3.9.133 - Loading overlay waits for inbox readiness.
+// V31.5.8.60.3.9.134 - Loading overlay waits for actual /api/messages data readiness.
 // UI-only helper. It does not change message loading, history rendering, APIs, or data merging.
 const ICONIC_LOADING_MIN_VISIBLE_MS = 2400;
-const ICONIC_LOADING_READY_DELAY_MS = 900;
-const ICONIC_LOADING_MAX_VISIBLE_MS = 12000;
+const ICONIC_LOADING_READY_DELAY_MS = 650;
+const ICONIC_LOADING_MAX_VISIBLE_MS = 14000;
 const iconicLoadingStartedAt = Date.now();
 let iconicLoadingHideTimer = null;
+let iconicInboxDataReady = false;
+let iconicInboxDataReadyReason = "";
 
-function iconicInboxLooksReady() {
+function iconicInboxDomLooksRendered() {
   try {
     const hasConversationCards = document.querySelectorAll(".conversation-card, .reference-conversation-card").length > 0;
-    const hasMessagesLoaded = Array.isArray(window.allMessages) && window.allMessages.length > 0;
-    const hasInboxFooter = !!document.querySelector(".reference-list-footer, #conversationList");
-    return hasConversationCards || hasMessagesLoaded || hasInboxFooter;
+    const hasConversationList = !!document.querySelector("#conversationList, .conversation-list");
+    const hasEmptyState = !!document.querySelector(".actual-empty-state, .inbox-empty-state, .no-conversations");
+    const hasChatPanel = !!document.querySelector(".chat-panel, #chatBody");
+    return (hasConversationCards || hasEmptyState || hasConversationList) && hasChatPanel;
   } catch (error) {
     return false;
   }
+}
+
+function markIconicInboxDataReady(reason) {
+  iconicInboxDataReady = true;
+  iconicInboxDataReadyReason = reason || "data-ready";
+  scheduleIconicLoadingOverlayHide(iconicInboxDataReadyReason);
 }
 
 function hideIconicLoadingOverlay(reason) {
@@ -38310,23 +38341,24 @@ function scheduleIconicLoadingOverlayHide(reason) {
   const delay = waitForMinimum + ICONIC_LOADING_READY_DELAY_MS;
 
   iconicLoadingHideTimer = window.setTimeout(function() {
-    if (iconicInboxLooksReady()) {
-      hideIconicLoadingOverlay(reason || "inbox-ready");
-      return;
-    }
-
     const retryElapsed = Date.now() - iconicLoadingStartedAt;
-    if (retryElapsed >= ICONIC_LOADING_MAX_VISIBLE_MS) {
-      hideIconicLoadingOverlay("max-timeout");
+
+    if (iconicInboxDataReady && iconicInboxDomLooksRendered()) {
+      hideIconicLoadingOverlay(reason || iconicInboxDataReadyReason || "data-ready");
       return;
     }
 
-    scheduleIconicLoadingOverlayHide("waiting-for-inbox");
+    if (retryElapsed >= ICONIC_LOADING_MAX_VISIBLE_MS) {
+      hideIconicLoadingOverlay("safety-timeout");
+      return;
+    }
+
+    scheduleIconicLoadingOverlayHide("waiting-for-data-ready");
   }, delay);
 }
 
 window.setTimeout(function() {
-  scheduleIconicLoadingOverlayHide("window-load");
+  scheduleIconicLoadingOverlayHide("initial-check");
 }, 1200);
 
 window.setTimeout(function() {
