@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-121-message-cards-composer-final-luxury";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-122-dark-chat-stage-luxury";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -32862,6 +32862,210 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       html body #body,
       html body textarea#body {
         min-height: 74px !important;
+      }
+    }
+
+
+    /* V31.5.8.60.3.9.122 - Dark Chat Stage Luxury.
+       Staging-only visual layer.
+       Scope: dark luxury background only for the chat conversation stage,
+       with readable light message bubbles and subtle Iconic watermark treatment.
+       Does not touch history, /api/messages, Google Sheet, send logic, status logic,
+       notifications logic, media logic, webhook, booking logic, or main/server.js. */
+
+    :root {
+      --v122-chat-dark-1: #06110c;
+      --v122-chat-dark-2: #0b1d14;
+      --v122-chat-dark-3: #123522;
+      --v122-chat-green: #25d366;
+      --v122-chat-green-soft: rgba(37,211,102,.18);
+      --v122-chat-gold-soft: rgba(200,163,60,.13);
+      --v122-chat-line: rgba(37,211,102,.30);
+      --v122-chat-white: rgba(255,255,255,.96);
+      --v122-chat-shadow: 0 28px 68px rgba(0,0,0,.28);
+    }
+
+    /* Dark conversation stage */
+    html body #chatBody,
+    html body .chat-body {
+      position: relative !important;
+      background:
+        radial-gradient(circle at 18% 12%, rgba(37,211,102,.18), transparent 34%),
+        radial-gradient(circle at 82% 10%, rgba(200,163,60,.12), transparent 30%),
+        radial-gradient(circle at 50% 105%, rgba(37,211,102,.10), transparent 42%),
+        linear-gradient(135deg, var(--v122-chat-dark-1) 0%, var(--v122-chat-dark-2) 48%, var(--v122-chat-dark-3) 100%) !important;
+      border-top: 1px solid rgba(255,255,255,.08) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.08),
+        inset 0 0 80px rgba(0,0,0,.20) !important;
+      overflow: auto !important;
+    }
+
+    html body #chatBody::before,
+    html body .chat-body::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      pointer-events: none !important;
+      background:
+        linear-gradient(115deg, rgba(255,255,255,.045), transparent 36%, rgba(255,255,255,.030)),
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,.055), transparent 42%) !important;
+      opacity: 1 !important;
+      z-index: 0 !important;
+    }
+
+    html body #chatBody::after,
+    html body .chat-body::after {
+      content: "" !important;
+      position: absolute !important;
+      inset: 16px !important;
+      pointer-events: none !important;
+      border-radius: 28px !important;
+      border: 1px solid rgba(255,255,255,.060) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.045),
+        inset 0 0 55px rgba(37,211,102,.035) !important;
+      z-index: 0 !important;
+    }
+
+    /* Keep the watermark, but make it luxury-subtle on dark */
+    html body .chat-watermark {
+      opacity: .145 !important;
+      filter:
+        saturate(1.18)
+        contrast(1.08)
+        brightness(1.08)
+        drop-shadow(0 18px 40px rgba(37,211,102,.18)) !important;
+      mix-blend-mode: screen !important;
+      z-index: 0 !important;
+    }
+
+    html body .chat-watermark img {
+      filter:
+        saturate(1.12)
+        contrast(1.05)
+        brightness(1.05)
+        drop-shadow(0 0 26px rgba(37,211,102,.22)) !important;
+    }
+
+    /* Make message/content layers sit above the dark stage overlays */
+    html body #chatBody > *:not(.chat-watermark),
+    html body .chat-body > *:not(.chat-watermark) {
+      position: relative !important;
+      z-index: 1 !important;
+    }
+
+    /* Message cards: brighter, glassier cards on dark background */
+    html body .bubble,
+    html body .message-bubble,
+    html body .chat-message {
+      border-color: rgba(255,255,255,.18) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.08), transparent 36%),
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(246,252,243,.94)) !important;
+      box-shadow:
+        0 26px 58px rgba(0,0,0,.26),
+        0 0 0 1px rgba(255,255,255,.56) inset,
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    html body .bubble.customer,
+    html body .message-bubble.customer,
+    html body .chat-message.customer {
+      border-left-color: rgba(37,211,102,.86) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.16), transparent 38%),
+        linear-gradient(180deg, #ffffff, #effbe8) !important;
+    }
+
+    html body .bubble.bot,
+    html body .bubble.staff,
+    html body .bubble.team,
+    html body .message-bubble.bot,
+    html body .message-bubble.staff,
+    html body .message-bubble.team,
+    html body .chat-message.bot,
+    html body .chat-message.staff,
+    html body .chat-message.team {
+      border-right-color: rgba(37,211,102,.90) !important;
+      background:
+        radial-gradient(circle at 100% 0%, rgba(37,211,102,.13), transparent 38%),
+        linear-gradient(180deg, #ffffff, #f8fff5) !important;
+    }
+
+    html body .bubble.failed,
+    html body .message-bubble.failed,
+    html body .chat-message.failed {
+      border-color: rgba(255,255,255,.18) !important;
+      border-right-color: rgba(239,68,68,.80) !important;
+      box-shadow:
+        0 26px 58px rgba(0,0,0,.26),
+        0 0 0 1px rgba(255,255,255,.54) inset,
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    /* Soft depth for message rows against the dark stage */
+    html body .message-row,
+    html body .bubble-row,
+    html body .chat-row {
+      filter: drop-shadow(0 14px 24px rgba(0,0,0,.12)) !important;
+    }
+
+    /* Keep empty state readable on dark */
+    html body #chatBody .actual-empty-state,
+    html body #chatBody .empty-state,
+    html body #chatBody .no-messages,
+    html body .chat-body .actual-empty-state,
+    html body .chat-body .empty-state,
+    html body .chat-body .no-messages {
+      background:
+        radial-gradient(circle at 50% 0%, rgba(37,211,102,.22), transparent 42%),
+        linear-gradient(180deg, rgba(255,255,255,.96), rgba(240,250,234,.90)) !important;
+      border-color: rgba(255,255,255,.20) !important;
+      box-shadow:
+        0 30px 72px rgba(0,0,0,.28),
+        0 0 0 1px rgba(255,255,255,.58) inset,
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    /* Composer transition into the dark stage */
+    html body .reply-panel,
+    html body .composer-block,
+    html body .premium-composer,
+    html body .composer-form {
+      border-top-color: rgba(37,211,102,.42) !important;
+      box-shadow:
+        0 -18px 52px rgba(0,0,0,.18),
+        0 28px 64px rgba(7,19,13,.105),
+        0 0 0 1px rgba(255,255,255,.76) inset,
+        inset 0 1px 0 rgba(255,255,255,.98) !important;
+    }
+
+    /* Chat panel frame around the dark area */
+    html body .chat-panel {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(239,250,233,.92)) !important;
+      box-shadow:
+        0 36px 88px rgba(7,19,13,.18),
+        0 0 0 1px rgba(255,255,255,.72) inset,
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V122" !important;
+    }
+
+    @media (max-width: 1180px) {
+      html body #chatBody,
+      html body .chat-body {
+        background:
+          radial-gradient(circle at 18% 10%, rgba(37,211,102,.16), transparent 34%),
+          linear-gradient(135deg, #06110c 0%, #0b1d14 52%, #123522 100%) !important;
+      }
+
+      html body .chat-watermark {
+        opacity: .12 !important;
       }
     }
 
