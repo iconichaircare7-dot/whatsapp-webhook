@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-128-smaller-send-button-notification-mark-all";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-129-notification-panel-luxury-polish";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -33512,6 +33512,265 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     html body .live-notification-mark-all:active {
       transform: translateY(0) scale(.99) !important;
       box-shadow: 0 6px 12px rgba(15,23,42,.08), inset 0 1px 0 rgba(255,255,255,.72) !important;
+    }
+
+
+    /* V31.5.8.60.3.9.129 - Notification Panel Luxury Polish.
+       Staging-only visual upgrade.
+       Scope: live notification window visual styling only.
+       Does not touch chat background, watermark, history, APIs, media, or send logic. */
+
+    html body .reply-panel::after,
+    html body .reference-version-badge::after,
+    html body .right-reference-panel .reference-version-badge::after,
+    html body .customer-crm-profile .reference-version-badge::after {
+      content: "V129" !important;
+    }
+
+    html body .live-notification-panel,
+    html body #liveNotificationPanel {
+      width: min(448px, calc(100vw - 28px)) !important;
+      border-radius: 28px !important;
+      border: 1px solid rgba(92, 151, 67, .20) !important;
+      background: linear-gradient(180deg, rgba(250,253,248,.985), rgba(241,248,238,.975)) !important;
+      box-shadow: 0 34px 90px rgba(10, 20, 15, .22), 0 10px 24px rgba(39, 85, 50, .10), inset 0 1px 0 rgba(255,255,255,.96) !important;
+      backdrop-filter: blur(20px) !important;
+      -webkit-backdrop-filter: blur(20px) !important;
+      overflow: hidden !important;
+    }
+
+    html body .live-notification-panel::before,
+    html body #liveNotificationPanel::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 0 auto 0 !important;
+      height: 86px !important;
+      background: linear-gradient(90deg, rgba(23,68,45,.98) 0%, rgba(10,45,27,.98) 38%, rgba(51,104,42,.92) 100%) !important;
+      border-radius: 28px 28px 0 0 !important;
+      pointer-events: none !important;
+      z-index: 0 !important;
+    }
+
+    html body .live-notification-panel-head {
+      position: relative !important;
+      z-index: 1 !important;
+      padding: 17px 17px 15px !important;
+      border-bottom: 1px solid rgba(255,255,255,.08) !important;
+      background: transparent !important;
+      align-items: flex-start !important;
+    }
+
+    html body .live-notification-panel-title {
+      gap: 12px !important;
+      align-items: center !important;
+    }
+
+    html body .live-notification-panel-icon {
+      width: 42px !important;
+      height: 42px !important;
+      border-radius: 16px !important;
+      background: linear-gradient(135deg, #32d56c 0%, #1da14d 58%, #114e31 100%) !important;
+      color: #ffffff !important;
+      box-shadow: 0 14px 28px rgba(17,78,49,.28), inset 0 1px 0 rgba(255,255,255,.30) !important;
+      border: 1px solid rgba(255,255,255,.16) !important;
+    }
+
+    html body .live-notification-panel-title strong {
+      color: #ffffff !important;
+      font-size: 15px !important;
+      font-weight: 900 !important;
+      letter-spacing: -.015em !important;
+      text-shadow: 0 1px 0 rgba(0,0,0,.12) !important;
+    }
+
+    html body .live-notification-panel-title span {
+      margin-top: 3px !important;
+      color: rgba(232,245,233,.82) !important;
+      font-size: 11px !important;
+      font-weight: 800 !important;
+      letter-spacing: .01em !important;
+    }
+
+    html body .live-notification-panel-actions {
+      position: relative !important;
+      z-index: 1 !important;
+      gap: 9px !important;
+      align-items: center !important;
+    }
+
+    html body .live-notification-mark-all {
+      height: 36px !important;
+      padding: 0 13px !important;
+      border-radius: 13px !important;
+      border: 1px solid rgba(255,255,255,.16) !important;
+      background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.08)) !important;
+      color: #ffffff !important;
+      font-size: 11px !important;
+      font-weight: 900 !important;
+      letter-spacing: .015em !important;
+      box-shadow: 0 10px 22px rgba(0,0,0,.14), inset 0 1px 0 rgba(255,255,255,.18) !important;
+      backdrop-filter: blur(8px) !important;
+      -webkit-backdrop-filter: blur(8px) !important;
+    }
+
+    html body .live-notification-mark-all:hover {
+      background: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.12)) !important;
+      box-shadow: 0 14px 26px rgba(0,0,0,.17), inset 0 1px 0 rgba(255,255,255,.24) !important;
+    }
+
+    html body .live-notification-panel-close {
+      width: 36px !important;
+      height: 36px !important;
+      border-radius: 13px !important;
+      border: 1px solid rgba(255,255,255,.16) !important;
+      background: linear-gradient(180deg, rgba(255,255,255,.20), rgba(255,255,255,.10)) !important;
+      color: #ffffff !important;
+      box-shadow: 0 10px 22px rgba(0,0,0,.14), inset 0 1px 0 rgba(255,255,255,.20) !important;
+      backdrop-filter: blur(8px) !important;
+      -webkit-backdrop-filter: blur(8px) !important;
+    }
+
+    html body .live-notification-panel-body {
+      position: relative !important;
+      z-index: 1 !important;
+      padding: 12px !important;
+      gap: 10px !important;
+      background: linear-gradient(180deg, rgba(248,252,246,.98), rgba(240,247,238,.98)) !important;
+    }
+
+    html body .live-notification-panel-body::-webkit-scrollbar {
+      width: 10px !important;
+    }
+
+    html body .live-notification-panel-body::-webkit-scrollbar-track {
+      background: transparent !important;
+    }
+
+    html body .live-notification-panel-body::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, rgba(40,98,47,.34), rgba(83,152,59,.38)) !important;
+      border-radius: 999px !important;
+      border: 2px solid rgba(245,250,243,.92) !important;
+    }
+
+    html body .live-notification-card {
+      position: relative !important;
+      border-radius: 20px !important;
+      padding: 14px !important;
+      border: 1px solid rgba(104, 162, 85, .18) !important;
+      background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(247,251,245,.94)) !important;
+      box-shadow: 0 14px 32px rgba(16,24,16,.08), inset 0 1px 0 rgba(255,255,255,.95) !important;
+      overflow: hidden !important;
+      transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease !important;
+    }
+
+    html body .live-notification-card::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 auto 0 0 !important;
+      width: 4px !important;
+      border-radius: 999px !important;
+      background: linear-gradient(180deg, #1db954 0%, #93d957 100%) !important;
+      opacity: .92 !important;
+    }
+
+    html body .live-notification-card:hover {
+      transform: translateY(-2px) !important;
+      border-color: rgba(84, 153, 62, .30) !important;
+      box-shadow: 0 18px 36px rgba(16,24,16,.11), inset 0 1px 0 rgba(255,255,255,.98) !important;
+    }
+
+    html body .live-notification-avatar {
+      width: 46px !important;
+      height: 46px !important;
+      border-radius: 16px !important;
+      background: linear-gradient(135deg, #e9f8e6 0%, #cceec4 45%, #9fdb84 100%) !important;
+      color: #17422c !important;
+      font-size: 15px !important;
+      font-weight: 900 !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.86), 0 8px 18px rgba(29, 84, 44, .12) !important;
+      border: 1px solid rgba(106, 165, 89, .20) !important;
+    }
+
+    html body .live-notification-name-row {
+      align-items: flex-start !important;
+      gap: 10px !important;
+    }
+
+    html body .live-notification-name {
+      color: #142b1f !important;
+      font-size: 14px !important;
+      font-weight: 900 !important;
+      letter-spacing: -.01em !important;
+    }
+
+    html body .live-notification-unread-pill {
+      min-width: 28px !important;
+      height: 24px !important;
+      padding: 0 8px !important;
+      border-radius: 999px !important;
+      background: linear-gradient(135deg, #24c85e 0%, #8fd85f 100%) !important;
+      color: #ffffff !important;
+      font-size: 11px !important;
+      font-weight: 900 !important;
+      box-shadow: 0 8px 18px rgba(36,200,94,.24), inset 0 1px 0 rgba(255,255,255,.24) !important;
+    }
+
+    html body .live-notification-preview {
+      margin-top: 4px !important;
+      color: #51606a !important;
+      font-size: 12px !important;
+      line-height: 1.45 !important;
+      font-weight: 700 !important;
+    }
+
+    html body .live-notification-meta {
+      margin-top: 8px !important;
+      gap: 6px !important;
+      flex-wrap: wrap !important;
+    }
+
+    html body .live-notification-meta span {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      min-height: 22px !important;
+      padding: 0 8px !important;
+      border-radius: 999px !important;
+      background: rgba(237,245,234,.98) !important;
+      border: 1px solid rgba(109,165,88,.16) !important;
+      color: #2e5a3f !important;
+      font-size: 10px !important;
+      font-weight: 900 !important;
+      letter-spacing: .01em !important;
+    }
+
+    html body .live-notification-time {
+      color: #768492 !important;
+      font-size: 11px !important;
+      font-weight: 800 !important;
+      padding-top: 2px !important;
+    }
+
+    html body .live-notification-empty {
+      border-radius: 22px !important;
+      border: 1px dashed rgba(108,165,88,.30) !important;
+      background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(244,249,242,.92)) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.92) !important;
+      padding: 28px 22px !important;
+    }
+
+    html body .live-notification-empty strong {
+      color: #16332a !important;
+      font-size: 15px !important;
+      font-weight: 900 !important;
+    }
+
+    html body .live-notification-empty span {
+      margin-top: 6px !important;
+      color: #657480 !important;
+      font-size: 12px !important;
+      line-height: 1.5 !important;
+      font-weight: 700 !important;
     }
 
   </style>
