@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-126-send-button-soft-polish";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-127-send-button-softer-badge-lock";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -33364,6 +33364,65 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     .reply-panel::after,
     .reference-version-badge::after {
       content: "V126" !important;
+    }
+
+
+    /* V31.5.8.60.3.9.127 - Send Button Softer + Badge Lock.
+       Staging-only visual layer.
+       Fixes the V126 badge issue caused by stronger V125 selector specificity.
+       Scope: version badge and send button only.
+       Does not touch chat background, watermark, history, APIs, or send logic. */
+
+    html body .reply-panel::after,
+    html body .reference-version-badge::after,
+    html body .right-reference-panel .reference-version-badge::after,
+    html body .customer-crm-profile .reference-version-badge::after {
+      content: "V127" !important;
+    }
+
+    /* Softer send button: less glow, less aggressive green, still premium */
+    html body #sendBtn,
+    html body .send-btn,
+    html body .premium-composer #sendBtn,
+    html body .composer-form #sendBtn {
+      width: 52px !important;
+      height: 52px !important;
+      min-width: 52px !important;
+      border-radius: 19px !important;
+      border: 1px solid rgba(255,255,255,.32) !important;
+      background:
+        radial-gradient(circle at 28% 0%, rgba(255,255,255,.28), transparent 42%),
+        linear-gradient(135deg, #16985a 0%, #25c765 62%, #96d966 100%) !important;
+      color: #ffffff !important;
+      box-shadow:
+        0 14px 26px rgba(37,211,102,.22),
+        0 0 0 2px rgba(37,211,102,.055),
+        inset 0 1px 0 rgba(255,255,255,.28) !important;
+      filter: saturate(.96) brightness(.99) !important;
+      transition: transform .14s ease, box-shadow .14s ease, filter .14s ease !important;
+    }
+
+    html body #sendBtn:hover,
+    html body .send-btn:hover,
+    html body .premium-composer #sendBtn:hover,
+    html body .composer-form #sendBtn:hover {
+      transform: translateY(-1px) scale(1.012) !important;
+      filter: saturate(1.00) brightness(1.01) !important;
+      box-shadow:
+        0 18px 32px rgba(37,211,102,.27),
+        0 0 0 3px rgba(37,211,102,.075),
+        inset 0 1px 0 rgba(255,255,255,.32) !important;
+    }
+
+    html body #sendBtn:active,
+    html body .send-btn:active,
+    html body .premium-composer #sendBtn:active,
+    html body .composer-form #sendBtn:active {
+      transform: translateY(0) scale(.985) !important;
+      box-shadow:
+        0 9px 18px rgba(37,211,102,.18),
+        0 0 0 2px rgba(37,211,102,.055),
+        inset 0 1px 0 rgba(255,255,255,.26) !important;
     }
 
   </style>
