@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-122-dark-chat-stage-luxury";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-123-dark-behind-blocks-restore-chat-image";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -33066,6 +33066,178 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
 
       html body .chat-watermark {
         opacity: .12 !important;
+      }
+    }
+
+
+    /* V31.5.8.60.3.9.123 - Restore chat image, dark only behind blocks.
+       Fixes V122 misunderstanding:
+       - keep chat background image / watermark visible
+       - remove full dark fill from conversation stage
+       - add dark luxury backplate only behind message blocks
+       Staging-only visual layer. */
+
+    :root {
+      --v123-block-dark-a: rgba(5, 12, 9, .62);
+      --v123-block-dark-b: rgba(10, 34, 22, .46);
+      --v123-block-dark-c: rgba(16, 66, 38, .22);
+      --v123-block-red-a: rgba(28, 10, 10, .58);
+      --v123-block-red-b: rgba(84, 22, 22, .24);
+    }
+
+    /* 1) Restore the conversation stage and do not paint over the chat background image */
+    html body #chatBody,
+    html body .chat-body {
+      background: transparent !important;
+      box-shadow: none !important;
+      border-top: 1px solid rgba(255,255,255,.05) !important;
+    }
+
+    html body #chatBody::before,
+    html body .chat-body::before,
+    html body #chatBody::after,
+    html body .chat-body::after {
+      content: none !important;
+      background: none !important;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+
+    /* 2) Restore watermark/logo visibility inside the chat area */
+    html body .chat-watermark {
+      opacity: .17 !important;
+      mix-blend-mode: normal !important;
+      filter:
+        saturate(1.08)
+        contrast(1.03)
+        brightness(1.03)
+        drop-shadow(0 14px 32px rgba(37,211,102,.12)) !important;
+      z-index: 0 !important;
+    }
+
+    html body .chat-watermark img {
+      filter:
+        saturate(1.06)
+        contrast(1.02)
+        brightness(1.02)
+        drop-shadow(0 0 18px rgba(37,211,102,.14)) !important;
+    }
+
+    html body #chatBody > *:not(.chat-watermark),
+    html body .chat-body > *:not(.chat-watermark) {
+      position: relative !important;
+      z-index: 1 !important;
+    }
+
+    /* 3) Dark premium backplate only behind message blocks */
+    html body .bubble,
+    html body .message-bubble,
+    html body .chat-message {
+      position: relative !important;
+      isolation: isolate !important;
+      overflow: visible !important;
+    }
+
+    html body .bubble::before,
+    html body .message-bubble::before,
+    html body .chat-message::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: -11px !important;
+      border-radius: 32px !important;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(255,255,255,.06), transparent 32%),
+        linear-gradient(135deg,
+          var(--v123-block-dark-a) 0%,
+          var(--v123-block-dark-b) 58%,
+          var(--v123-block-dark-c) 100%) !important;
+      box-shadow:
+        0 20px 42px rgba(0,0,0,.18),
+        0 10px 22px rgba(0,0,0,.10),
+        inset 0 1px 0 rgba(255,255,255,.08) !important;
+      backdrop-filter: blur(9px) saturate(1.02) !important;
+      -webkit-backdrop-filter: blur(9px) saturate(1.02) !important;
+      z-index: -1 !important;
+      opacity: .92 !important;
+    }
+
+    html body .bubble.customer::before,
+    html body .message-bubble.customer::before,
+    html body .chat-message.customer::before {
+      background:
+        radial-gradient(circle at 18% 0%, rgba(255,255,255,.06), transparent 32%),
+        linear-gradient(135deg,
+          rgba(6,14,10,.60) 0%,
+          rgba(12,42,26,.42) 62%,
+          rgba(37,211,102,.16) 100%) !important;
+    }
+
+    html body .bubble.bot::before,
+    html body .bubble.staff::before,
+    html body .bubble.team::before,
+    html body .message-bubble.bot::before,
+    html body .message-bubble.staff::before,
+    html body .message-bubble.team::before,
+    html body .chat-message.bot::before,
+    html body .chat-message.staff::before,
+    html body .chat-message.team::before {
+      background:
+        radial-gradient(circle at 82% 0%, rgba(255,255,255,.06), transparent 34%),
+        linear-gradient(135deg,
+          rgba(5,12,10,.58) 0%,
+          rgba(12,34,24,.42) 58%,
+          rgba(30,100,60,.14) 100%) !important;
+    }
+
+    html body .bubble.failed::before,
+    html body .message-bubble.failed::before,
+    html body .chat-message.failed::before {
+      background:
+        radial-gradient(circle at 18% 0%, rgba(255,255,255,.05), transparent 32%),
+        linear-gradient(135deg,
+          var(--v123-block-red-a) 0%,
+          var(--v123-block-red-b) 100%) !important;
+      box-shadow:
+        0 20px 42px rgba(80,18,18,.16),
+        0 10px 22px rgba(0,0,0,.11),
+        inset 0 1px 0 rgba(255,255,255,.07) !important;
+    }
+
+    /* 4) Slightly stronger clarity so light bubbles stay crisp over the restored image */
+    html body .bubble,
+    html body .message-bubble,
+    html body .chat-message {
+      box-shadow:
+        0 22px 48px rgba(7,19,13,.11),
+        0 0 0 1px rgba(255,255,255,.58) inset,
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    html body .bubble p,
+    html body .bubble .message-text,
+    html body .message-bubble p,
+    html body .message-bubble .message-text,
+    html body .chat-message p,
+    html body .chat-message .message-text {
+      color: #07130d !important;
+    }
+
+    /* 5) Keep version badge correct */
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V123" !important;
+    }
+
+    @media (max-width: 1180px) {
+      html body .bubble::before,
+      html body .message-bubble::before,
+      html body .chat-message::before {
+        inset: -8px !important;
+        border-radius: 26px !important;
+      }
+
+      html body .chat-watermark {
+        opacity: .15 !important;
       }
     }
 
