@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-124-v121-plus-dark-depth-behind-bubbles";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-125-reply-composer-luxury-polish";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -32983,6 +32983,339 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     .reply-panel::after,
     .reference-version-badge::after {
       content: "V124" !important;
+    }
+
+
+    /* V31.5.8.60.3.9.125 - Reply Composer Luxury Polish.
+       Staging-only visual layer.
+       Scope: reply composer block, reply/note tabs, textarea, responding-as selector,
+       media buttons, send button, ready badge, and composer hints.
+       Does not touch chat background image, chat watermark, message history,
+       /api/messages, Google Sheet, send logic, status logic, media logic,
+       notifications logic, webhook, booking logic, or main/server.js. */
+
+    :root {
+      --v125-composer-green: #25d366;
+      --v125-composer-green-dark: #0f8f4f;
+      --v125-composer-gold: #c8a33c;
+      --v125-composer-ink: #06110c;
+      --v125-composer-muted: #5a6f5f;
+      --v125-composer-line: rgba(37, 211, 102, .38);
+      --v125-composer-line-soft: rgba(167, 207, 156, .68);
+      --v125-composer-shadow: 0 30px 72px rgba(7, 19, 13, .135);
+      --v125-composer-shadow-soft: 0 18px 42px rgba(7, 19, 13, .095);
+      --v125-composer-inner: inset 0 1px 0 rgba(255, 255, 255, .96);
+    }
+
+    /* Main reply block */
+    html body .reply-panel,
+    html body .composer-block,
+    html body .premium-composer,
+    html body .composer-form {
+      position: relative !important;
+      border-radius: 34px !important;
+      border: 1px solid var(--v125-composer-line) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.18), transparent 36%),
+        radial-gradient(circle at 100% 0%, rgba(200,163,60,.12), transparent 32%),
+        linear-gradient(180deg, rgba(255,255,255,.99), rgba(237,250,231,.94)) !important;
+      box-shadow:
+        0 -16px 54px rgba(7,19,13,.105),
+        var(--v125-composer-shadow),
+        0 0 0 1px rgba(255,255,255,.76) inset,
+        var(--v125-composer-inner) !important;
+      overflow: hidden !important;
+    }
+
+    html body .reply-panel::before,
+    html body .composer-block::before,
+    html body .premium-composer::before,
+    html body .composer-form::before {
+      content: "" !important;
+      position: absolute !important;
+      top: 0 !important;
+      left: 18px !important;
+      right: 18px !important;
+      height: 4px !important;
+      border-radius: 999px !important;
+      background:
+        linear-gradient(90deg,
+          transparent,
+          rgba(37,211,102,.88),
+          rgba(200,163,60,.50),
+          rgba(37,211,102,.70),
+          transparent) !important;
+      box-shadow: 0 8px 20px rgba(37,211,102,.16) !important;
+      pointer-events: none !important;
+      z-index: 2 !important;
+    }
+
+    html body .reply-panel::after,
+    html body .reference-version-badge::after {
+      content: "V125" !important;
+    }
+
+    /* Reply / Note pill tabs */
+    html body .composer-tabs,
+    html body .composer-mode-toggle,
+    html body .reply-tabs,
+    html body .reply-mode-tabs {
+      padding: 5px !important;
+      border-radius: 999px !important;
+      border: 1px solid rgba(37,211,102,.26) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.94), rgba(240,250,235,.82)) !important;
+      box-shadow:
+        0 10px 22px rgba(7,19,13,.050),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+    }
+
+    html body .composer-tabs button,
+    html body .composer-mode-toggle button,
+    html body .reply-mode-btn,
+    html body .note-mode-btn,
+    html body .reply-tab,
+    html body .note-tab {
+      min-height: 31px !important;
+      padding-inline: 16px !important;
+      border-radius: 999px !important;
+      border: 1px solid transparent !important;
+      font-size: 10px !important;
+      font-weight: 1000 !important;
+      letter-spacing: -.006em !important;
+      color: rgba(29, 53, 36, .72) !important;
+      background: transparent !important;
+      transition: transform .14s ease, box-shadow .14s ease, background .14s ease, color .14s ease !important;
+    }
+
+    html body .composer-tabs button.active,
+    html body .composer-mode-toggle button.active,
+    html body .reply-mode-btn.active,
+    html body .note-mode-btn.active,
+    html body .reply-tab.active,
+    html body .note-tab.active {
+      color: #06110c !important;
+      border-color: rgba(255,255,255,.44) !important;
+      background:
+        radial-gradient(circle at 25% 0%, rgba(255,255,255,.58), transparent 34%),
+        linear-gradient(135deg, #25d366 0%, #aeea73 100%) !important;
+      box-shadow:
+        0 15px 30px rgba(37,211,102,.25),
+        inset 0 1px 0 rgba(255,255,255,.58) !important;
+    }
+
+    /* Responding-as selector / top composer row */
+    html body .responding-as,
+    html body .responding-as-bar,
+    html body .composer-responding-as,
+    html body .composer-top-row select,
+    html body .premium-composer select {
+      min-height: 34px !important;
+      border-radius: 999px !important;
+      border: 1px solid rgba(37,211,102,.30) !important;
+      background:
+        linear-gradient(180deg, #ffffff, #f1faed) !important;
+      color: #06110c !important;
+      font-size: 10px !important;
+      font-weight: 950 !important;
+      letter-spacing: .01em !important;
+      box-shadow:
+        0 12px 24px rgba(7,19,13,.060),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    html body .responding-as-label,
+    html body .composer-responding-label,
+    html body .premium-composer .muted-label {
+      color: rgba(50, 67, 54, .64) !important;
+      font-size: 8.5px !important;
+      font-weight: 1000 !important;
+      letter-spacing: .14em !important;
+      text-transform: uppercase !important;
+    }
+
+    /* Text area field */
+    html body #body,
+    html body textarea#body,
+    html body .reply-textarea,
+    html body .composer-textarea {
+      min-height: 88px !important;
+      border-radius: 24px !important;
+      border: 1px solid rgba(37,211,102,.36) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.055), transparent 34%),
+        linear-gradient(180deg, #ffffff, #f8fff5) !important;
+      color: #07130d !important;
+      font-size: 13px !important;
+      font-weight: 780 !important;
+      line-height: 1.52 !important;
+      letter-spacing: -.004em !important;
+      padding: 20px 22px !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.98),
+        0 16px 36px rgba(7,19,13,.075) !important;
+      transition: border-color .14s ease, box-shadow .14s ease, background .14s ease !important;
+    }
+
+    html body #body:focus,
+    html body textarea#body:focus,
+    html body .reply-textarea:focus,
+    html body .composer-textarea:focus {
+      border-color: rgba(37,211,102,.66) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.075), transparent 34%),
+        linear-gradient(180deg, #ffffff, #fbfff8) !important;
+      box-shadow:
+        0 0 0 5px rgba(37,211,102,.13),
+        inset 0 1px 0 rgba(255,255,255,.98),
+        0 20px 42px rgba(7,19,13,.095) !important;
+      outline: none !important;
+    }
+
+    html body #body::placeholder,
+    html body textarea#body::placeholder,
+    html body .reply-textarea::placeholder,
+    html body .composer-textarea::placeholder {
+      color: rgba(75, 91, 79, .50) !important;
+      font-weight: 850 !important;
+      letter-spacing: .02em !important;
+    }
+
+    /* Icon buttons */
+    html body .composer-icon-btn,
+    html body #sendImageBtn,
+    html body #sendVoiceBtn,
+    html body .attach-btn,
+    html body .voice-btn {
+      width: 46px !important;
+      height: 46px !important;
+      min-width: 46px !important;
+      border-radius: 18px !important;
+      border: 1px solid rgba(37,211,102,.30) !important;
+      background:
+        radial-gradient(circle at 26% 0%, rgba(255,255,255,.56), transparent 34%),
+        linear-gradient(180deg, #ffffff, #eff9ea) !important;
+      color: #0f5132 !important;
+      box-shadow:
+        0 15px 30px rgba(7,19,13,.085),
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+      transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease !important;
+    }
+
+    html body .composer-icon-btn:hover,
+    html body #sendImageBtn:hover,
+    html body #sendVoiceBtn:hover,
+    html body .attach-btn:hover,
+    html body .voice-btn:hover {
+      transform: translateY(-2px) !important;
+      border-color: rgba(37,211,102,.52) !important;
+      box-shadow:
+        0 22px 42px rgba(7,19,13,.110),
+        0 0 0 4px rgba(37,211,102,.10),
+        inset 0 1px 0 rgba(255,255,255,.98) !important;
+    }
+
+    /* Send button */
+    html body #sendBtn,
+    html body .send-btn {
+      width: 56px !important;
+      height: 56px !important;
+      min-width: 56px !important;
+      border-radius: 22px !important;
+      border: 1px solid rgba(255,255,255,.42) !important;
+      background:
+        radial-gradient(circle at 28% 0%, rgba(255,255,255,.42), transparent 38%),
+        linear-gradient(135deg, #0f8f4f 0%, #25d366 56%, #b8e870 100%) !important;
+      color: #ffffff !important;
+      box-shadow:
+        0 26px 54px rgba(37,211,102,.42),
+        0 0 0 5px rgba(37,211,102,.11),
+        inset 0 1px 0 rgba(255,255,255,.40) !important;
+      transition: transform .14s ease, box-shadow .14s ease, filter .14s ease !important;
+    }
+
+    html body #sendBtn:hover,
+    html body .send-btn:hover {
+      transform: translateY(-3px) scale(1.035) !important;
+      filter: saturate(1.05) brightness(1.02) !important;
+      box-shadow:
+        0 34px 68px rgba(37,211,102,.48),
+        0 0 0 6px rgba(37,211,102,.14),
+        inset 0 1px 0 rgba(255,255,255,.44) !important;
+    }
+
+    html body #sendBtn:active,
+    html body .send-btn:active {
+      transform: translateY(0) scale(.98) !important;
+    }
+
+    /* Ready / result badge */
+    html body #result,
+    html body .result-box,
+    html body .ready-badge,
+    html body .composer-ready {
+      min-height: 34px !important;
+      border-radius: 999px !important;
+      border: 1px dashed rgba(37,211,102,.30) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.86), rgba(246,252,243,.72)) !important;
+      color: rgba(44, 65, 50, .70) !important;
+      font-size: 10px !important;
+      font-weight: 950 !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.88),
+        0 8px 16px rgba(7,19,13,.035) !important;
+    }
+
+    /* Enter-to-send hint */
+    html body .premium-composer .composer-bottom-row::before,
+    html body .chat-panel .premium-composer .composer-bottom-row::before {
+      min-height: 31px !important;
+      padding-inline: 13px !important;
+      border-radius: 999px !important;
+      border-color: rgba(37,211,102,.30) !important;
+      background:
+        linear-gradient(180deg, #ffffff, #edf9e7) !important;
+      color: rgba(43,63,49,.76) !important;
+      font-size: 8.8px !important;
+      font-weight: 1000 !important;
+      letter-spacing: .01em !important;
+      box-shadow:
+        0 11px 20px rgba(7,19,13,.050),
+        inset 0 1px 0 rgba(255,255,255,.94) !important;
+    }
+
+    @media (max-width: 1180px) {
+      html body .reply-panel,
+      html body .composer-block,
+      html body .premium-composer,
+      html body .composer-form {
+        border-radius: 28px !important;
+      }
+
+      html body #body,
+      html body textarea#body,
+      html body .reply-textarea,
+      html body .composer-textarea {
+        min-height: 78px !important;
+        border-radius: 20px !important;
+      }
+
+      html body #sendBtn,
+      html body .send-btn {
+        width: 50px !important;
+        height: 50px !important;
+        min-width: 50px !important;
+        border-radius: 19px !important;
+      }
+
+      html body .composer-icon-btn,
+      html body #sendImageBtn,
+      html body #sendVoiceBtn {
+        width: 42px !important;
+        height: 42px !important;
+        min-width: 42px !important;
+      }
     }
 
   </style>
