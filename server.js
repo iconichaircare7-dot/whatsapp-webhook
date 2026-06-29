@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-123-dark-behind-blocks-restore-chat-image";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-124-v121-plus-dark-depth-behind-bubbles";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -32866,116 +32866,39 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     }
 
 
-    /* V31.5.8.60.3.9.122 - Dark Chat Stage Luxury.
-       Staging-only visual layer.
-       Scope: dark luxury background only for the chat conversation stage,
-       with readable light message bubbles and subtle Iconic watermark treatment.
+    /* V31.5.8.60.3.9.124 - V121 + Dark Depth Behind Bubbles.
+       Built from V121 clean base, not from V122/V123.
+       Goal: preserve the original conversation image exactly as V121,
+       and add dark luxury depth only behind message blocks using safe box-shadows.
+       No ::before/::after overrides on message bubbles.
        Does not touch history, /api/messages, Google Sheet, send logic, status logic,
        notifications logic, media logic, webhook, booking logic, or main/server.js. */
 
     :root {
-      --v122-chat-dark-1: #06110c;
-      --v122-chat-dark-2: #0b1d14;
-      --v122-chat-dark-3: #123522;
-      --v122-chat-green: #25d366;
-      --v122-chat-green-soft: rgba(37,211,102,.18);
-      --v122-chat-gold-soft: rgba(200,163,60,.13);
-      --v122-chat-line: rgba(37,211,102,.30);
-      --v122-chat-white: rgba(255,255,255,.96);
-      --v122-chat-shadow: 0 28px 68px rgba(0,0,0,.28);
+      --v124-dark-depth: rgba(4, 13, 9, .30);
+      --v124-dark-depth-strong: rgba(4, 13, 9, .42);
     }
 
-    /* Dark conversation stage */
-    html body #chatBody,
-    html body .chat-body {
-      position: relative !important;
-      background:
-        radial-gradient(circle at 18% 12%, rgba(37,211,102,.18), transparent 34%),
-        radial-gradient(circle at 82% 10%, rgba(200,163,60,.12), transparent 30%),
-        radial-gradient(circle at 50% 105%, rgba(37,211,102,.10), transparent 42%),
-        linear-gradient(135deg, var(--v122-chat-dark-1) 0%, var(--v122-chat-dark-2) 48%, var(--v122-chat-dark-3) 100%) !important;
-      border-top: 1px solid rgba(255,255,255,.08) !important;
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,.08),
-        inset 0 0 80px rgba(0,0,0,.20) !important;
-      overflow: auto !important;
-    }
-
-    html body #chatBody::before,
-    html body .chat-body::before {
-      content: "" !important;
-      position: absolute !important;
-      inset: 0 !important;
-      pointer-events: none !important;
-      background:
-        linear-gradient(115deg, rgba(255,255,255,.045), transparent 36%, rgba(255,255,255,.030)),
-        radial-gradient(circle at 50% 0%, rgba(255,255,255,.055), transparent 42%) !important;
-      opacity: 1 !important;
-      z-index: 0 !important;
-    }
-
-    html body #chatBody::after,
-    html body .chat-body::after {
-      content: "" !important;
-      position: absolute !important;
-      inset: 16px !important;
-      pointer-events: none !important;
-      border-radius: 28px !important;
-      border: 1px solid rgba(255,255,255,.060) !important;
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,.045),
-        inset 0 0 55px rgba(37,211,102,.035) !important;
-      z-index: 0 !important;
-    }
-
-    /* Keep the watermark, but make it luxury-subtle on dark */
-    html body .chat-watermark {
-      opacity: .145 !important;
-      filter:
-        saturate(1.18)
-        contrast(1.08)
-        brightness(1.08)
-        drop-shadow(0 18px 40px rgba(37,211,102,.18)) !important;
-      mix-blend-mode: screen !important;
-      z-index: 0 !important;
-    }
-
-    html body .chat-watermark img {
-      filter:
-        saturate(1.12)
-        contrast(1.05)
-        brightness(1.05)
-        drop-shadow(0 0 26px rgba(37,211,102,.22)) !important;
-    }
-
-    /* Make message/content layers sit above the dark stage overlays */
-    html body #chatBody > *:not(.chat-watermark),
-    html body .chat-body > *:not(.chat-watermark) {
-      position: relative !important;
-      z-index: 1 !important;
-    }
-
-    /* Message cards: brighter, glassier cards on dark background */
     html body .bubble,
     html body .message-bubble,
     html body .chat-message {
-      border-color: rgba(255,255,255,.18) !important;
-      background:
-        radial-gradient(circle at 0% 0%, rgba(37,211,102,.08), transparent 36%),
-        linear-gradient(180deg, rgba(255,255,255,.98), rgba(246,252,243,.94)) !important;
       box-shadow:
-        0 26px 58px rgba(0,0,0,.26),
-        0 0 0 1px rgba(255,255,255,.56) inset,
+        0 20px 0 -12px var(--v124-dark-depth-strong),
+        0 28px 54px rgba(4,13,9,.24),
+        0 8px 18px rgba(4,13,9,.16),
+        0 0 0 1px rgba(255,255,255,.58) inset,
         inset 0 1px 0 rgba(255,255,255,.96) !important;
     }
 
     html body .bubble.customer,
     html body .message-bubble.customer,
     html body .chat-message.customer {
-      border-left-color: rgba(37,211,102,.86) !important;
-      background:
-        radial-gradient(circle at 0% 0%, rgba(37,211,102,.16), transparent 38%),
-        linear-gradient(180deg, #ffffff, #effbe8) !important;
+      box-shadow:
+        -10px 14px 0 -8px rgba(5,18,12,.34),
+        0 28px 54px rgba(4,13,9,.22),
+        0 0 26px rgba(37,211,102,.070),
+        0 0 0 1px rgba(255,255,255,.58) inset,
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
     }
 
     html body .bubble.bot,
@@ -32987,258 +32910,79 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     html body .chat-message.bot,
     html body .chat-message.staff,
     html body .chat-message.team {
-      border-right-color: rgba(37,211,102,.90) !important;
-      background:
-        radial-gradient(circle at 100% 0%, rgba(37,211,102,.13), transparent 38%),
-        linear-gradient(180deg, #ffffff, #f8fff5) !important;
+      box-shadow:
+        10px 14px 0 -8px rgba(5,18,12,.34),
+        0 28px 54px rgba(4,13,9,.22),
+        0 0 26px rgba(37,211,102,.060),
+        0 0 0 1px rgba(255,255,255,.58) inset,
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
     }
 
     html body .bubble.failed,
     html body .message-bubble.failed,
     html body .chat-message.failed {
-      border-color: rgba(255,255,255,.18) !important;
-      border-right-color: rgba(239,68,68,.80) !important;
       box-shadow:
-        0 26px 58px rgba(0,0,0,.26),
-        0 0 0 1px rgba(255,255,255,.54) inset,
-        inset 0 1px 0 rgba(255,255,255,.96) !important;
-    }
-
-    /* Soft depth for message rows against the dark stage */
-    html body .message-row,
-    html body .bubble-row,
-    html body .chat-row {
-      filter: drop-shadow(0 14px 24px rgba(0,0,0,.12)) !important;
-    }
-
-    /* Keep empty state readable on dark */
-    html body #chatBody .actual-empty-state,
-    html body #chatBody .empty-state,
-    html body #chatBody .no-messages,
-    html body .chat-body .actual-empty-state,
-    html body .chat-body .empty-state,
-    html body .chat-body .no-messages {
-      background:
-        radial-gradient(circle at 50% 0%, rgba(37,211,102,.22), transparent 42%),
-        linear-gradient(180deg, rgba(255,255,255,.96), rgba(240,250,234,.90)) !important;
-      border-color: rgba(255,255,255,.20) !important;
-      box-shadow:
-        0 30px 72px rgba(0,0,0,.28),
+        10px 14px 0 -8px rgba(62,14,14,.28),
+        0 28px 54px rgba(4,13,9,.22),
+        0 0 26px rgba(239,68,68,.065),
         0 0 0 1px rgba(255,255,255,.58) inset,
         inset 0 1px 0 rgba(255,255,255,.96) !important;
     }
 
-    /* Composer transition into the dark stage */
+    html body .bubble:hover,
+    html body .message-bubble:hover,
+    html body .chat-message:hover {
+      transform: translateY(-1px) !important;
+      box-shadow:
+        0 22px 0 -12px rgba(4,13,9,.44),
+        0 34px 66px rgba(4,13,9,.28),
+        0 0 0 3px rgba(37,211,102,.055),
+        0 0 0 1px rgba(255,255,255,.62) inset,
+        inset 0 1px 0 rgba(255,255,255,.98) !important;
+    }
+
+    html body .bubble.customer:hover,
+    html body .message-bubble.customer:hover,
+    html body .chat-message.customer:hover {
+      box-shadow:
+        -12px 16px 0 -8px rgba(5,18,12,.42),
+        0 34px 66px rgba(4,13,9,.27),
+        0 0 0 3px rgba(37,211,102,.060),
+        0 0 0 1px rgba(255,255,255,.62) inset,
+        inset 0 1px 0 rgba(255,255,255,.98) !important;
+    }
+
+    html body .bubble.bot:hover,
+    html body .bubble.staff:hover,
+    html body .bubble.team:hover,
+    html body .message-bubble.bot:hover,
+    html body .message-bubble.staff:hover,
+    html body .message-bubble.team:hover,
+    html body .chat-message.bot:hover,
+    html body .chat-message.staff:hover,
+    html body .chat-message.team:hover {
+      box-shadow:
+        12px 16px 0 -8px rgba(5,18,12,.42),
+        0 34px 66px rgba(4,13,9,.27),
+        0 0 0 3px rgba(37,211,102,.060),
+        0 0 0 1px rgba(255,255,255,.62) inset,
+        inset 0 1px 0 rgba(255,255,255,.98) !important;
+    }
+
     html body .reply-panel,
     html body .composer-block,
     html body .premium-composer,
     html body .composer-form {
-      border-top-color: rgba(37,211,102,.42) !important;
       box-shadow:
-        0 -18px 52px rgba(0,0,0,.18),
+        0 -12px 46px rgba(4,13,9,.10),
         0 28px 64px rgba(7,19,13,.105),
         0 0 0 1px rgba(255,255,255,.76) inset,
         inset 0 1px 0 rgba(255,255,255,.98) !important;
     }
 
-    /* Chat panel frame around the dark area */
-    html body .chat-panel {
-      background:
-        linear-gradient(180deg, rgba(255,255,255,.98), rgba(239,250,233,.92)) !important;
-      box-shadow:
-        0 36px 88px rgba(7,19,13,.18),
-        0 0 0 1px rgba(255,255,255,.72) inset,
-        inset 0 1px 0 rgba(255,255,255,.96) !important;
-    }
-
     .reply-panel::after,
     .reference-version-badge::after {
-      content: "V122" !important;
-    }
-
-    @media (max-width: 1180px) {
-      html body #chatBody,
-      html body .chat-body {
-        background:
-          radial-gradient(circle at 18% 10%, rgba(37,211,102,.16), transparent 34%),
-          linear-gradient(135deg, #06110c 0%, #0b1d14 52%, #123522 100%) !important;
-      }
-
-      html body .chat-watermark {
-        opacity: .12 !important;
-      }
-    }
-
-
-    /* V31.5.8.60.3.9.123 - Restore chat image, dark only behind blocks.
-       Fixes V122 misunderstanding:
-       - keep chat background image / watermark visible
-       - remove full dark fill from conversation stage
-       - add dark luxury backplate only behind message blocks
-       Staging-only visual layer. */
-
-    :root {
-      --v123-block-dark-a: rgba(5, 12, 9, .62);
-      --v123-block-dark-b: rgba(10, 34, 22, .46);
-      --v123-block-dark-c: rgba(16, 66, 38, .22);
-      --v123-block-red-a: rgba(28, 10, 10, .58);
-      --v123-block-red-b: rgba(84, 22, 22, .24);
-    }
-
-    /* 1) Restore the conversation stage and do not paint over the chat background image */
-    html body #chatBody,
-    html body .chat-body {
-      background: transparent !important;
-      box-shadow: none !important;
-      border-top: 1px solid rgba(255,255,255,.05) !important;
-    }
-
-    html body #chatBody::before,
-    html body .chat-body::before,
-    html body #chatBody::after,
-    html body .chat-body::after {
-      content: none !important;
-      background: none !important;
-      border: 0 !important;
-      box-shadow: none !important;
-    }
-
-    /* 2) Restore watermark/logo visibility inside the chat area */
-    html body .chat-watermark {
-      opacity: .17 !important;
-      mix-blend-mode: normal !important;
-      filter:
-        saturate(1.08)
-        contrast(1.03)
-        brightness(1.03)
-        drop-shadow(0 14px 32px rgba(37,211,102,.12)) !important;
-      z-index: 0 !important;
-    }
-
-    html body .chat-watermark img {
-      filter:
-        saturate(1.06)
-        contrast(1.02)
-        brightness(1.02)
-        drop-shadow(0 0 18px rgba(37,211,102,.14)) !important;
-    }
-
-    html body #chatBody > *:not(.chat-watermark),
-    html body .chat-body > *:not(.chat-watermark) {
-      position: relative !important;
-      z-index: 1 !important;
-    }
-
-    /* 3) Dark premium backplate only behind message blocks */
-    html body .bubble,
-    html body .message-bubble,
-    html body .chat-message {
-      position: relative !important;
-      isolation: isolate !important;
-      overflow: visible !important;
-    }
-
-    html body .bubble::before,
-    html body .message-bubble::before,
-    html body .chat-message::before {
-      content: "" !important;
-      position: absolute !important;
-      inset: -11px !important;
-      border-radius: 32px !important;
-      background:
-        radial-gradient(circle at 18% 0%, rgba(255,255,255,.06), transparent 32%),
-        linear-gradient(135deg,
-          var(--v123-block-dark-a) 0%,
-          var(--v123-block-dark-b) 58%,
-          var(--v123-block-dark-c) 100%) !important;
-      box-shadow:
-        0 20px 42px rgba(0,0,0,.18),
-        0 10px 22px rgba(0,0,0,.10),
-        inset 0 1px 0 rgba(255,255,255,.08) !important;
-      backdrop-filter: blur(9px) saturate(1.02) !important;
-      -webkit-backdrop-filter: blur(9px) saturate(1.02) !important;
-      z-index: -1 !important;
-      opacity: .92 !important;
-    }
-
-    html body .bubble.customer::before,
-    html body .message-bubble.customer::before,
-    html body .chat-message.customer::before {
-      background:
-        radial-gradient(circle at 18% 0%, rgba(255,255,255,.06), transparent 32%),
-        linear-gradient(135deg,
-          rgba(6,14,10,.60) 0%,
-          rgba(12,42,26,.42) 62%,
-          rgba(37,211,102,.16) 100%) !important;
-    }
-
-    html body .bubble.bot::before,
-    html body .bubble.staff::before,
-    html body .bubble.team::before,
-    html body .message-bubble.bot::before,
-    html body .message-bubble.staff::before,
-    html body .message-bubble.team::before,
-    html body .chat-message.bot::before,
-    html body .chat-message.staff::before,
-    html body .chat-message.team::before {
-      background:
-        radial-gradient(circle at 82% 0%, rgba(255,255,255,.06), transparent 34%),
-        linear-gradient(135deg,
-          rgba(5,12,10,.58) 0%,
-          rgba(12,34,24,.42) 58%,
-          rgba(30,100,60,.14) 100%) !important;
-    }
-
-    html body .bubble.failed::before,
-    html body .message-bubble.failed::before,
-    html body .chat-message.failed::before {
-      background:
-        radial-gradient(circle at 18% 0%, rgba(255,255,255,.05), transparent 32%),
-        linear-gradient(135deg,
-          var(--v123-block-red-a) 0%,
-          var(--v123-block-red-b) 100%) !important;
-      box-shadow:
-        0 20px 42px rgba(80,18,18,.16),
-        0 10px 22px rgba(0,0,0,.11),
-        inset 0 1px 0 rgba(255,255,255,.07) !important;
-    }
-
-    /* 4) Slightly stronger clarity so light bubbles stay crisp over the restored image */
-    html body .bubble,
-    html body .message-bubble,
-    html body .chat-message {
-      box-shadow:
-        0 22px 48px rgba(7,19,13,.11),
-        0 0 0 1px rgba(255,255,255,.58) inset,
-        inset 0 1px 0 rgba(255,255,255,.96) !important;
-    }
-
-    html body .bubble p,
-    html body .bubble .message-text,
-    html body .message-bubble p,
-    html body .message-bubble .message-text,
-    html body .chat-message p,
-    html body .chat-message .message-text {
-      color: #07130d !important;
-    }
-
-    /* 5) Keep version badge correct */
-    .reply-panel::after,
-    .reference-version-badge::after {
-      content: "V123" !important;
-    }
-
-    @media (max-width: 1180px) {
-      html body .bubble::before,
-      html body .message-bubble::before,
-      html body .chat-message::before {
-        inset: -8px !important;
-        border-radius: 26px !important;
-      }
-
-      html body .chat-watermark {
-        opacity: .15 !important;
-      }
+      content: "V124" !important;
     }
 
   </style>
