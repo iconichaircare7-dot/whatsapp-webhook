@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-137-clean-premium-loading-mark";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-138-luxury-loading-polish-plus";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -34470,9 +34470,9 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     }
 
 
-    /* V31.5.8.60.3.9.137 - Clean Premium Loading Mark.
+    /* V31.5.8.60.3.9.138 - Luxury Loading Polish Plus.
        Staging-only visual refinement for loading screen.
-       Scope: loading wordmark + spacing only.
+       Scope: loading overlay CSS/HTML only.
        Does not touch loading logic, history, /api/messages, Google Sheet, send logic,
        status logic, media logic, notifications logic, webhook, booking logic, or main/server.js. */
 
@@ -34480,7 +34480,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     html body .reference-version-badge::after,
     html body .right-reference-panel .reference-version-badge::after,
     html body .customer-crm-profile .reference-version-badge::after {
-      content: "V137" !important;
+      content: "V138" !important;
     }
 
     html body .iconic-loading-card {
@@ -34583,18 +34583,312 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       }
     }
 
+
+
+    html body .iconic-loading-overlay {
+      background:
+        radial-gradient(circle at 18% 10%, rgba(37,211,102,.24), transparent 33%),
+        radial-gradient(circle at 84% 10%, rgba(201,172,76,.18), transparent 29%),
+        radial-gradient(circle at 50% 112%, rgba(15,143,79,.15), transparent 42%),
+        linear-gradient(135deg, #fbfff8 0%, #edf9e7 46%, #f8fff5 100%) !important;
+    }
+
+    html body .iconic-loading-overlay::before {
+      background:
+        linear-gradient(115deg, rgba(255,255,255,.62), transparent 38%, rgba(37,211,102,.08)),
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,.66), transparent 46%),
+        repeating-linear-gradient(
+          90deg,
+          rgba(15,143,79,.02) 0px,
+          rgba(15,143,79,.02) 1px,
+          transparent 1px,
+          transparent 32px
+        ) !important;
+      opacity: .98 !important;
+    }
+
+    html body .iconic-loading-overlay::after {
+      width: 620px !important;
+      height: 620px !important;
+      background:
+        radial-gradient(circle, rgba(37,211,102,.14), transparent 62%) !important;
+      filter: blur(10px) !important;
+      animation-duration: 5.4s !important;
+    }
+
+    html body .iconic-loading-card {
+      width: min(496px, calc(100vw - 40px)) !important;
+      margin-top: -56px !important;
+      border-radius: 40px !important;
+      border: 1px solid rgba(37,211,102,.34) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.20), transparent 34%),
+        radial-gradient(circle at 100% 0%, rgba(201,172,76,.16), transparent 30%),
+        linear-gradient(180deg, rgba(255,255,255,.99), rgba(237,249,231,.95)) !important;
+      box-shadow:
+        0 52px 120px rgba(7,19,13,.19),
+        0 22px 44px rgba(37,211,102,.10),
+        0 0 0 1px rgba(255,255,255,.84) inset,
+        inset 0 1px 0 rgba(255,255,255,.98) !important;
+      padding: 42px 36px 32px !important;
+      overflow: visible !important;
+    }
+
+    html body .iconic-loading-card::before {
+      left: 30px !important;
+      right: 30px !important;
+      height: 5px !important;
+      background:
+        linear-gradient(90deg, transparent, rgba(37,211,102,.96), rgba(201,172,76,.74), rgba(37,211,102,.82), transparent) !important;
+      box-shadow:
+        0 12px 26px rgba(37,211,102,.18),
+        0 0 34px rgba(201,172,76,.16) !important;
+    }
+
+    html body .iconic-loading-card::after {
+      inset: 14px !important;
+      border-radius: 32px !important;
+      border: 1px solid rgba(37,211,102,.08) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.62),
+        inset 0 0 52px rgba(37,211,102,.035) !important;
+    }
+
+    html body .iconic-loading-card-decor {
+      position: absolute !important;
+      border-radius: 999px !important;
+      pointer-events: none !important;
+      z-index: 0 !important;
+    }
+
+    html body .iconic-loading-card-decor.is-left {
+      width: 98px !important;
+      height: 98px !important;
+      top: -18px !important;
+      left: -14px !important;
+      background: radial-gradient(circle, rgba(37,211,102,.16), rgba(37,211,102,.05) 58%, transparent 72%) !important;
+      filter: blur(.2px) !important;
+    }
+
+    html body .iconic-loading-card-decor.is-right {
+      width: 124px !important;
+      height: 124px !important;
+      bottom: -24px !important;
+      right: -20px !important;
+      background: radial-gradient(circle, rgba(201,172,76,.15), rgba(201,172,76,.04) 58%, transparent 74%) !important;
+    }
+
+    html body .iconic-loading-copy,
+    html body .iconic-loading-logo-wrap,
+    html body .iconic-loading-progress,
+    html body .iconic-loading-dots,
+    html body .iconic-loading-status-row {
+      position: relative !important;
+      z-index: 1 !important;
+    }
+
+    html body .iconic-loading-logo-wrap {
+      width: 278px !important;
+      height: 88px !important;
+      margin: 0 auto 18px !important;
+    }
+
+    html body .iconic-loading-wordmark {
+      font-size: 42px !important;
+      line-height: .88 !important;
+      letter-spacing: -.045em !important;
+      text-shadow:
+        0 1px 0 rgba(255,255,255,.92),
+        0 16px 28px rgba(7,19,13,.12) !important;
+      filter: drop-shadow(0 12px 20px rgba(7,19,13,.10)) !important;
+    }
+
+    html body .iconic-loading-wordmark span {
+      background: linear-gradient(180deg, #07130d 0%, #13301f 46%, #09150f 100%) !important;
+      -webkit-background-clip: text !important;
+      background-clip: text !important;
+      -webkit-text-fill-color: transparent !important;
+    }
+
+    html body .iconic-loading-wordmark::after {
+      content: "" !important;
+      display: block !important;
+      width: 74px !important;
+      height: 3px !important;
+      margin: 11px auto 0 !important;
+      border-radius: 999px !important;
+      background: linear-gradient(90deg, rgba(37,211,102,.16), rgba(201,172,76,.72), rgba(37,211,102,.16)) !important;
+      box-shadow: 0 8px 16px rgba(201,172,76,.12) !important;
+    }
+
+    html body .iconic-loading-wordmark-sub {
+      margin-top: 10px !important;
+      color: rgba(20, 49, 30, .58) !important;
+      font-size: 9px !important;
+      font-weight: 1000 !important;
+      letter-spacing: .48em !important;
+    }
+
+    html body .iconic-loading-kicker {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      min-height: 28px !important;
+      padding: 0 14px !important;
+      margin: 6px auto 12px !important;
+      border-radius: 999px !important;
+      border: 1px solid rgba(37,211,102,.16) !important;
+      background: rgba(255,255,255,.56) !important;
+      box-shadow:
+        0 8px 16px rgba(7,19,13,.04),
+        inset 0 1px 0 rgba(255,255,255,.74) !important;
+      color: rgba(38, 70, 49, .74) !important;
+      font-size: 10px !important;
+      letter-spacing: .22em !important;
+    }
+
+    html body .iconic-loading-title {
+      font-size: 30px !important;
+      margin-bottom: 10px !important;
+      letter-spacing: -.045em !important;
+      line-height: 1.02 !important;
+      text-shadow: 0 1px 0 rgba(255,255,255,.76) !important;
+    }
+
+    html body .iconic-loading-subtitle {
+      max-width: 382px !important;
+      color: rgba(57, 76, 62, .78) !important;
+      font-size: 12.5px !important;
+      line-height: 1.62 !important;
+    }
+
+    html body .iconic-loading-progress {
+      height: 11px !important;
+      margin: 26px 0 16px !important;
+      border: 1px solid rgba(37,211,102,.19) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.94), rgba(233,247,227,.78)) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.98),
+        0 11px 20px rgba(7,19,13,.05) !important;
+    }
+
+    html body .iconic-loading-progress span {
+      width: 38% !important;
+      background: linear-gradient(90deg, #0f8f4f 0%, #25d366 56%, #c8de77 100%) !important;
+      box-shadow:
+        0 0 24px rgba(37,211,102,.34),
+        inset 0 1px 0 rgba(255,255,255,.36) !important;
+      animation-duration: 1.36s !important;
+    }
+
+    html body .iconic-loading-status-row {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 8px !important;
+      flex-wrap: wrap !important;
+      margin-top: 4px !important;
+      margin-bottom: 2px !important;
+    }
+
+    html body .iconic-loading-status-pill {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      min-height: 26px !important;
+      padding: 0 11px !important;
+      border-radius: 999px !important;
+      border: 1px solid rgba(37,211,102,.14) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.88), rgba(244,251,240,.82)) !important;
+      color: rgba(28, 60, 39, .74) !important;
+      font-size: 10px !important;
+      font-weight: 900 !important;
+      letter-spacing: .05em !important;
+      box-shadow:
+        0 8px 16px rgba(7,19,13,.035),
+        inset 0 1px 0 rgba(255,255,255,.82) !important;
+    }
+
+    html body .iconic-loading-status-pill.is-accent {
+      border-color: rgba(201,172,76,.22) !important;
+      color: rgba(97, 75, 22, .82) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.90), rgba(252,248,232,.84)) !important;
+    }
+
+    html body .iconic-loading-dots {
+      gap: 10px !important;
+      height: 22px !important;
+      margin-top: 6px !important;
+    }
+
+    html body .iconic-loading-dots i {
+      width: 8px !important;
+      height: 8px !important;
+      background: linear-gradient(135deg, #25d366, #a6df67) !important;
+      box-shadow:
+        0 8px 16px rgba(37,211,102,.28),
+        inset 0 1px 0 rgba(255,255,255,.34) !important;
+    }
+
+    @media (max-width: 700px) {
+      html body .iconic-loading-card {
+        width: min(430px, calc(100vw - 32px)) !important;
+        margin-top: -30px !important;
+        padding: 34px 24px 26px !important;
+        border-radius: 32px !important;
+      }
+
+      html body .iconic-loading-logo-wrap {
+        width: 236px !important;
+        height: 78px !important;
+      }
+
+      html body .iconic-loading-wordmark {
+        font-size: 35px !important;
+      }
+
+      html body .iconic-loading-wordmark::after {
+        width: 62px !important;
+      }
+
+      html body .iconic-loading-wordmark-sub {
+        letter-spacing: .36em !important;
+      }
+
+      html body .iconic-loading-title {
+        font-size: 24px !important;
+      }
+
+      html body .iconic-loading-subtitle {
+        font-size: 12px !important;
+      }
+
+      html body .iconic-loading-status-row {
+        gap: 6px !important;
+      }
+
+      html body .iconic-loading-status-pill {
+        min-height: 24px !important;
+        padding: 0 10px !important;
+        font-size: 9px !important;
+      }
+    }
+
   </style>
 </head>
 <body>
       <div class="iconic-loading-overlay" id="iconicLoadingOverlay" aria-live="polite" aria-label="Loading Team Inbox">
         <div class="iconic-loading-card">
+          <span class="iconic-loading-card-decor is-left" aria-hidden="true"></span>
+          <span class="iconic-loading-card-decor is-right" aria-hidden="true"></span>
           <div class="iconic-loading-logo-wrap">
-            
             <div class="iconic-loading-wordmark" aria-label="Iconic Hair Care">
               <span>ICONIC</span>
             </div>
             <div class="iconic-loading-wordmark-sub">HAIR CARE</div>
-
           </div>
           <div class="iconic-loading-copy">
             <div class="iconic-loading-kicker">ICONIC TEAM INBOX</div>
@@ -34603,6 +34897,11 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
           </div>
           <div class="iconic-loading-progress" aria-hidden="true">
             <span></span>
+          </div>
+          <div class="iconic-loading-status-row" aria-hidden="true">
+            <span class="iconic-loading-status-pill">Syncing inbox</span>
+            <span class="iconic-loading-status-pill is-accent">Loading CRM</span>
+            <span class="iconic-loading-status-pill">Preparing history</span>
           </div>
           <div class="iconic-loading-dots" aria-hidden="true">
             <i></i><i></i><i></i>
