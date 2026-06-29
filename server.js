@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-119-executive-theme-balance-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-120-luxury-depth-polish-no-chat-background-touch";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -31777,6 +31777,648 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     .reply-panel::after,
     .reference-version-badge::after {
       content: "V119" !important;
+    }
+
+
+    /* V31.5.8.60.3.9.120 - Luxury Depth Polish.
+       Staging-only visual layer.
+       This patch intentionally does not target the chat background or watermark selectors.
+       Scope: stronger depth for sidebar, conversation list, chat header frame,
+       message bubbles, CRM, composer, controls, buttons and badges.
+       Does not touch history, /api/messages, Google Sheet, send logic, status logic,
+       notifications logic, media logic, webhook, booking logic, or main/server.js. */
+
+    :root {
+      --v120-ink: #06110c;
+      --v120-green: #25d366;
+      --v120-green-dark: #0f8f4f;
+      --v120-gold: #c8a33c;
+      --v120-line: rgba(37,211,102,.32);
+      --v120-line-soft: rgba(169,207,156,.70);
+      --v120-shadow-card: 0 18px 42px rgba(7,19,13,.095);
+      --v120-shadow-deep: 0 32px 78px rgba(7,19,13,.145);
+      --v120-inner: inset 0 1px 0 rgba(255,255,255,.95);
+    }
+
+    html body .app {
+      gap: 18px !important;
+    }
+
+    html body .topbar,
+    html body .v18-topbar,
+    html body .app > .panel,
+    html body .chat-panel,
+    html body .right-reference-panel {
+      border-color: var(--v120-line) !important;
+      box-shadow:
+        var(--v120-shadow-deep),
+        0 0 0 1px rgba(255,255,255,.72) inset,
+        var(--v120-inner) !important;
+    }
+
+    html body .app > .panel::before,
+    html body .chat-panel::before,
+    html body .right-reference-panel::before {
+      height: 4px !important;
+      left: 16px !important;
+      right: 16px !important;
+      background:
+        linear-gradient(90deg,
+          transparent,
+          rgba(37,211,102,.92),
+          rgba(200,163,60,.56),
+          rgba(37,211,102,.74),
+          transparent) !important;
+      box-shadow: 0 8px 20px rgba(37,211,102,.16) !important;
+    }
+
+    /* Top controls */
+    html body .topbar,
+    html body .v18-topbar {
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.22), transparent 34%),
+        radial-gradient(circle at 100% 0%, rgba(200,163,60,.12), transparent 30%),
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(241,251,236,.90)) !important;
+    }
+
+    html body .topbar-title {
+      color: #06110c !important;
+      font-weight: 1000 !important;
+      letter-spacing: -.035em !important;
+      text-shadow: 0 1px 0 rgba(255,255,255,.72) !important;
+    }
+
+    html body .topbar-quick,
+    html body .topbar-system,
+    html body .topbar-notification {
+      border-color: rgba(37,211,102,.30) !important;
+      background: linear-gradient(180deg, #ffffff, #eff9ea) !important;
+      box-shadow:
+        0 14px 30px rgba(7,19,13,.075),
+        var(--v120-inner) !important;
+    }
+
+    html body .topbar-quick:hover,
+    html body .topbar-notification:hover {
+      transform: translateY(-1px) !important;
+      box-shadow:
+        0 18px 38px rgba(7,19,13,.10),
+        0 0 0 3px rgba(37,211,102,.08),
+        var(--v120-inner) !important;
+    }
+
+    /* Sidebar */
+    html body .main-sidebar {
+      border-right-color: rgba(37,211,102,.25) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.20), transparent 36%),
+        radial-gradient(circle at 100% 78%, rgba(200,163,60,.10), transparent 34%),
+        linear-gradient(180deg, #fbfff8 0%, #f1faed 44%, #eaf7e3 100%) !important;
+      box-shadow:
+        20px 0 54px rgba(7,19,13,.090),
+        inset -1px 0 0 rgba(255,255,255,.92) !important;
+    }
+
+    html body .main-sidebar .sidebar-brand {
+      border-color: rgba(37,211,102,.25) !important;
+      border-radius: 24px !important;
+      box-shadow:
+        0 18px 40px rgba(7,19,13,.080),
+        var(--v120-inner) !important;
+    }
+
+    html body .main-sidebar .sidebar-item {
+      min-height: 42px !important;
+      margin: 3px 0 !important;
+      border-radius: 18px !important;
+      color: #102018 !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.66), rgba(244,252,240,.44)) !important;
+      border: 1px solid rgba(37,211,102,.07) !important;
+      font-weight: 950 !important;
+    }
+
+    html body .main-sidebar .sidebar-item .nav-icon {
+      width: 28px !important;
+      height: 28px !important;
+      border-radius: 12px !important;
+      color: #0f5132 !important;
+      border-color: rgba(37,211,102,.24) !important;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,.92), transparent 42%),
+        linear-gradient(180deg, #ffffff, #eaf9e4) !important;
+      box-shadow:
+        0 9px 18px rgba(7,19,13,.055),
+        var(--v120-inner) !important;
+    }
+
+    html body .main-sidebar .sidebar-item:hover {
+      transform: translateX(3px) translateY(-1px) !important;
+      border-color: rgba(37,211,102,.30) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.16), transparent 46%),
+        linear-gradient(180deg, #ffffff, #eefae8) !important;
+      box-shadow:
+        0 16px 32px rgba(7,19,13,.085),
+        var(--v120-inner) !important;
+    }
+
+    html body .main-sidebar .sidebar-item.active,
+    html body .main-sidebar .sidebar-item[aria-current="page"] {
+      transform: translateX(2px) !important;
+      border-color: rgba(37,211,102,.56) !important;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(255,255,255,.54), transparent 36%),
+        linear-gradient(135deg, #25d366 0%, #a9e76d 100%) !important;
+      box-shadow:
+        0 18px 38px rgba(37,211,102,.245),
+        inset 0 1px 0 rgba(255,255,255,.52) !important;
+    }
+
+    html body .main-sidebar .sidebar-branches,
+    html body .main-sidebar .premium-branch-card,
+    html body .main-sidebar .sidebar-user {
+      border-color: rgba(37,211,102,.26) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.13), transparent 38%),
+        linear-gradient(180deg, rgba(255,255,255,.94), rgba(238,250,231,.84)) !important;
+      box-shadow:
+        0 18px 38px rgba(7,19,13,.078),
+        var(--v120-inner) !important;
+    }
+
+    /* Conversation list */
+    html body #searchBox,
+    html body .reference-search-row input {
+      height: 43px !important;
+      border-radius: 18px !important;
+      border: 1px solid rgba(37,211,102,.38) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.075), transparent 40%),
+        linear-gradient(180deg, #ffffff, #f5fcf2) !important;
+      box-shadow:
+        0 13px 28px rgba(7,19,13,.060),
+        var(--v120-inner) !important;
+    }
+
+    html body .reference-pill,
+    html body .reference-branch-tab,
+    html body .needs-action-card {
+      border-radius: 15px !important;
+      border-color: rgba(37,211,102,.25) !important;
+      background: linear-gradient(180deg, #ffffff, #f2faee) !important;
+      box-shadow:
+        0 9px 19px rgba(7,19,13,.045),
+        var(--v120-inner) !important;
+      font-weight: 930 !important;
+    }
+
+    html body .reference-pill.active,
+    html body .reference-branch-tab.active,
+    html body .needs-action-card.active,
+    html body .needs-action-card.is-active {
+      background:
+        radial-gradient(circle at 24% 0%, rgba(255,255,255,.50), transparent 34%),
+        linear-gradient(135deg, #25d366, #b5e878) !important;
+      color: #06110c !important;
+      border-color: rgba(37,211,102,.52) !important;
+      box-shadow:
+        0 15px 30px rgba(37,211,102,.20),
+        inset 0 1px 0 rgba(255,255,255,.52) !important;
+    }
+
+    html body .conversation-card {
+      position: relative !important;
+      border-radius: 22px !important;
+      border: 1px solid rgba(37,211,102,.21) !important;
+      border-left: 5px solid rgba(37,211,102,.64) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.085), transparent 32%),
+        linear-gradient(180deg, rgba(255,255,255,.99), rgba(242,250,238,.93)) !important;
+      box-shadow:
+        0 16px 36px rgba(7,19,13,.078),
+        var(--v120-inner) !important;
+      overflow: hidden !important;
+    }
+
+    html body .conversation-card::after {
+      content: "" !important;
+      position: absolute !important;
+      top: 0 !important;
+      right: 0 !important;
+      width: 64px !important;
+      height: 100% !important;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.34)) !important;
+      pointer-events: none !important;
+      opacity: .72 !important;
+    }
+
+    html body .conversation-card:hover {
+      transform: translateY(-2px) !important;
+      border-color: rgba(37,211,102,.44) !important;
+      border-left-color: var(--v120-gold) !important;
+      box-shadow:
+        0 24px 48px rgba(7,19,13,.115),
+        0 0 0 3px rgba(37,211,102,.055),
+        var(--v120-inner) !important;
+    }
+
+    html body .conversation-card.active,
+    html body .conversation-card.selected {
+      border-color: rgba(37,211,102,.58) !important;
+      border-left-color: var(--v120-gold) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.20), transparent 40%),
+        linear-gradient(180deg, #ffffff, #ecfae6) !important;
+      box-shadow:
+        0 26px 54px rgba(37,211,102,.22),
+        0 0 0 3px rgba(37,211,102,.10),
+        var(--v120-inner) !important;
+    }
+
+    html body .conv-name,
+    html body .conversation-card .conv-name {
+      color: #06110c !important;
+      font-weight: 1000 !important;
+      letter-spacing: -.012em !important;
+    }
+
+    html body .conv-preview {
+      color: rgba(49, 67, 53, .78) !important;
+      font-weight: 780 !important;
+    }
+
+    /* Chat frame and header only; not the chat background */
+    html body .chat-panel {
+      border-radius: 32px !important;
+      border-color: rgba(37,211,102,.34) !important;
+      box-shadow:
+        0 34px 80px rgba(7,19,13,.145),
+        0 0 0 1px rgba(255,255,255,.72) inset,
+        var(--v120-inner) !important;
+    }
+
+    html body .chat-head {
+      min-height: 92px !important;
+      border-bottom: 1px solid rgba(255,255,255,.16) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.34), transparent 36%),
+        radial-gradient(circle at 100% 0%, rgba(200,163,60,.24), transparent 32%),
+        linear-gradient(135deg, #06110c 0%, #0f2418 46%, #183e27 100%) !important;
+      box-shadow:
+        0 22px 48px rgba(7,19,13,.24),
+        inset 0 1px 0 rgba(255,255,255,.13),
+        inset 0 -1px 0 rgba(37,211,102,.18) !important;
+    }
+
+    html body .chat-head::after {
+      content: "" !important;
+      position: absolute !important;
+      left: 22px !important;
+      right: 22px !important;
+      bottom: 0 !important;
+      height: 1px !important;
+      background:
+        linear-gradient(90deg, transparent, rgba(37,211,102,.62), rgba(200,163,60,.40), transparent) !important;
+      pointer-events: none !important;
+    }
+
+    html body .chat-title {
+      color: #ffffff !important;
+      font-weight: 1000 !important;
+      letter-spacing: -.022em !important;
+      text-shadow: 0 1px 0 rgba(0,0,0,.32) !important;
+    }
+
+    html body .chat-actions {
+      border-radius: 22px !important;
+      border: 1px solid rgba(255,255,255,.16) !important;
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.045)) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.14),
+        0 14px 30px rgba(0,0,0,.13) !important;
+    }
+
+    html body .chat-actions .mini-btn,
+    html body .chat-actions select,
+    html body #conversationStatusSelect {
+      min-height: 36px !important;
+      border-radius: 15px !important;
+      border: 1px solid rgba(255,255,255,.22) !important;
+      background: linear-gradient(180deg, #ffffff, #eff9ea) !important;
+      color: #06110c !important;
+      font-weight: 1000 !important;
+      box-shadow:
+        0 12px 26px rgba(0,0,0,.16),
+        var(--v120-inner) !important;
+    }
+
+    /* Message bubbles */
+    html body .bubble,
+    html body .message-bubble,
+    html body .chat-message {
+      border-radius: 24px !important;
+      border: 1px solid rgba(37,211,102,.22) !important;
+      box-shadow:
+        0 20px 44px rgba(7,19,13,.105),
+        0 1px 0 rgba(255,255,255,.68) inset,
+        var(--v120-inner) !important;
+      overflow: visible !important;
+    }
+
+    html body .bubble.customer,
+    html body .message-bubble.customer,
+    html body .chat-message.customer {
+      border-left: 5px solid rgba(37,211,102,.72) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.12), transparent 36%),
+        linear-gradient(180deg, #ffffff, #eef9e8) !important;
+    }
+
+    html body .bubble.bot,
+    html body .bubble.staff,
+    html body .bubble.team,
+    html body .message-bubble.bot,
+    html body .message-bubble.staff,
+    html body .message-bubble.team,
+    html body .chat-message.bot,
+    html body .chat-message.staff,
+    html body .chat-message.team {
+      border-right: 5px solid rgba(37,211,102,.82) !important;
+      background:
+        radial-gradient(circle at 100% 0%, rgba(37,211,102,.10), transparent 36%),
+        linear-gradient(180deg, #ffffff, #f8fff5) !important;
+    }
+
+    html body .bubble.failed,
+    html body .message-bubble.failed,
+    html body .chat-message.failed {
+      border-color: rgba(239,68,68,.24) !important;
+      border-right-color: rgba(239,68,68,.66) !important;
+      box-shadow:
+        0 20px 44px rgba(127,29,29,.10),
+        var(--v120-inner) !important;
+    }
+
+    html body .bubble-info,
+    html body .message-meta,
+    html body .bubble-meta {
+      color: rgba(47, 66, 51, .70) !important;
+      font-weight: 800 !important;
+    }
+
+    html body .status-sent,
+    html body .sent-badge {
+      border-color: rgba(37,211,102,.24) !important;
+      background: linear-gradient(180deg, #ecfdf3, #d9f8cf) !important;
+      color: #0f5132 !important;
+      box-shadow: 0 8px 16px rgba(37,211,102,.12) !important;
+    }
+
+    html body .status-failed,
+    html body .failed-badge {
+      border-color: rgba(239,68,68,.25) !important;
+      background: linear-gradient(180deg, #fff5f5, #ffe4e6) !important;
+      color: #b91c1c !important;
+      box-shadow: 0 8px 16px rgba(239,68,68,.10) !important;
+    }
+
+    /* Composer */
+    html body .reply-panel,
+    html body .composer-block,
+    html body .premium-composer,
+    html body .composer-form {
+      border-radius: 30px !important;
+      border: 1px solid rgba(37,211,102,.35) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.14), transparent 36%),
+        radial-gradient(circle at 100% 0%, rgba(200,163,60,.08), transparent 30%),
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(239,250,233,.92)) !important;
+      box-shadow:
+        0 -10px 42px rgba(7,19,13,.080),
+        0 22px 52px rgba(7,19,13,.080),
+        var(--v120-inner) !important;
+    }
+
+    html body .composer-tabs,
+    html body .composer-mode-toggle {
+      padding: 4px !important;
+      border-radius: 999px !important;
+      border: 1px solid rgba(37,211,102,.22) !important;
+      background: rgba(255,255,255,.72) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.88),
+        0 8px 18px rgba(7,19,13,.035) !important;
+    }
+
+    html body .composer-tabs button.active,
+    html body .composer-mode-toggle button.active,
+    html body .reply-mode-btn.active,
+    html body .note-mode-btn.active {
+      background:
+        radial-gradient(circle at 25% 0%, rgba(255,255,255,.48), transparent 34%),
+        linear-gradient(135deg, #25d366, #aeea73) !important;
+      color: #06110c !important;
+      box-shadow:
+        0 12px 24px rgba(37,211,102,.22),
+        inset 0 1px 0 rgba(255,255,255,.52) !important;
+    }
+
+    html body #body,
+    html body textarea#body {
+      min-height: 76px !important;
+      border-radius: 20px !important;
+      border: 1px solid rgba(37,211,102,.31) !important;
+      background: linear-gradient(180deg, #ffffff, #f8fff5) !important;
+      box-shadow:
+        var(--v120-inner),
+        0 12px 28px rgba(7,19,13,.055) !important;
+      color: #07130d !important;
+      font-weight: 760 !important;
+    }
+
+    html body #sendBtn,
+    html body .send-btn {
+      width: 48px !important;
+      height: 48px !important;
+      border-radius: 18px !important;
+      background:
+        radial-gradient(circle at 28% 0%, rgba(255,255,255,.34), transparent 38%),
+        linear-gradient(135deg, #0f8f4f, #25d366 56%, #b8e870) !important;
+      border: 1px solid rgba(255,255,255,.34) !important;
+      box-shadow:
+        0 20px 38px rgba(37,211,102,.34),
+        inset 0 1px 0 rgba(255,255,255,.34) !important;
+    }
+
+    html body .composer-icon-btn,
+    html body #sendImageBtn,
+    html body #sendVoiceBtn {
+      width: 42px !important;
+      height: 42px !important;
+      border-radius: 16px !important;
+      border-color: rgba(37,211,102,.25) !important;
+      background: linear-gradient(180deg, #ffffff, #f1faed) !important;
+      box-shadow:
+        0 12px 24px rgba(7,19,13,.065),
+        var(--v120-inner) !important;
+    }
+
+    /* CRM */
+    html body .right-reference-panel {
+      border-color: rgba(37,211,102,.31) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.14), transparent 34%),
+        radial-gradient(circle at 100% 88%, rgba(200,163,60,.06), transparent 32%),
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(241,250,236,.91)) !important;
+    }
+
+    html body .reference-card,
+    html body .customer-details-card,
+    html body .booking-request-card,
+    html body .assign-team-card,
+    html body .branch-team-assignment-card,
+    html body .crm-privacy-strip {
+      border-radius: 22px !important;
+      border: 1px solid rgba(37,211,102,.25) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.085), transparent 36%),
+        linear-gradient(180deg, #ffffff, #f3fbef) !important;
+      box-shadow:
+        0 18px 38px rgba(7,19,13,.078),
+        var(--v120-inner) !important;
+    }
+
+    html body .reference-card-head h3,
+    html body .right-reference-panel h3,
+    html body .customer-profile-title {
+      color: #06110c !important;
+      font-weight: 1000 !important;
+      letter-spacing: -.020em !important;
+    }
+
+    html body .reference-avatar,
+    html body #customerProfileAvatar {
+      width: 48px !important;
+      height: 48px !important;
+      border-radius: 18px !important;
+      border: 1px solid rgba(255,255,255,.36) !important;
+      box-shadow:
+        0 18px 34px rgba(37,211,102,.26),
+        inset 0 1px 0 rgba(255,255,255,.32) !important;
+    }
+
+    html body .reference-detail-row {
+      min-height: 28px !important;
+      padding: 7px 0 !important;
+      border-bottom-color: rgba(37,211,102,.12) !important;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,.70), rgba(255,255,255,.18)) !important;
+    }
+
+    html body .reference-detail-row strong {
+      color: #06110c !important;
+      font-weight: 1000 !important;
+    }
+
+    html body .branch-team-select,
+    html body #assigneeSelect {
+      height: 42px !important;
+      border-radius: 16px !important;
+      border-color: rgba(37,211,102,.31) !important;
+      background: linear-gradient(180deg, #ffffff, #f1faed) !important;
+      box-shadow:
+        0 12px 24px rgba(7,19,13,.060),
+        var(--v120-inner) !important;
+      font-weight: 950 !important;
+    }
+
+    /* Menus and badges */
+    html body .quick-replies-menu,
+    html body .live-notification-panel,
+    html body #liveNotificationPanel,
+    html body #notificationsPanel,
+    html body .notifications-panel {
+      border-radius: 26px !important;
+      border-color: rgba(37,211,102,.35) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.16), transparent 36%),
+        linear-gradient(180deg, #ffffff, #eef9e9) !important;
+      box-shadow:
+        0 34px 86px rgba(7,19,13,.22),
+        var(--v120-inner) !important;
+    }
+
+    html body .quick-reply-item,
+    html body .notification-item,
+    html body .notification-card {
+      border-radius: 18px !important;
+      border-color: rgba(37,211,102,.23) !important;
+      background: linear-gradient(180deg, #ffffff, #f5fcf2) !important;
+      box-shadow:
+        0 14px 28px rgba(7,19,13,.070),
+        var(--v120-inner) !important;
+    }
+
+    html body .status,
+    html body .reference-status-pill,
+    html body .crm-code-pill,
+    html body .branch-dubai,
+    html body .branch-abu,
+    html body .tag-chip,
+    html body .message-count-badge,
+    html body .panel-badge {
+      border-radius: 999px !important;
+      border-color: rgba(37,211,102,.25) !important;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(255,255,255,.52), transparent 35%),
+        linear-gradient(180deg, #ffffff, #eaf9e4) !important;
+      color: #0f5132 !important;
+      box-shadow:
+        0 8px 17px rgba(7,19,13,.040),
+        var(--v120-inner) !important;
+      font-weight: 950 !important;
+    }
+
+    html body .tag-chip.human-support,
+    html body .tag-chip.booking,
+    html body .tag-chip.new {
+      border-color: rgba(200,163,60,.31) !important;
+      background: linear-gradient(180deg, #fffdf5, #f9f0d8) !important;
+      color: #7a5a10 !important;
+    }
+
+    html body .actual-empty-state,
+    html body .empty-state,
+    html body .no-results,
+    html body .no-conversations,
+    html body .no-messages {
+      border-radius: 28px !important;
+      border-color: rgba(37,211,102,.35) !important;
+      box-shadow:
+        0 28px 66px rgba(7,19,13,.105),
+        var(--v120-inner) !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V120" !important;
+    }
+
+    @media (max-width: 1180px) {
+      html body .chat-head {
+        min-height: 82px !important;
+      }
+
+      html body .conversation-card {
+        border-left-width: 4px !important;
+      }
+
+      html body #sendBtn,
+      html body .send-btn {
+        width: 44px !important;
+        height: 44px !important;
+      }
     }
 
   </style>
