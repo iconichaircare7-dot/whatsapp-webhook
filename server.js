@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-136-loading-text-logo-mark";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-137-clean-premium-loading-mark";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -34469,6 +34469,120 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       }
     }
 
+
+    /* V31.5.8.60.3.9.137 - Clean Premium Loading Mark.
+       Staging-only visual refinement for loading screen.
+       Scope: loading wordmark + spacing only.
+       Does not touch loading logic, history, /api/messages, Google Sheet, send logic,
+       status logic, media logic, notifications logic, webhook, booking logic, or main/server.js. */
+
+    html body .reply-panel::after,
+    html body .reference-version-badge::after,
+    html body .right-reference-panel .reference-version-badge::after,
+    html body .customer-crm-profile .reference-version-badge::after {
+      content: "V137" !important;
+    }
+
+    html body .iconic-loading-card {
+      margin-top: -42px !important;
+    }
+
+    html body .iconic-loading-logo-wrap {
+      width: 260px !important;
+      height: 76px !important;
+      margin: 0 auto 16px !important;
+      padding: 0 !important;
+      border: none !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: center !important;
+      overflow: visible !important;
+    }
+
+    html body .iconic-loading-wordmark {
+      display: block !important;
+      color: #07130d !important;
+      font-size: 38px !important;
+      line-height: .9 !important;
+      font-weight: 1000 !important;
+      letter-spacing: -.035em !important;
+      text-transform: uppercase !important;
+      text-shadow:
+        0 1px 0 rgba(255,255,255,.88),
+        0 14px 24px rgba(7,19,13,.12) !important;
+      filter: drop-shadow(0 10px 18px rgba(7,19,13,.10)) !important;
+    }
+
+    html body .iconic-loading-wordmark span {
+      display: inline-block !important;
+      color: #07130d !important;
+      font-weight: 1000 !important;
+      background: linear-gradient(180deg, #07130d 0%, #10291a 48%, #07130d 100%) !important;
+      -webkit-background-clip: text !important;
+      background-clip: text !important;
+      -webkit-text-fill-color: transparent !important;
+    }
+
+    html body .iconic-loading-wordmark b,
+    html body .iconic-loading-wordmark b::before {
+      display: none !important;
+      content: none !important;
+    }
+
+    html body .iconic-loading-wordmark-sub {
+      margin-top: 8px !important;
+      color: rgba(22, 49, 32, .56) !important;
+      font-size: 9px !important;
+      font-weight: 1000 !important;
+      letter-spacing: .42em !important;
+      text-transform: uppercase !important;
+      text-shadow: 0 1px 0 rgba(255,255,255,.78) !important;
+    }
+
+    html body .iconic-loading-kicker {
+      margin-top: 4px !important;
+      margin-bottom: 9px !important;
+      letter-spacing: .20em !important;
+    }
+
+    html body .iconic-loading-title {
+      font-size: 28px !important;
+      margin-bottom: 9px !important;
+      letter-spacing: -.038em !important;
+    }
+
+    html body .iconic-loading-subtitle {
+      max-width: 372px !important;
+      line-height: 1.52 !important;
+    }
+
+    html body .iconic-loading-progress {
+      margin-top: 24px !important;
+    }
+
+    @media (max-width: 700px) {
+      html body .iconic-loading-card {
+        margin-top: -24px !important;
+      }
+
+      html body .iconic-loading-logo-wrap {
+        width: 226px !important;
+        height: 70px !important;
+      }
+
+      html body .iconic-loading-wordmark {
+        font-size: 33px !important;
+      }
+
+      html body .iconic-loading-wordmark-sub {
+        font-size: 8px !important;
+        letter-spacing: .36em !important;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -34477,7 +34591,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
           <div class="iconic-loading-logo-wrap">
             
             <div class="iconic-loading-wordmark" aria-label="Iconic Hair Care">
-              <span>IC</span><b>O</b><span>NIC</span>
+              <span>ICONIC</span>
             </div>
             <div class="iconic-loading-wordmark-sub">HAIR CARE</div>
 
