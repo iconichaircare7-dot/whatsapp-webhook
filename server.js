@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-138-luxury-loading-polish-plus";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-141-production-notification-scope-sticky-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -34480,7 +34480,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     html body .reference-version-badge::after,
     html body .right-reference-panel .reference-version-badge::after,
     html body .customer-crm-profile .reference-version-badge::after {
-      content: "V138" !important;
+      content: "V141" !important;
     }
 
     html body .iconic-loading-card {
@@ -35421,6 +35421,123 @@ const customerProfileLocation = document.getElementById("customerProfileLocation
 const inboxBranchScope = ${JSON.stringify(req.inboxBranchScope || "")};
 const inboxUserName = ${JSON.stringify(req.inboxUser || "")};
 
+// V31.5.8.60.3.9.141 - Production notification scope + sticky notification fix.
+// UI/browser-only: branch-aware notification read storage and first-load baseline.
+// Does not touch /api/messages, Google Sheet backend, send logic, webhook, booking, media, or history loading.
+let liveNotificationInitialBaselineApplied = false;
+
+function normalizeInboxScopeToken(value) {
+  return (value || "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "all";
+}
+
+function getScopedInboxStorageSuffix() {
+  const userToken = normalizeInboxScopeToken(inboxUserName || "user");
+  const branchToken = normalizeInboxScopeToken(inboxBranchScope || "all");
+  return userToken + ":" + branchToken;
+}
+
+function getReadMapStorageKey() {
+  return "iconic_read_map:" + getScopedInboxStorageSuffix();
+}
+
+function loadScopedReadMap() {
+  const scopedKey = getReadMapStorageKey();
+  let scopedReadMap = {};
+
+  try {
+    scopedReadMap = JSON.parse(localStorage.getItem(scopedKey) || "{}");
+  } catch (e) {
+    scopedReadMap = {};
+  }
+
+  if (scopedReadMap && typeof scopedReadMap === "object" && Object.keys(scopedReadMap).length) {
+    readMap = scopedReadMap;
+    return;
+  }
+
+  // Keep the old shared key only for the all-branch/admin user.
+  // Branch users get their own clean read-map so admin/Dubai/Abu Dhabi sessions never pollute each other.
+  if (!inboxBranchScope) {
+    try {
+      readMap = JSON.parse(localStorage.getItem("iconic_read_map") || "{}");
+    } catch (e) {
+      readMap = {};
+    }
+  } else {
+    readMap = {};
+  }
+
+  try {
+    localStorage.setItem(scopedKey, JSON.stringify(readMap));
+  } catch (e) {
+    // localStorage can fail in private mode; notifications still work in memory.
+  }
+}
+
+loadScopedReadMap();
+
+function normalizeLiveBranchName(value) {
+  const clean = (value || "").toString().trim().toLowerCase();
+  if (!clean) return "";
+  if (clean.includes("abu") || clean.includes("dhabi") || clean.includes("ابوظ") || clean.includes("أبوظ")) return "Abu Dhabi";
+  if (clean.includes("dubai") || clean.includes("دبي")) return "Dubai";
+  return value.toString().trim();
+}
+
+function isLiveBranchAllowedForCurrentUser(branch) {
+  const scope = normalizeLiveBranchName(inboxBranchScope || "");
+  if (!scope) return true;
+
+  const resolvedBranch = normalizeLiveBranchName(branch || "");
+  if (!resolvedBranch) return false;
+
+  return resolvedBranch === scope;
+}
+
+function isLiveMessageAllowedForCurrentUser(message) {
+  if (!message) return false;
+  return isLiveBranchAllowedForCurrentUser(message.branch || "");
+}
+
+function isLiveConversationAllowedForCurrentUser(conversation) {
+  if (!conversation) return false;
+  return isLiveBranchAllowedForCurrentUser(conversation.branch || conversation.latest?.branch || "");
+}
+
+function applyInitialBranchNotificationBaseline(messages) {
+  if (!inboxBranchScope || liveNotificationInitialBaselineApplied) return;
+
+  liveNotificationInitialBaselineApplied = true;
+
+  const latestCustomerMessageByConversation = new Map();
+
+  (messages || []).forEach(function(message) {
+    if (!shouldIncludeInLiveCustomerNotifications(message)) return;
+
+    const key = getMessageConversationKey(message);
+    const currentMessage = latestCustomerMessageByConversation.get(key);
+
+    if (!currentMessage || getMessageTimeValue(message) > getMessageTimeValue(currentMessage)) {
+      latestCustomerMessageByConversation.set(key, message);
+    }
+  });
+
+  latestCustomerMessageByConversation.forEach(function(message, key) {
+    if (key) {
+      readMap[key] = messageKey(message);
+    }
+  });
+
+  saveReadMap();
+  resetVisibleLiveNotifications();
+}
+
+
 function applyBranchScopeUiVisibility() {
   const scope = (inboxBranchScope || "").toString().trim().toLowerCase();
 
@@ -35687,7 +35804,22 @@ if (toggleArchivedBtn) {
 
 
 function saveReadMap() {
-  localStorage.setItem("iconic_read_map", JSON.stringify(readMap));
+  const payload = JSON.stringify(readMap);
+
+  try {
+    localStorage.setItem(getReadMapStorageKey(), payload);
+  } catch (e) {
+    // localStorage can fail in private mode; keep the in-memory map active.
+  }
+
+  // Backward compatibility for the admin/all-branch user only.
+  if (!inboxBranchScope) {
+    try {
+      localStorage.setItem("iconic_read_map", payload);
+    } catch (e) {
+      // Ignore storage failures.
+    }
+  }
 }
 
 function saveStatusOverrideMap() {
@@ -36620,7 +36752,7 @@ function getUnreadCustomerMessageCount(c) {
       break;
     }
 
-    if (message.sender === "customer") {
+    if (shouldIncludeInLiveCustomerNotifications(message)) {
       count += 1;
     }
   }
@@ -36708,6 +36840,7 @@ function isLiveNotificationArchivedMessage(message) {
 
 function shouldIncludeInLiveCustomerNotifications(message) {
   if (!message || message.sender !== "customer") return false;
+  if (!isLiveMessageAllowedForCurrentUser(message)) return false;
   if (isInternalNotificationPhone(message.phone)) return false;
   if (isOperationalReminderConsentMessage(message)) return false;
   if (isLiveNotificationArchivedMessage(message)) return false;
@@ -36751,7 +36884,10 @@ function customerNotificationKey(message) {
 }
 
 function getCustomerNotificationKeys(messages) {
-  return new Set((messages || []).filter(shouldIncludeInLiveCustomerNotifications).slice(0, 500).map(customerNotificationKey));
+  return new Set((messages || [])
+    .filter(shouldIncludeInLiveCustomerNotifications)
+    .slice(0, 500)
+    .map(customerNotificationKey));
 }
 
 function getUnreadConversationCount() {
@@ -36773,6 +36909,14 @@ function updatePageNotificationTitle() {
 
 function updateLiveNotificationUi() {
   const unreadCount = getUnreadConversationCount();
+
+  // If all relevant customer conversations are read/closed/archived, never keep a stale red badge,
+  // stale browser title count, or hanging toast from an older refresh.
+  if (unreadCount === 0 && liveAlertCount > 0) {
+    liveAlertCount = 0;
+    clearLiveNotificationToasts();
+  }
+
   const visibleCount = Math.max(unreadCount, liveAlertCount);
 
   if (liveNotificationCount) {
@@ -36816,6 +36960,7 @@ function clearLiveNotificationToasts() {
 function getOpenLiveNotificationConversations() {
   return buildConversations().filter(function(conversation) {
     if (!conversation) return false;
+    if (!isLiveConversationAllowedForCurrentUser(conversation)) return false;
     if (typeof isClosedOrArchivedConversation === "function" && isClosedOrArchivedConversation(conversation)) return false;
     return getUnreadCustomerMessageCount(conversation) > 0;
   }).sort(function(a, b) {
@@ -37096,9 +37241,10 @@ function showBrowserLiveNotification(message, newCount) {
 }
 
 function processLiveInboxNotifications(nextMessages) {
-  const newKnownKeys = getCustomerNotificationKeys(nextMessages);
-  const newCustomerMessages = (nextMessages || []).filter(function(message) {
-    return shouldIncludeInLiveCustomerNotifications(message) && !knownCustomerMessageKeys.has(customerNotificationKey(message));
+  const scopedMessages = (nextMessages || []).filter(shouldIncludeInLiveCustomerNotifications);
+  const newKnownKeys = getCustomerNotificationKeys(scopedMessages);
+  const newCustomerMessages = scopedMessages.filter(function(message) {
+    return !knownCustomerMessageKeys.has(customerNotificationKey(message));
   });
 
   if (!liveNotificationsReady) {
@@ -38116,6 +38262,10 @@ async function loadMessages(options) {
     // contribute to unread/live alert counters.
     applyConversationStates(nextConversationStates);
 
+    if (loadOptions.reason === "initial") {
+      applyInitialBranchNotificationBaseline(safeMessages);
+    }
+
     const nextRenderSignature = buildBrowserInboxRenderSignature(safeMessages, nextConversationStates, nextBookingRequests);
     const shouldRender = Boolean(loadOptions.forceRender) || nextRenderSignature !== lastBrowserInboxRenderSignature;
 
@@ -38670,8 +38820,14 @@ if (liveNotificationPanel) {
     if (!card) return;
 
     const key = card.getAttribute("data-live-notification-key") || "";
-    const conversation = buildConversations().find(function(item) { return item.key === key; });
-    if (!conversation) return;
+    const conversation = buildConversations().find(function(item) {
+      return item.key === key && isLiveConversationAllowedForCurrentUser(item);
+    });
+    if (!conversation) {
+      renderLiveNotificationPanel();
+      updateLiveNotificationUi();
+      return;
+    }
 
     selectedConversationKey = conversation.key;
     selectedPhone = conversation.phone || selectedPhone;
