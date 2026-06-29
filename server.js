@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-129-notification-panel-luxury-polish";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-130-luxury-loading-screen";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -33773,9 +33773,248 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       font-weight: 700 !important;
     }
 
+
+    /* V31.5.8.60.3.9.130 - Luxury Loading Screen.
+       Staging-only visual layer + safe display timing.
+       Scope: initial loading overlay only.
+       Does not touch history logic, /api/messages, Google Sheet loading logic,
+       send logic, status logic, media logic, notifications logic, webhook, booking logic, or main/server.js. */
+
+    html body .reply-panel::after,
+    html body .reference-version-badge::after,
+    html body .right-reference-panel .reference-version-badge::after,
+    html body .customer-crm-profile .reference-version-badge::after {
+      content: "V130" !important;
+    }
+
+    .iconic-loading-overlay {
+      position: fixed !important;
+      inset: 0 !important;
+      z-index: 999999 !important;
+      display: grid !important;
+      place-items: center !important;
+      padding: 24px !important;
+      background:
+        radial-gradient(circle at 18% 8%, rgba(37,211,102,.18), transparent 32%),
+        radial-gradient(circle at 85% 10%, rgba(200,163,60,.12), transparent 30%),
+        linear-gradient(135deg, #f9fff6 0%, #ecf8e7 46%, #f8fff5 100%) !important;
+      opacity: 1 !important;
+      visibility: visible !important;
+      transition: opacity .34s ease, visibility .34s ease !important;
+    }
+
+    .iconic-loading-overlay::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      background:
+        linear-gradient(115deg, rgba(255,255,255,.46), transparent 40%, rgba(37,211,102,.055)),
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,.52), transparent 46%) !important;
+      pointer-events: none !important;
+    }
+
+    .iconic-loading-overlay.is-hidden {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+
+    .iconic-loading-card {
+      position: relative !important;
+      width: min(430px, calc(100vw - 40px)) !important;
+      border-radius: 34px !important;
+      border: 1px solid rgba(37,211,102,.28) !important;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(37,211,102,.14), transparent 34%),
+        radial-gradient(circle at 100% 0%, rgba(200,163,60,.10), transparent 32%),
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(239,250,233,.94)) !important;
+      box-shadow:
+        0 38px 95px rgba(7,19,13,.16),
+        0 0 0 1px rgba(255,255,255,.74) inset,
+        inset 0 1px 0 rgba(255,255,255,.98) !important;
+      padding: 34px 30px 30px !important;
+      text-align: center !important;
+      overflow: hidden !important;
+      transform: translateY(0) scale(1) !important;
+      animation: iconicLoadingCardIn .42s ease-out both !important;
+    }
+
+    .iconic-loading-card::before {
+      content: "" !important;
+      position: absolute !important;
+      top: 0 !important;
+      left: 22px !important;
+      right: 22px !important;
+      height: 4px !important;
+      border-radius: 999px !important;
+      background:
+        linear-gradient(90deg, transparent, rgba(37,211,102,.92), rgba(200,163,60,.52), rgba(37,211,102,.78), transparent) !important;
+      box-shadow: 0 8px 20px rgba(37,211,102,.16) !important;
+    }
+
+    @keyframes iconicLoadingCardIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px) scale(.985);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .iconic-loading-logo-wrap {
+      width: 112px !important;
+      height: 82px !important;
+      margin: 0 auto 18px !important;
+      border-radius: 24px !important;
+      border: 1px solid rgba(37,211,102,.22) !important;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,.96), transparent 42%),
+        linear-gradient(180deg, #ffffff, #f2faee) !important;
+      box-shadow:
+        0 18px 38px rgba(7,19,13,.10),
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+      display: grid !important;
+      place-items: center !important;
+      overflow: hidden !important;
+    }
+
+    .iconic-loading-logo {
+      max-width: 92px !important;
+      max-height: 58px !important;
+      object-fit: contain !important;
+      filter: drop-shadow(0 8px 16px rgba(7,19,13,.10)) !important;
+    }
+
+    .iconic-loading-kicker {
+      color: rgba(44, 65, 50, .62) !important;
+      font-size: 10px !important;
+      font-weight: 1000 !important;
+      letter-spacing: .16em !important;
+      text-transform: uppercase !important;
+      margin-bottom: 8px !important;
+    }
+
+    .iconic-loading-title {
+      color: #06110c !important;
+      font-size: 24px !important;
+      font-weight: 1000 !important;
+      letter-spacing: -.035em !important;
+      line-height: 1.08 !important;
+      margin-bottom: 8px !important;
+    }
+
+    .iconic-loading-subtitle {
+      max-width: 330px !important;
+      margin: 0 auto !important;
+      color: rgba(70, 86, 74, .76) !important;
+      font-size: 12px !important;
+      font-weight: 820 !important;
+      line-height: 1.55 !important;
+    }
+
+    .iconic-loading-progress {
+      height: 9px !important;
+      border-radius: 999px !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.82), rgba(236,248,231,.72)) !important;
+      border: 1px solid rgba(37,211,102,.18) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.92),
+        0 10px 18px rgba(7,19,13,.045) !important;
+      overflow: hidden !important;
+      margin: 22px 0 16px !important;
+    }
+
+    .iconic-loading-progress span {
+      display: block !important;
+      height: 100% !important;
+      width: 46% !important;
+      border-radius: inherit !important;
+      background:
+        linear-gradient(90deg, #0f8f4f, #25d366, #b8e870) !important;
+      box-shadow:
+        0 0 18px rgba(37,211,102,.30),
+        inset 0 1px 0 rgba(255,255,255,.28) !important;
+      animation: iconicLoadingProgress 1.15s ease-in-out infinite !important;
+    }
+
+    @keyframes iconicLoadingProgress {
+      0% { transform: translateX(-105%); }
+      55% { transform: translateX(72%); }
+      100% { transform: translateX(220%); }
+    }
+
+    .iconic-loading-dots {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 8px !important;
+      height: 18px !important;
+    }
+
+    .iconic-loading-dots i {
+      width: 7px !important;
+      height: 7px !important;
+      border-radius: 999px !important;
+      background: #25d366 !important;
+      box-shadow: 0 6px 14px rgba(37,211,102,.28) !important;
+      animation: iconicLoadingDot 1s ease-in-out infinite !important;
+    }
+
+    .iconic-loading-dots i:nth-child(2) { animation-delay: .14s !important; }
+    .iconic-loading-dots i:nth-child(3) { animation-delay: .28s !important; }
+
+    @keyframes iconicLoadingDot {
+      0%, 80%, 100% {
+        opacity: .34;
+        transform: translateY(0) scale(.88);
+      }
+      40% {
+        opacity: 1;
+        transform: translateY(-4px) scale(1);
+      }
+    }
+
+    @media (max-width: 700px) {
+      .iconic-loading-card {
+        border-radius: 28px !important;
+        padding: 28px 22px 24px !important;
+      }
+
+      .iconic-loading-title {
+        font-size: 21px !important;
+      }
+
+      .iconic-loading-logo-wrap {
+        width: 102px !important;
+        height: 76px !important;
+      }
+    }
+
   </style>
 </head>
 <body>
+      <div class="iconic-loading-overlay" id="iconicLoadingOverlay" aria-live="polite" aria-label="Loading Team Inbox">
+        <div class="iconic-loading-card">
+          <div class="iconic-loading-logo-wrap">
+            <img src="/assets/iconic-sidebar-logo.png" alt="Iconic Hair Care" class="iconic-loading-logo" />
+          </div>
+          <div class="iconic-loading-copy">
+            <div class="iconic-loading-kicker">ICONIC TEAM INBOX</div>
+            <div class="iconic-loading-title">Loading conversations</div>
+            <div class="iconic-loading-subtitle">Preparing customer history, CRM profile, and live notifications...</div>
+          </div>
+          <div class="iconic-loading-progress" aria-hidden="true">
+            <span></span>
+          </div>
+          <div class="iconic-loading-dots" aria-hidden="true">
+            <i></i><i></i><i></i>
+          </div>
+        </div>
+      </div>
+
   <div class="workspace-shell">
     <aside class="main-sidebar">
       <div class="sidebar-brand">
@@ -36862,6 +37101,7 @@ function renderAll() {
   updateStats();
   renderConversationList();
   renderChat();
+  window.setTimeout(function() { hideIconicLoadingOverlay("renderAll"); }, 260);
 }
 
 function buildBrowserInboxRenderSignature(messages, conversationStates, bookingRequests) {
@@ -37730,6 +37970,34 @@ setInterval(function() {
   if (document.visibilityState === "hidden") return;
   loadMessages({ reason: "auto" });
 }, 8000);
+
+
+// V31.5.8.60.3.9.130 - Luxury loading overlay timing.
+// Safe UI-only helper. It does not change message loading, history rendering, APIs, or data merging.
+function hideIconicLoadingOverlay(reason) {
+  const overlay = document.getElementById("iconicLoadingOverlay");
+  if (!overlay || overlay.dataset.hidden === "yes") return;
+
+  overlay.dataset.hidden = "yes";
+  overlay.classList.add("is-hidden");
+
+  window.setTimeout(function() {
+    if (overlay && overlay.parentNode) {
+      overlay.parentNode.removeChild(overlay);
+    }
+  }, 520);
+}
+
+window.setTimeout(function() {
+  hideIconicLoadingOverlay("safety-timeout");
+}, 5200);
+
+window.addEventListener("load", function() {
+  window.setTimeout(function() {
+    hideIconicLoadingOverlay("window-load");
+  }, 720);
+});
+
 </script>
 </body>
 </html>`);
