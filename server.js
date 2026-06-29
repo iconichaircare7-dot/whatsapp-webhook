@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-132-luxury-loading-polish";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-133-loading-waits-for-inbox-ready";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -34266,6 +34266,24 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       }
     }
 
+
+    /* V31.5.8.60.3.9.133 - Loading waits for inbox ready.
+       Staging-only timing fix for the luxury loading screen.
+       Scope: loading overlay timing only.
+       Does not touch data loading logic, history, /api/messages, Google Sheet,
+       send logic, status logic, media logic, notifications logic, webhook, booking logic, or main/server.js. */
+
+    html body .reply-panel::after,
+    html body .reference-version-badge::after,
+    html body .right-reference-panel .reference-version-badge::after,
+    html body .customer-crm-profile .reference-version-badge::after {
+      content: "V133" !important;
+    }
+
+    html body .iconic-loading-subtitle::after {
+      content: " Please wait a moment." !important;
+    }
+
   </style>
 </head>
 <body>
@@ -37374,7 +37392,7 @@ function renderAll() {
   updateStats();
   renderConversationList();
   renderChat();
-  window.setTimeout(function() { hideIconicLoadingOverlay("renderAll"); }, 260);
+  scheduleIconicLoadingOverlayHide("renderAll");
 }
 
 function buildBrowserInboxRenderSignature(messages, conversationStates, bookingRequests) {
@@ -38245,30 +38263,80 @@ setInterval(function() {
 }, 8000);
 
 
-// V31.5.8.60.3.9.130 - Luxury loading overlay timing.
-// Safe UI-only helper. It does not change message loading, history rendering, APIs, or data merging.
+// V31.5.8.60.3.9.133 - Loading overlay waits for inbox readiness.
+// UI-only helper. It does not change message loading, history rendering, APIs, or data merging.
+const ICONIC_LOADING_MIN_VISIBLE_MS = 2400;
+const ICONIC_LOADING_READY_DELAY_MS = 900;
+const ICONIC_LOADING_MAX_VISIBLE_MS = 12000;
+const iconicLoadingStartedAt = Date.now();
+let iconicLoadingHideTimer = null;
+
+function iconicInboxLooksReady() {
+  try {
+    const hasConversationCards = document.querySelectorAll(".conversation-card, .reference-conversation-card").length > 0;
+    const hasMessagesLoaded = Array.isArray(window.allMessages) && window.allMessages.length > 0;
+    const hasInboxFooter = !!document.querySelector(".reference-list-footer, #conversationList");
+    return hasConversationCards || hasMessagesLoaded || hasInboxFooter;
+  } catch (error) {
+    return false;
+  }
+}
+
 function hideIconicLoadingOverlay(reason) {
   const overlay = document.getElementById("iconicLoadingOverlay");
   if (!overlay || overlay.dataset.hidden === "yes") return;
 
   overlay.dataset.hidden = "yes";
+  overlay.dataset.hideReason = reason || "";
   overlay.classList.add("is-hidden");
 
   window.setTimeout(function() {
     if (overlay && overlay.parentNode) {
       overlay.parentNode.removeChild(overlay);
     }
-  }, 520);
+  }, 620);
+}
+
+function scheduleIconicLoadingOverlayHide(reason) {
+  const overlay = document.getElementById("iconicLoadingOverlay");
+  if (!overlay || overlay.dataset.hidden === "yes") return;
+
+  if (iconicLoadingHideTimer) {
+    window.clearTimeout(iconicLoadingHideTimer);
+  }
+
+  const elapsed = Date.now() - iconicLoadingStartedAt;
+  const waitForMinimum = Math.max(0, ICONIC_LOADING_MIN_VISIBLE_MS - elapsed);
+  const delay = waitForMinimum + ICONIC_LOADING_READY_DELAY_MS;
+
+  iconicLoadingHideTimer = window.setTimeout(function() {
+    if (iconicInboxLooksReady()) {
+      hideIconicLoadingOverlay(reason || "inbox-ready");
+      return;
+    }
+
+    const retryElapsed = Date.now() - iconicLoadingStartedAt;
+    if (retryElapsed >= ICONIC_LOADING_MAX_VISIBLE_MS) {
+      hideIconicLoadingOverlay("max-timeout");
+      return;
+    }
+
+    scheduleIconicLoadingOverlayHide("waiting-for-inbox");
+  }, delay);
 }
 
 window.setTimeout(function() {
+  scheduleIconicLoadingOverlayHide("window-load");
+}, 1200);
+
+window.setTimeout(function() {
   hideIconicLoadingOverlay("safety-timeout");
-}, 5200);
+}, ICONIC_LOADING_MAX_VISIBLE_MS);
 
 window.addEventListener("load", function() {
   window.setTimeout(function() {
-    hideIconicLoadingOverlay("window-load");
-  }, 720);
+    scheduleIconicLoadingOverlayHide("window-load");
+  }, 1200);
 });
 
 </script>
