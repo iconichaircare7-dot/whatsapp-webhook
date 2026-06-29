@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-130-luxury-loading-screen";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-131-loading-logo-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -33993,13 +33993,69 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
       }
     }
 
+
+    /* V31.5.8.60.3.9.131 - Loading Screen Logo Fix.
+       Staging-only visual fix.
+       Scope: loading overlay logo only.
+       Uses the working Iconic chat background logo asset instead of the broken sidebar logo path.
+       Does not touch history, /api/messages, Google Sheet loading logic, send logic,
+       status logic, media logic, notifications logic, webhook, booking logic, or main/server.js. */
+
+    html body .reply-panel::after,
+    html body .reference-version-badge::after,
+    html body .right-reference-panel .reference-version-badge::after,
+    html body .customer-crm-profile .reference-version-badge::after {
+      content: "V131" !important;
+    }
+
+    html body .iconic-loading-logo-wrap {
+      width: 154px !important;
+      height: 92px !important;
+      border-radius: 26px !important;
+      padding: 12px 16px !important;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,.98), transparent 45%),
+        linear-gradient(180deg, #ffffff, #f1faed) !important;
+      box-shadow:
+        0 20px 42px rgba(7,19,13,.105),
+        0 0 0 1px rgba(37,211,102,.12) inset,
+        inset 0 1px 0 rgba(255,255,255,.98) !important;
+    }
+
+    html body .iconic-loading-logo {
+      max-width: 132px !important;
+      max-height: 70px !important;
+      width: auto !important;
+      height: auto !important;
+      object-fit: contain !important;
+      display: block !important;
+      opacity: .96 !important;
+      filter:
+        saturate(1.08)
+        contrast(1.05)
+        brightness(1.02)
+        drop-shadow(0 10px 18px rgba(7,19,13,.12)) !important;
+    }
+
+    @media (max-width: 700px) {
+      html body .iconic-loading-logo-wrap {
+        width: 142px !important;
+        height: 86px !important;
+      }
+
+      html body .iconic-loading-logo {
+        max-width: 122px !important;
+        max-height: 64px !important;
+      }
+    }
+
   </style>
 </head>
 <body>
       <div class="iconic-loading-overlay" id="iconicLoadingOverlay" aria-live="polite" aria-label="Loading Team Inbox">
         <div class="iconic-loading-card">
           <div class="iconic-loading-logo-wrap">
-            <img src="/assets/iconic-sidebar-logo.png" alt="Iconic Hair Care" class="iconic-loading-logo" />
+            <img src="/assets/iconic-chat-background-logo.png" alt="Iconic Hair Care" class="iconic-loading-logo" />
           </div>
           <div class="iconic-loading-copy">
             <div class="iconic-loading-kicker">ICONIC TEAM INBOX</div>
