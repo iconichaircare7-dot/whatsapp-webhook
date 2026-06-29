@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-125-reply-composer-luxury-polish";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-126-send-button-soft-polish";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -33316,6 +33316,54 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
         height: 42px !important;
         min-width: 42px !important;
       }
+    }
+
+
+    /* V31.5.8.60.3.9.126 - Send Button Soft Polish.
+       Staging-only visual layer.
+       Scope: soften the send button only.
+       Does not touch chat background, watermark, history, APIs, or send logic. */
+
+    html body #sendBtn,
+    html body .send-btn {
+      width: 54px !important;
+      height: 54px !important;
+      min-width: 54px !important;
+      border-radius: 20px !important;
+      border: 1px solid rgba(255,255,255,.34) !important;
+      background:
+        radial-gradient(circle at 28% 0%, rgba(255,255,255,.32), transparent 40%),
+        linear-gradient(135deg, #149353 0%, #25d366 62%, #aee174 100%) !important;
+      color: #ffffff !important;
+      box-shadow:
+        0 18px 34px rgba(37,211,102,.28),
+        0 0 0 3px rgba(37,211,102,.08),
+        inset 0 1px 0 rgba(255,255,255,.32) !important;
+      transition: transform .14s ease, box-shadow .14s ease, filter .14s ease !important;
+    }
+
+    html body #sendBtn:hover,
+    html body .send-btn:hover {
+      transform: translateY(-2px) scale(1.02) !important;
+      filter: saturate(1.03) brightness(1.01) !important;
+      box-shadow:
+        0 24px 42px rgba(37,211,102,.34),
+        0 0 0 4px rgba(37,211,102,.10),
+        inset 0 1px 0 rgba(255,255,255,.36) !important;
+    }
+
+    html body #sendBtn:active,
+    html body .send-btn:active {
+      transform: translateY(0) scale(.985) !important;
+      box-shadow:
+        0 12px 22px rgba(37,211,102,.22),
+        0 0 0 2px rgba(37,211,102,.08),
+        inset 0 1px 0 rgba(255,255,255,.30) !important;
+    }
+
+    .reply-panel::after,
+    .reference-version-badge::after {
+      content: "V126" !important;
     }
 
   </style>
