@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-141-production-notification-scope-sticky-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-146-root-notification-ui-auto-refresh";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -10535,8 +10535,8 @@ function buildInboxReferenceBranchTabs(branchScope = "") {
   const includeAbuDhabi = !scope || scope === "Abu Dhabi";
 
   const buttons = [
-    includeDubai ? '<button type="button" class="reference-branch-tab" data-branch="Dubai" data-branch-scope-item="Dubai">Dubai <span id="tabDubaiCount">0</span></button>' : '',
-    includeAbuDhabi ? '<button type="button" class="reference-branch-tab" data-branch="Abu Dhabi" data-branch-scope-item="Abu Dhabi">Abu Dhabi <span id="tabAbuCount">0</span></button>' : ''
+    includeDubai ? '<button type="button" class="reference-branch-tab" data-branch="Dubai" data-branch-scope-item="Dubai"><span class="branch-tab-label">Dubai</span><span id="tabDubaiCount" class="branch-tab-count" aria-hidden="true"></span></button>' : '',
+    includeAbuDhabi ? '<button type="button" class="reference-branch-tab" data-branch="Abu Dhabi" data-branch-scope-item="Abu Dhabi"><span class="branch-tab-label">Abu Dhabi</span><span id="tabAbuCount" class="branch-tab-count" aria-hidden="true"></span></button>' : ''
   ].filter(Boolean).join("\n");
 
   if (!buttons) return "";
@@ -10607,6 +10607,9 @@ async function getInboxBootstrapDataForServerRender() {
 
 app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   const inboxAccessLabel = buildInboxAccessLabel(req.inboxAccess || {});
   const inboxQuickReplyLocationText = buildInboxQuickReplyLocationAttribute(req.inboxBranchScope || "");
   const inboxSidebarBranchControls = buildInboxSidebarBranchControls(req.inboxBranchScope || "");
@@ -34480,7 +34483,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     html body .reference-version-badge::after,
     html body .right-reference-panel .reference-version-badge::after,
     html body .customer-crm-profile .reference-version-badge::after {
-      content: "V141" !important;
+      content: "V146" !important;
     }
 
     html body .iconic-loading-card {
@@ -34875,6 +34878,146 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
         padding: 0 10px !important;
         font-size: 9px !important;
       }
+    }
+
+
+
+    /* V31.5.8.60.3.9.142 - Notification hard dedupe + read fix badge. */
+    html body .reply-panel::after,
+    html body .reference-version-badge::after,
+    html body .right-reference-panel .reference-version-badge::after,
+    html body .customer-crm-profile .reference-version-badge::after {
+      content: "V146" !important;
+    }
+
+
+    /* V31.5.8.60.3.9.144 - Branch notification visual cleanup.
+       UI-only: soften branch filter active state and stop branch tabs from looking like unread alerts.
+       No /api/messages, Google Sheet loading, send, webhook, booking, media, or history logic changed. */
+    html body .reference-branch-tabs {
+      gap: 9px !important;
+      border-top-color: rgba(151, 194, 137, .32) !important;
+    }
+
+    html body .reference-branch-tab {
+      position: relative !important;
+      height: 36px !important;
+      min-height: 36px !important;
+      border-radius: 18px !important;
+      gap: 7px !important;
+      color: rgba(20, 48, 32, .74) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.94), rgba(246,252,242,.80)) !important;
+      border: 1px solid rgba(143, 186, 130, .36) !important;
+      box-shadow:
+        0 7px 15px rgba(7,19,13,.035),
+        inset 0 1px 0 rgba(255,255,255,.88) !important;
+      transform: none !important;
+    }
+
+    html body .reference-branch-tab::before {
+      content: "" !important;
+      width: 7px !important;
+      height: 7px !important;
+      border-radius: 999px !important;
+      background: rgba(99, 136, 105, .28) !important;
+      box-shadow: none !important;
+      flex: 0 0 auto !important;
+    }
+
+    html body .reference-branch-tab:hover {
+      color: rgba(10, 47, 27, .90) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(240,250,235,.90)) !important;
+      border-color: rgba(37, 132, 70, .26) !important;
+      box-shadow:
+        0 9px 18px rgba(7,19,13,.045),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+    }
+
+    html body .reference-branch-tab.active {
+      color: #143320 !important;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(255,255,255,.68), transparent 34%),
+        linear-gradient(180deg, #f8fff5, #edf8e8) !important;
+      border-color: rgba(37, 132, 70, .36) !important;
+      box-shadow:
+        0 10px 20px rgba(7,19,13,.050),
+        inset 0 0 0 1px rgba(37, 132, 70, .075),
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    html body .reference-branch-tab.active::before {
+      background: rgba(37, 132, 70, .70) !important;
+      box-shadow: 0 0 0 4px rgba(37, 211, 102, .10) !important;
+    }
+
+    html body .reference-branch-tab .branch-tab-label {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      line-height: 1 !important;
+      min-width: auto !important;
+      width: auto !important;
+      height: auto !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      border-radius: 0 !important;
+      color: inherit !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      font-size: inherit !important;
+      font-weight: inherit !important;
+    }
+
+    html body .reference-branch-tab .branch-tab-count,
+    html body #tabDubaiCount,
+    html body #tabAbuCount {
+      display: none !important;
+      visibility: hidden !important;
+      width: 0 !important;
+      min-width: 0 !important;
+      height: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      overflow: hidden !important;
+    }
+
+    html body .main-sidebar .branch-row b,
+    html body .main-sidebar #sideDubaiCount,
+    html body .main-sidebar #sideAbuCount {
+      min-width: 42px !important;
+      height: 25px !important;
+      border-radius: 999px !important;
+      color: rgba(18, 67, 39, .74) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.84), rgba(235,248,229,.72)) !important;
+      border: 1px solid rgba(134, 182, 119, .38) !important;
+      box-shadow:
+        0 6px 12px rgba(7,19,13,.035),
+        inset 0 1px 0 rgba(255,255,255,.84) !important;
+      font-size: 10.5px !important;
+      font-weight: 900 !important;
+      letter-spacing: .01em !important;
+    }
+
+    html body .main-sidebar .branch-row:hover b,
+    html body .main-sidebar .branch-row:hover #sideDubaiCount,
+    html body .main-sidebar .branch-row:hover #sideAbuCount {
+      color: rgba(13, 82, 45, .88) !important;
+      border-color: rgba(37, 132, 70, .30) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.94), rgba(229,247,222,.82)) !important;
+    }
+
+
+
+    /* V31.5.8.60.3.9.146 - Final visible build badge. */
+    html body .reply-panel::after,
+    html body .reference-version-badge::after,
+    html body .right-reference-panel .reference-version-badge::after,
+    html body .customer-crm-profile .reference-version-badge::after {
+      content: "V146" !important;
     }
 
   </style>
@@ -35343,6 +35486,11 @@ const LIVE_TOAST_DEDUP_WINDOW_MS = 12000;
 const LIVE_TOAST_MAX_VISIBLE = 3;
 const recentLiveToastMap = new Map();
 
+// V31.5.8.60.3.9.146 - Sound guard: prevent admin/visible-page sound-only alerts.
+let liveNotificationSoundLastPlayedAt = 0;
+const LIVE_NOTIFICATION_SOUND_COOLDOWN_MS = 15000;
+const LIVE_NOTIFICATION_SOUND_ON_VISIBLE_PAGE = false;
+
 let statusOverrideMap = {};
 try {
   statusOverrideMap = JSON.parse(localStorage.getItem("iconic_status_override_map") || "{}");
@@ -35405,6 +35553,9 @@ const liveNotificationStatus = document.getElementById("liveNotificationStatus")
 const liveNotificationPanel = document.getElementById("liveNotificationPanel");
 let liveNotificationPanelOpen = false;
 const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
+const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-146-root-notification-ui-auto-refresh';
+let iconicBuildAutoReloading = false;
+let iconicBuildLastVersionCheckAt = 0;
 const customerProfilePhone = document.getElementById("customerProfilePhone");
 const customerProfileBranch = document.getElementById("customerProfileBranch");
 const customerProfileLastActivity = document.getElementById("customerProfileLastActivity");
@@ -35421,10 +35572,13 @@ const customerProfileLocation = document.getElementById("customerProfileLocation
 const inboxBranchScope = ${JSON.stringify(req.inboxBranchScope || "")};
 const inboxUserName = ${JSON.stringify(req.inboxUser || "")};
 
-// V31.5.8.60.3.9.141 - Production notification scope + sticky notification fix.
-// UI/browser-only: branch-aware notification read storage and first-load baseline.
+// V31.5.8.60.3.9.143 - Notification initial baseline + historical batch guard.
+// UI/browser-only: branch/user scoped notification storage, first meaningful load baseline,
+// and stale batch suppression so old Sheet rows never appear as fresh "new messages".
 // Does not touch /api/messages, Google Sheet backend, send logic, webhook, booking, media, or history loading.
 let liveNotificationInitialBaselineApplied = false;
+const liveNotificationsPageStartedAt = Date.now();
+const LIVE_TOAST_MAX_HISTORICAL_AGE_MS = 5 * 60 * 1000;
 
 function normalizeInboxScopeToken(value) {
   return (value || "")
@@ -35510,15 +35664,24 @@ function isLiveConversationAllowedForCurrentUser(conversation) {
 }
 
 function applyInitialBranchNotificationBaseline(messages) {
-  if (!inboxBranchScope || liveNotificationInitialBaselineApplied) return;
+  if (liveNotificationInitialBaselineApplied) return false;
+
+  const sourceMessages = Array.isArray(messages) ? messages : [];
+
+  // Do not arm notifications from an empty/partial first API response.
+  // Some cold loads briefly return no rows before the Sheet payload arrives; arming there
+  // makes the next real payload look like a fresh batch of "new" messages.
+  if (!sourceMessages.length) {
+    updateLiveNotificationUi();
+    return false;
+  }
 
   liveNotificationInitialBaselineApplied = true;
 
+  const scopedMessages = sourceMessages.filter(shouldIncludeInLiveCustomerNotifications);
   const latestCustomerMessageByConversation = new Map();
 
-  (messages || []).forEach(function(message) {
-    if (!shouldIncludeInLiveCustomerNotifications(message)) return;
-
+  scopedMessages.forEach(function(message) {
     const key = getMessageConversationKey(message);
     const currentMessage = latestCustomerMessageByConversation.get(key);
 
@@ -35529,12 +35692,16 @@ function applyInitialBranchNotificationBaseline(messages) {
 
   latestCustomerMessageByConversation.forEach(function(message, key) {
     if (key) {
-      readMap[key] = messageKey(message);
+      readMap[key] = getStableCustomerNotificationSignature(message);
     }
   });
 
+  knownCustomerMessageKeys = getCustomerNotificationKeys(scopedMessages);
+  liveNotificationsReady = true;
   saveReadMap();
   resetVisibleLiveNotifications();
+  updateLiveNotificationUi();
+  return true;
 }
 
 
@@ -36745,16 +36912,15 @@ function getUnreadCustomerMessageCount(c) {
   if (typeof isClosedOrArchivedConversation === "function" && isClosedOrArchivedConversation(c)) return 0;
 
   const readMarker = readMap[c.key] || "";
+  const customerMessages = getConversationNotificationMessages(c);
   let count = 0;
 
-  for (const message of c.messages) {
-    if (readMarker && messageKey(message) === readMarker) {
+  for (const message of customerMessages) {
+    if (readMarker && isReadMarkerMatch(message, readMarker)) {
       break;
     }
 
-    if (shouldIncludeInLiveCustomerNotifications(message)) {
-      count += 1;
-    }
+    count += 1;
   }
 
   return count;
@@ -36766,8 +36932,15 @@ function isUnreadConversation(c) {
 
 function markConversationRead(key) {
   const c = buildConversations().find(function(item) { return item.key === key; });
-  if (!c || !c.latest) return;
-  readMap[key] = messageKey(c.latest);
+  if (!c) return;
+
+  const latestCustomerMessage = getLatestCustomerNotificationMessage(c);
+  const markerSource = latestCustomerMessage || c.latest;
+  if (!markerSource) return;
+
+  readMap[key] = latestCustomerMessage
+    ? getStableCustomerNotificationSignature(latestCustomerMessage)
+    : messageKey(markerSource);
   saveReadMap();
 }
 
@@ -36777,6 +36950,56 @@ function normalizePhoneDigitsClient(value) {
 
 function normalizeLiveBody(value) {
   return (value || "").toString().toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+// V31.5.8.60.3.9.142 - Notification hard dedupe + read marker fix.
+// UI/browser-only: prevents repeated/sticky notification counts when the same Sheet row
+// is reloaded with a slightly different time/order, and keeps branch/user scoped storage.
+// Does not touch /api/messages, loadMessagesFromGoogleSheet, Google Sheet backend,
+// send logic, webhook, booking, media/images/audio, or history loading.
+function getStableCustomerNotificationSignature(message) {
+  if (!message) return "";
+
+  const conversation = getMessageConversationKey(message);
+  const body = normalizeLiveBody(message.body || "").slice(0, 220);
+  const type = normalizeLiveBody(message.messageType || "").slice(0, 60);
+  const sender = normalizeLiveBody(message.sender || "").slice(0, 40);
+  const branch = normalizeLiveBranchName(message.branch || "");
+  const phone = normalizePhoneDigitsClient(message.phone || "");
+  const line = (message.phoneNumberId || "").toString().trim();
+
+  return [conversation, branch, phone, line, sender, type, body].join("|");
+}
+
+function getConversationNotificationMessages(conversation) {
+  if (!conversation || !Array.isArray(conversation.messages)) return [];
+
+  const seen = new Set();
+  const list = [];
+
+  (conversation.messages || []).forEach(function(message) {
+    if (!shouldIncludeInLiveCustomerNotifications(message)) return;
+
+    const signature = getStableCustomerNotificationSignature(message);
+    if (!signature || seen.has(signature)) return;
+
+    seen.add(signature);
+    list.push(message);
+  });
+
+  return list.sort(function(a, b) {
+    return getMessageTimeValue(b) - getMessageTimeValue(a);
+  });
+}
+
+function getLatestCustomerNotificationMessage(conversation) {
+  const messages = getConversationNotificationMessages(conversation);
+  return messages[0] || null;
+}
+
+function isReadMarkerMatch(message, readMarker) {
+  if (!message || !readMarker) return false;
+  return readMarker === getStableCustomerNotificationSignature(message) || readMarker === messageKey(message);
 }
 
 function isInternalNotificationPhone(phone) {
@@ -36873,14 +37096,23 @@ function shouldShowLiveToastForMessage(message) {
   return true;
 }
 
+function isFreshEnoughForLiveToast(message) {
+  const timeValue = getMessageTimeValue(message);
+
+  // If the message has a parseable Sheet timestamp, only toast for messages that
+  // arrived after this browser session started. This prevents old/history rows
+  // from producing a large repeating toast after refresh or cold start.
+  if (timeValue) {
+    return timeValue >= (liveNotificationsPageStartedAt - LIVE_TOAST_MAX_HISTORICAL_AGE_MS);
+  }
+
+  // No reliable timestamp: keep the message in the panel/read logic, but do not
+  // generate a toast from it because it may be an old imported row.
+  return false;
+}
+
 function customerNotificationKey(message) {
-  return [
-    message.phone || "",
-    message.phoneNumberId || "",
-    message.time || "",
-    message.sender || "",
-    (message.body || "").toString().slice(0, 80)
-  ].join("|");
+  return getStableCustomerNotificationSignature(message);
 }
 
 function getCustomerNotificationKeys(messages) {
@@ -36917,7 +37149,16 @@ function updateLiveNotificationUi() {
     clearLiveNotificationToasts();
   }
 
-  const visibleCount = Math.max(unreadCount, liveAlertCount);
+  // Badge/panel must reflect the real unread open conversations only.
+  // liveAlertCount is only a temporary browser-title/toast signal and must never inflate/repeat the bell count.
+  const visibleCount = unreadCount;
+
+  if (unreadCount === 0) {
+    liveAlertCount = 0;
+    clearLiveNotificationToasts();
+  } else if (liveAlertCount > unreadCount) {
+    liveAlertCount = unreadCount;
+  }
 
   if (liveNotificationCount) {
     liveNotificationCount.textContent = visibleCount > 99 ? "99+" : String(visibleCount);
@@ -36954,6 +37195,7 @@ function getLiveToastStack() {
 function clearLiveNotificationToasts() {
   const stack = document.getElementById("liveToastStack");
   if (stack) stack.innerHTML = "";
+  recentLiveToastMap.clear();
 }
 
 
@@ -37078,7 +37320,13 @@ function resetVisibleLiveNotifications() {
 
 function markAllLiveNotificationConversationsRead() {
   const conversations = getOpenLiveNotificationConversations();
-  if (!conversations.length) return;
+
+  if (!conversations.length) {
+    resetVisibleLiveNotifications();
+    renderLiveNotificationPanel();
+    updateLiveNotificationUi();
+    return;
+  }
 
   conversations.forEach(function(conversation) {
     if (conversation && conversation.key) {
@@ -37087,6 +37335,7 @@ function markAllLiveNotificationConversationsRead() {
   });
 
   resetLiveAlertCounter();
+  clearLiveNotificationToasts();
   renderConversationList();
   renderLiveNotificationPanel();
   updateLiveNotificationUi();
@@ -37170,6 +37419,19 @@ function unlockLiveNotificationSound() {
 function playLiveNotificationSound() {
   if (!liveNotificationsEnabled) return;
 
+  // V31.5.8.60.3.9.145:
+  // Avoid the annoying admin "sound only" case while the inbox is already visible.
+  // Visible page = show toast/bell only. Hidden/minimized tab = allow a throttled sound for a real new message.
+  if (document.visibilityState === "visible" && !LIVE_NOTIFICATION_SOUND_ON_VISIBLE_PAGE) {
+    return;
+  }
+
+  const now = Date.now();
+  if (now - liveNotificationSoundLastPlayedAt < LIVE_NOTIFICATION_SOUND_COOLDOWN_MS) {
+    return;
+  }
+  liveNotificationSoundLastPlayedAt = now;
+
   try {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return;
@@ -37192,7 +37454,7 @@ function playLiveNotificationSound() {
     oscillator.frequency.setValueAtTime(660, ctx.currentTime + 0.12);
 
     gain.gain.setValueAtTime(0.001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.16, ctx.currentTime + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.03);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
 
     oscillator.connect(gain);
@@ -37241,18 +37503,30 @@ function showBrowserLiveNotification(message, newCount) {
 }
 
 function processLiveInboxNotifications(nextMessages) {
-  const scopedMessages = (nextMessages || []).filter(shouldIncludeInLiveCustomerNotifications);
-  const newKnownKeys = getCustomerNotificationKeys(scopedMessages);
-  const newCustomerMessages = scopedMessages.filter(function(message) {
-    return !knownCustomerMessageKeys.has(customerNotificationKey(message));
-  });
+  const sourceMessages = Array.isArray(nextMessages) ? nextMessages : [];
 
+  // First meaningful payload is a baseline, not a notification event.
+  // This covers admin + branch users and fixes cold-start/refresh batches.
   if (!liveNotificationsReady) {
-    knownCustomerMessageKeys = newKnownKeys;
-    liveNotificationsReady = true;
-    updateLiveNotificationUi();
+    applyInitialBranchNotificationBaseline(sourceMessages);
     return;
   }
+
+  const scopedMessages = sourceMessages.filter(shouldIncludeInLiveCustomerNotifications);
+  const newKnownKeys = getCustomerNotificationKeys(scopedMessages);
+
+  const seenNewKeys = new Set();
+  const newCustomerMessages = scopedMessages.filter(function(message) {
+    const key = customerNotificationKey(message);
+    if (!key || knownCustomerMessageKeys.has(key) || seenNewKeys.has(key)) return false;
+    seenNewKeys.add(key);
+
+    const conversationKeyValue = getMessageConversationKey(message);
+    const readMarker = readMap[conversationKeyValue] || "";
+    if (readMarker && isReadMarkerMatch(message, readMarker)) return false;
+
+    return true;
+  });
 
   knownCustomerMessageKeys = newKnownKeys;
 
@@ -37261,7 +37535,9 @@ function processLiveInboxNotifications(nextMessages) {
     return;
   }
 
-  const dedupedNewCustomerMessages = newCustomerMessages.filter(shouldShowLiveToastForMessage);
+  const dedupedNewCustomerMessages = newCustomerMessages
+    .filter(isFreshEnoughForLiveToast)
+    .filter(shouldShowLiveToastForMessage);
 
   if (!dedupedNewCustomerMessages.length) {
     updateLiveNotificationUi();
@@ -37269,7 +37545,7 @@ function processLiveInboxNotifications(nextMessages) {
   }
 
   const newestMessage = dedupedNewCustomerMessages[0];
-  liveAlertCount += dedupedNewCustomerMessages.length;
+  liveAlertCount = Math.min(getUnreadConversationCount(), liveAlertCount + dedupedNewCustomerMessages.length);
 
   showLiveNotificationToast(newestMessage, dedupedNewCustomerMessages.length);
   playLiveNotificationSound();
@@ -37689,8 +37965,10 @@ function updateStats() {
     else acc.dubai += 1;
     return acc;
   }, { dubai: 0, abu: 0 });
-  if (tabDubaiCount) tabDubaiCount.textContent = conversationBranchCounts.dubai;
-  if (tabAbuCount) tabAbuCount.textContent = conversationBranchCounts.abu;
+  // V144: top branch tabs are filters, not notification counters.
+  // Keep sidebar branch totals available, but do not show noisy numbers beside Dubai / Abu Dhabi tabs.
+  if (tabDubaiCount) tabDubaiCount.textContent = "";
+  if (tabAbuCount) tabAbuCount.textContent = "";
   applyBranchScopeUiVisibility();
   updateNeedsActionCommandCenter(conversations);
   updateLiveNotificationUi();
@@ -38269,9 +38547,12 @@ async function loadMessages(options) {
     const nextRenderSignature = buildBrowserInboxRenderSignature(safeMessages, nextConversationStates, nextBookingRequests);
     const shouldRender = Boolean(loadOptions.forceRender) || nextRenderSignature !== lastBrowserInboxRenderSignature;
 
-    processLiveInboxNotifications(safeMessages);
+    // Update the browser state before notification calculations.
+    // The unread counter builds conversations from allMessages, so using the old
+    // state here can inflate/repeat counts during refresh.
     allMessages = safeMessages;
     allBookingRequests = nextBookingRequests;
+    processLiveInboxNotifications(safeMessages);
 
     if (shouldRender) {
       lastBrowserInboxRenderSignature = nextRenderSignature;
@@ -38995,6 +39276,50 @@ document.querySelectorAll("[data-sidebar-branch-reset]").forEach(function(btn) {
   });
 });
 
+
+// V31.5.8.60.3.9.146 - Production build watcher / auto-refresh after deploy.
+// After this version is loaded once, future deploys are detected through /api/version.
+// The page reloads with a cache-buster so the browser receives the newest Team Inbox HTML/JS.
+function getIconicReloadUrl() {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set("build", Date.now().toString());
+    return url.toString();
+  } catch (error) {
+    return "/inbox?build=" + Date.now();
+  }
+}
+
+async function checkForIconicInboxBuildUpdate(force) {
+  if (iconicBuildAutoReloading) return;
+
+  const now = Date.now();
+  if (!force && now - iconicBuildLastVersionCheckAt < 25000) return;
+  iconicBuildLastVersionCheckAt = now;
+
+  try {
+    const res = await fetch("/api/version?buildCheck=" + now, { cache: "no-store" });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const serverVersion = (data && data.version ? data.version : "").toString().trim();
+
+    if (!serverVersion || serverVersion === ICONIC_CLIENT_BUILD_VERSION) {
+      return;
+    }
+
+    iconicBuildAutoReloading = true;
+    clearLiveNotificationToasts();
+    setLiveNotificationStatusText("New version detected — refreshing inbox...");
+
+    window.setTimeout(function() {
+      window.location.replace(getIconicReloadUrl());
+    }, 900);
+  } catch (error) {
+    // Version check is optional; normal inbox polling continues.
+  }
+}
+
 function ensureBookingActionsVisible() {
   const card = document.getElementById("bookingRequestCard");
   if (!card) return;
@@ -39023,6 +39348,15 @@ setInterval(function() {
   if (document.visibilityState === "hidden") return;
   loadMessages({ reason: "auto" });
 }, 8000);
+
+// Detect new Render/GitHub deploys and refresh the already-open inbox automatically.
+setTimeout(function() { checkForIconicInboxBuildUpdate(true); }, 12000);
+setInterval(function() { checkForIconicInboxBuildUpdate(false); }, 30000);
+document.addEventListener("visibilitychange", function() {
+  if (document.visibilityState === "visible") {
+    checkForIconicInboxBuildUpdate(true);
+  }
+});
 
 
 // V31.5.8.60.3.9.134 - Loading overlay waits for actual /api/messages data readiness.
