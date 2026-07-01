@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-142-notification-hard-dedupe-read-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-143-notification-initial-baseline-batch-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -35430,10 +35430,13 @@ const customerProfileLocation = document.getElementById("customerProfileLocation
 const inboxBranchScope = ${JSON.stringify(req.inboxBranchScope || "")};
 const inboxUserName = ${JSON.stringify(req.inboxUser || "")};
 
-// V31.5.8.60.3.9.141 - Production notification scope + sticky notification fix.
-// UI/browser-only: branch-aware notification read storage and first-load baseline.
+// V31.5.8.60.3.9.143 - Notification initial baseline + historical batch guard.
+// UI/browser-only: branch/user scoped notification storage, first meaningful load baseline,
+// and stale batch suppression so old Sheet rows never appear as fresh "new messages".
 // Does not touch /api/messages, Google Sheet backend, send logic, webhook, booking, media, or history loading.
 let liveNotificationInitialBaselineApplied = false;
+const liveNotificationsPageStartedAt = Date.now();
+const LIVE_TOAST_MAX_HISTORICAL_AGE_MS = 5 * 60 * 1000;
 
 function normalizeInboxScopeToken(value) {
   return (value || "")
@@ -35519,15 +35522,24 @@ function isLiveConversationAllowedForCurrentUser(conversation) {
 }
 
 function applyInitialBranchNotificationBaseline(messages) {
-  if (!inboxBranchScope || liveNotificationInitialBaselineApplied) return;
+  if (liveNotificationInitialBaselineApplied) return false;
+
+  const sourceMessages = Array.isArray(messages) ? messages : [];
+
+  // Do not arm notifications from an empty/partial first API response.
+  // Some cold loads briefly return no rows before the Sheet payload arrives; arming there
+  // makes the next real payload look like a fresh batch of "new" messages.
+  if (!sourceMessages.length) {
+    updateLiveNotificationUi();
+    return false;
+  }
 
   liveNotificationInitialBaselineApplied = true;
 
+  const scopedMessages = sourceMessages.filter(shouldIncludeInLiveCustomerNotifications);
   const latestCustomerMessageByConversation = new Map();
 
-  (messages || []).forEach(function(message) {
-    if (!shouldIncludeInLiveCustomerNotifications(message)) return;
-
+  scopedMessages.forEach(function(message) {
     const key = getMessageConversationKey(message);
     const currentMessage = latestCustomerMessageByConversation.get(key);
 
@@ -35542,8 +35554,12 @@ function applyInitialBranchNotificationBaseline(messages) {
     }
   });
 
+  knownCustomerMessageKeys = getCustomerNotificationKeys(scopedMessages);
+  liveNotificationsReady = true;
   saveReadMap();
   resetVisibleLiveNotifications();
+  updateLiveNotificationUi();
+  return true;
 }
 
 
@@ -36938,6 +36954,21 @@ function shouldShowLiveToastForMessage(message) {
   return true;
 }
 
+function isFreshEnoughForLiveToast(message) {
+  const timeValue = getMessageTimeValue(message);
+
+  // If the message has a parseable Sheet timestamp, only toast for messages that
+  // arrived after this browser session started. This prevents old/history rows
+  // from producing a large repeating toast after refresh or cold start.
+  if (timeValue) {
+    return timeValue >= (liveNotificationsPageStartedAt - LIVE_TOAST_MAX_HISTORICAL_AGE_MS);
+  }
+
+  // No reliable timestamp: keep the message in the panel/read logic, but do not
+  // generate a toast from it because it may be an old imported row.
+  return false;
+}
+
 function customerNotificationKey(message) {
   return getStableCustomerNotificationSignature(message);
 }
@@ -37147,7 +37178,13 @@ function resetVisibleLiveNotifications() {
 
 function markAllLiveNotificationConversationsRead() {
   const conversations = getOpenLiveNotificationConversations();
-  if (!conversations.length) return;
+
+  if (!conversations.length) {
+    resetVisibleLiveNotifications();
+    renderLiveNotificationPanel();
+    updateLiveNotificationUi();
+    return;
+  }
 
   conversations.forEach(function(conversation) {
     if (conversation && conversation.key) {
@@ -37156,6 +37193,7 @@ function markAllLiveNotificationConversationsRead() {
   });
 
   resetLiveAlertCounter();
+  clearLiveNotificationToasts();
   renderConversationList();
   renderLiveNotificationPanel();
   updateLiveNotificationUi();
@@ -37310,7 +37348,16 @@ function showBrowserLiveNotification(message, newCount) {
 }
 
 function processLiveInboxNotifications(nextMessages) {
-  const scopedMessages = (nextMessages || []).filter(shouldIncludeInLiveCustomerNotifications);
+  const sourceMessages = Array.isArray(nextMessages) ? nextMessages : [];
+
+  // First meaningful payload is a baseline, not a notification event.
+  // This covers admin + branch users and fixes cold-start/refresh batches.
+  if (!liveNotificationsReady) {
+    applyInitialBranchNotificationBaseline(sourceMessages);
+    return;
+  }
+
+  const scopedMessages = sourceMessages.filter(shouldIncludeInLiveCustomerNotifications);
   const newKnownKeys = getCustomerNotificationKeys(scopedMessages);
 
   const seenNewKeys = new Set();
@@ -37326,13 +37373,6 @@ function processLiveInboxNotifications(nextMessages) {
     return true;
   });
 
-  if (!liveNotificationsReady) {
-    knownCustomerMessageKeys = newKnownKeys;
-    liveNotificationsReady = true;
-    updateLiveNotificationUi();
-    return;
-  }
-
   knownCustomerMessageKeys = newKnownKeys;
 
   if (!newCustomerMessages.length) {
@@ -37340,7 +37380,9 @@ function processLiveInboxNotifications(nextMessages) {
     return;
   }
 
-  const dedupedNewCustomerMessages = newCustomerMessages.filter(shouldShowLiveToastForMessage);
+  const dedupedNewCustomerMessages = newCustomerMessages
+    .filter(isFreshEnoughForLiveToast)
+    .filter(shouldShowLiveToastForMessage);
 
   if (!dedupedNewCustomerMessages.length) {
     updateLiveNotificationUi();
@@ -38348,9 +38390,12 @@ async function loadMessages(options) {
     const nextRenderSignature = buildBrowserInboxRenderSignature(safeMessages, nextConversationStates, nextBookingRequests);
     const shouldRender = Boolean(loadOptions.forceRender) || nextRenderSignature !== lastBrowserInboxRenderSignature;
 
-    processLiveInboxNotifications(safeMessages);
+    // Update the browser state before notification calculations.
+    // The unread counter builds conversations from allMessages, so using the old
+    // state here can inflate/repeat counts during refresh.
     allMessages = safeMessages;
     allBookingRequests = nextBookingRequests;
+    processLiveInboxNotifications(safeMessages);
 
     if (shouldRender) {
       lastBrowserInboxRenderSignature = nextRenderSignature;
