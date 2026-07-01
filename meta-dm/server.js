@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-143-notification-initial-baseline-batch-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-144-branch-tabs-soft-notification-ui-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -10535,8 +10535,8 @@ function buildInboxReferenceBranchTabs(branchScope = "") {
   const includeAbuDhabi = !scope || scope === "Abu Dhabi";
 
   const buttons = [
-    includeDubai ? '<button type="button" class="reference-branch-tab" data-branch="Dubai" data-branch-scope-item="Dubai">Dubai <span id="tabDubaiCount">0</span></button>' : '',
-    includeAbuDhabi ? '<button type="button" class="reference-branch-tab" data-branch="Abu Dhabi" data-branch-scope-item="Abu Dhabi">Abu Dhabi <span id="tabAbuCount">0</span></button>' : ''
+    includeDubai ? '<button type="button" class="reference-branch-tab" data-branch="Dubai" data-branch-scope-item="Dubai"><span class="branch-tab-label">Dubai</span><span id="tabDubaiCount" class="branch-tab-count" aria-hidden="true"></span></button>' : '',
+    includeAbuDhabi ? '<button type="button" class="reference-branch-tab" data-branch="Abu Dhabi" data-branch-scope-item="Abu Dhabi"><span class="branch-tab-label">Abu Dhabi</span><span id="tabAbuCount" class="branch-tab-count" aria-hidden="true"></span></button>' : ''
   ].filter(Boolean).join("\n");
 
   if (!buttons) return "";
@@ -34886,6 +34886,127 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     html body .customer-crm-profile .reference-version-badge::after {
       content: "V142" !important;
     }
+
+
+    /* V31.5.8.60.3.9.144 - Branch notification visual cleanup.
+       UI-only: soften branch filter active state and stop branch tabs from looking like unread alerts.
+       No /api/messages, Google Sheet loading, send, webhook, booking, media, or history logic changed. */
+    html body .reference-branch-tabs {
+      gap: 9px !important;
+      border-top-color: rgba(151, 194, 137, .32) !important;
+    }
+
+    html body .reference-branch-tab {
+      position: relative !important;
+      height: 36px !important;
+      min-height: 36px !important;
+      border-radius: 18px !important;
+      gap: 7px !important;
+      color: rgba(20, 48, 32, .74) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.94), rgba(246,252,242,.80)) !important;
+      border: 1px solid rgba(143, 186, 130, .36) !important;
+      box-shadow:
+        0 7px 15px rgba(7,19,13,.035),
+        inset 0 1px 0 rgba(255,255,255,.88) !important;
+      transform: none !important;
+    }
+
+    html body .reference-branch-tab::before {
+      content: "" !important;
+      width: 7px !important;
+      height: 7px !important;
+      border-radius: 999px !important;
+      background: rgba(99, 136, 105, .28) !important;
+      box-shadow: none !important;
+      flex: 0 0 auto !important;
+    }
+
+    html body .reference-branch-tab:hover {
+      color: rgba(10, 47, 27, .90) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(240,250,235,.90)) !important;
+      border-color: rgba(37, 132, 70, .26) !important;
+      box-shadow:
+        0 9px 18px rgba(7,19,13,.045),
+        inset 0 1px 0 rgba(255,255,255,.92) !important;
+    }
+
+    html body .reference-branch-tab.active {
+      color: #143320 !important;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(255,255,255,.68), transparent 34%),
+        linear-gradient(180deg, #f8fff5, #edf8e8) !important;
+      border-color: rgba(37, 132, 70, .36) !important;
+      box-shadow:
+        0 10px 20px rgba(7,19,13,.050),
+        inset 0 0 0 1px rgba(37, 132, 70, .075),
+        inset 0 1px 0 rgba(255,255,255,.96) !important;
+    }
+
+    html body .reference-branch-tab.active::before {
+      background: rgba(37, 132, 70, .70) !important;
+      box-shadow: 0 0 0 4px rgba(37, 211, 102, .10) !important;
+    }
+
+    html body .reference-branch-tab .branch-tab-label {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      line-height: 1 !important;
+      min-width: auto !important;
+      width: auto !important;
+      height: auto !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      border-radius: 0 !important;
+      color: inherit !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      font-size: inherit !important;
+      font-weight: inherit !important;
+    }
+
+    html body .reference-branch-tab .branch-tab-count,
+    html body #tabDubaiCount,
+    html body #tabAbuCount {
+      display: none !important;
+      visibility: hidden !important;
+      width: 0 !important;
+      min-width: 0 !important;
+      height: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      overflow: hidden !important;
+    }
+
+    html body .main-sidebar .branch-row b,
+    html body .main-sidebar #sideDubaiCount,
+    html body .main-sidebar #sideAbuCount {
+      min-width: 42px !important;
+      height: 25px !important;
+      border-radius: 999px !important;
+      color: rgba(18, 67, 39, .74) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.84), rgba(235,248,229,.72)) !important;
+      border: 1px solid rgba(134, 182, 119, .38) !important;
+      box-shadow:
+        0 6px 12px rgba(7,19,13,.035),
+        inset 0 1px 0 rgba(255,255,255,.84) !important;
+      font-size: 10.5px !important;
+      font-weight: 900 !important;
+      letter-spacing: .01em !important;
+    }
+
+    html body .main-sidebar .branch-row:hover b,
+    html body .main-sidebar .branch-row:hover #sideDubaiCount,
+    html body .main-sidebar .branch-row:hover #sideAbuCount {
+      color: rgba(13, 82, 45, .88) !important;
+      border-color: rgba(37, 132, 70, .30) !important;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.94), rgba(229,247,222,.82)) !important;
+    }
+
   </style>
 </head>
 <body>
@@ -37810,8 +37931,10 @@ function updateStats() {
     else acc.dubai += 1;
     return acc;
   }, { dubai: 0, abu: 0 });
-  if (tabDubaiCount) tabDubaiCount.textContent = conversationBranchCounts.dubai;
-  if (tabAbuCount) tabAbuCount.textContent = conversationBranchCounts.abu;
+  // V144: top branch tabs are filters, not notification counters.
+  // Keep sidebar branch totals available, but do not show noisy numbers beside Dubai / Abu Dhabi tabs.
+  if (tabDubaiCount) tabDubaiCount.textContent = "";
+  if (tabAbuCount) tabAbuCount.textContent = "";
   applyBranchScopeUiVisibility();
   updateNeedsActionCommandCenter(conversations);
   updateLiveNotificationUi();
