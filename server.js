@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-146-root-notification-ui-auto-refresh";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-148-notification-count-fallback-safe";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -34483,7 +34483,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     html body .reference-version-badge::after,
     html body .right-reference-panel .reference-version-badge::after,
     html body .customer-crm-profile .reference-version-badge::after {
-      content: "V146" !important;
+      content: "V148" !important;
     }
 
     html body .iconic-loading-card {
@@ -34887,7 +34887,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     html body .reference-version-badge::after,
     html body .right-reference-panel .reference-version-badge::after,
     html body .customer-crm-profile .reference-version-badge::after {
-      content: "V146" !important;
+      content: "V148" !important;
     }
 
 
@@ -35017,7 +35017,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     html body .reference-version-badge::after,
     html body .right-reference-panel .reference-version-badge::after,
     html body .customer-crm-profile .reference-version-badge::after {
-      content: "V146" !important;
+      content: "V148" !important;
     }
 
   </style>
@@ -35491,6 +35491,12 @@ let liveNotificationSoundLastPlayedAt = 0;
 const LIVE_NOTIFICATION_SOUND_COOLDOWN_MS = 15000;
 const LIVE_NOTIFICATION_SOUND_ON_VISIBLE_PAGE = false;
 
+// V31.5.8.60.3.9.148 - Safe live notification fallback state.
+// Tracks scoped customer-message count between successful polling cycles.
+// This catches real new messages even when Sheet timestamps or old read markers make the normal key logic too strict.
+let liveNotificationLastCustomerCount = 0;
+let liveNotificationLastNewestKey = "";
+
 let statusOverrideMap = {};
 try {
   statusOverrideMap = JSON.parse(localStorage.getItem("iconic_status_override_map") || "{}");
@@ -35553,7 +35559,7 @@ const liveNotificationStatus = document.getElementById("liveNotificationStatus")
 const liveNotificationPanel = document.getElementById("liveNotificationPanel");
 let liveNotificationPanelOpen = false;
 const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
-const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-146-root-notification-ui-auto-refresh';
+const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-148-notification-count-fallback-safe';
 let iconicBuildAutoReloading = false;
 let iconicBuildLastVersionCheckAt = 0;
 const customerProfilePhone = document.getElementById("customerProfilePhone");
@@ -35697,6 +35703,7 @@ function applyInitialBranchNotificationBaseline(messages) {
   });
 
   knownCustomerMessageKeys = getCustomerNotificationKeys(scopedMessages);
+  updateLiveNotificationSnapshot(scopedMessages);
   liveNotificationsReady = true;
   saveReadMap();
   resetVisibleLiveNotifications();
@@ -37122,6 +37129,54 @@ function getCustomerNotificationKeys(messages) {
     .map(customerNotificationKey));
 }
 
+function getLiveNotificationSnapshot(scopedMessages) {
+  const list = (Array.isArray(scopedMessages) ? scopedMessages : [])
+    .filter(shouldIncludeInLiveCustomerNotifications)
+    .slice()
+    .sort(function(a, b) {
+      const timeDiff = getMessageTimeValue(b) - getMessageTimeValue(a);
+      if (timeDiff) return timeDiff;
+      return String(b.time || "").localeCompare(String(a.time || ""));
+    });
+
+  const newest = list[0] || null;
+  return {
+    count: list.length,
+    newest,
+    newestKey: newest ? customerNotificationKey(newest) : ""
+  };
+}
+
+function updateLiveNotificationSnapshot(scopedMessages) {
+  const snapshot = getLiveNotificationSnapshot(scopedMessages);
+  liveNotificationLastCustomerCount = snapshot.count;
+  liveNotificationLastNewestKey = snapshot.newestKey || "";
+  return snapshot;
+}
+
+function getFallbackLiveNotificationMessage(scopedMessages, previousCustomerCount) {
+  const snapshot = getLiveNotificationSnapshot(scopedMessages);
+
+  if (!previousCustomerCount || snapshot.count <= previousCustomerCount) {
+    return { message: null, count: 0 };
+  }
+
+  const newest = snapshot.newest;
+  if (!newest) return { message: null, count: 0 };
+
+  const conversationKeyValue = getMessageConversationKey(newest);
+  const readMarker = readMap[conversationKeyValue] || "";
+
+  // When the normal unread/read-marker system already considers it read, still allow
+  // a very small transient bell/toast if the total customer-message count increased.
+  // This is intentional: it fixes the case where all users receive new Sheet rows but
+  // no visible notification is produced because the row signature was treated as known.
+  return {
+    message: newest,
+    count: Math.max(1, Math.min(snapshot.count - previousCustomerCount, 9))
+  };
+}
+
 function getUnreadConversationCount() {
   return buildConversations().filter(isUnreadConversation).length;
 }
@@ -37149,9 +37204,9 @@ function updateLiveNotificationUi() {
     clearLiveNotificationToasts();
   }
 
-  // Badge/panel must reflect the real unread open conversations only.
-  // liveAlertCount is only a temporary browser-title/toast signal and must never inflate/repeat the bell count.
-  const visibleCount = unreadCount;
+  // Badge shows real unread conversations, plus a short transient fallback count when
+  // a fresh Sheet poll clearly received new customer rows but strict read markers hid them.
+  const visibleCount = Math.max(unreadCount, liveAlertCount);
 
   if (unreadCount === 0) {
     liveAlertCount = 0;
@@ -37513,6 +37568,7 @@ function processLiveInboxNotifications(nextMessages) {
   }
 
   const scopedMessages = sourceMessages.filter(shouldIncludeInLiveCustomerNotifications);
+  const previousCustomerCount = liveNotificationLastCustomerCount || 0;
   const newKnownKeys = getCustomerNotificationKeys(scopedMessages);
 
   const seenNewKeys = new Set();
@@ -37529,27 +37585,37 @@ function processLiveInboxNotifications(nextMessages) {
   });
 
   knownCustomerMessageKeys = newKnownKeys;
+  updateLiveNotificationSnapshot(scopedMessages);
 
-  if (!newCustomerMessages.length) {
-    updateLiveNotificationUi();
-    return;
-  }
-
-  const dedupedNewCustomerMessages = newCustomerMessages
-    .filter(isFreshEnoughForLiveToast)
+  let alertMessages = newCustomerMessages
+    .filter(function(message) {
+      // Keep timestamp protection for normal alerts, but do not let an unparseable
+      // Sheet timestamp kill all notifications if the fallback count proves a new row arrived.
+      return isFreshEnoughForLiveToast(message);
+    })
     .filter(shouldShowLiveToastForMessage);
+  let alertCount = alertMessages.length;
 
-  if (!dedupedNewCustomerMessages.length) {
+  if (!alertMessages.length) {
+    const fallback = getFallbackLiveNotificationMessage(scopedMessages, previousCustomerCount);
+    if (fallback.message && shouldShowLiveToastForMessage(fallback.message)) {
+      alertMessages = [fallback.message];
+      alertCount = fallback.count;
+    }
+  }
+
+  if (!alertMessages.length) {
     updateLiveNotificationUi();
     return;
   }
 
-  const newestMessage = dedupedNewCustomerMessages[0];
-  liveAlertCount = Math.min(getUnreadConversationCount(), liveAlertCount + dedupedNewCustomerMessages.length);
+  const newestMessage = alertMessages[0];
+  liveAlertCount = Math.max(liveAlertCount, alertCount);
+  liveAlertCount = Math.min(Math.max(getUnreadConversationCount(), alertCount), Math.max(liveAlertCount, alertCount));
 
-  showLiveNotificationToast(newestMessage, dedupedNewCustomerMessages.length);
+  showLiveNotificationToast(newestMessage, alertCount);
   playLiveNotificationSound();
-  showBrowserLiveNotification(newestMessage, dedupedNewCustomerMessages.length);
+  showBrowserLiveNotification(newestMessage, alertCount);
   updateLiveNotificationUi();
 }
 
