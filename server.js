@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-153-live-alert-short-suffix-suppression-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-154-live-alert-time-signature-safe-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -35553,7 +35553,7 @@ const liveNotificationStatus = document.getElementById("liveNotificationStatus")
 const liveNotificationPanel = document.getElementById("liveNotificationPanel");
 let liveNotificationPanelOpen = false;
 const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
-const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-153-live-alert-short-suffix-suppression-fix';
+const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-154-live-alert-time-signature-safe-fix';
 let iconicBuildAutoReloading = false;
 let iconicBuildLastVersionCheckAt = 0;
 const customerProfilePhone = document.getElementById("customerProfilePhone");
@@ -36961,6 +36961,7 @@ function getStableCustomerNotificationSignature(message) {
   if (!message) return "";
 
   const conversation = getMessageConversationKey(message);
+  const time = (message.time || "").toString().trim();
   const body = normalizeLiveBody(message.body || "").slice(0, 220);
   const type = normalizeLiveBody(message.messageType || "").slice(0, 60);
   const sender = normalizeLiveBody(message.sender || "").slice(0, 40);
@@ -36968,7 +36969,10 @@ function getStableCustomerNotificationSignature(message) {
   const phone = normalizePhoneDigitsClient(message.phone || "");
   const line = (message.phoneNumberId || "").toString().trim();
 
-  return [conversation, branch, phone, line, sender, type, body].join("|");
+  // V31.5.8.60.3.9.154:
+  // Include time so two identical customer messages from the same number are not treated as the same row.
+  // This keeps read/unread and live bell alerts reliable for repeated texts like "Test" / "مرحبا".
+  return [conversation, branch, phone, line, time, sender, type, body].join("|");
 }
 
 function getConversationNotificationMessages(conversation) {
@@ -37010,12 +37014,13 @@ function isInternalNotificationPhone(phone) {
     const cleanNumber = normalizePhoneDigitsClient(number);
     if (!cleanNumber) return false;
 
-    // V31.5.8.60.3.9.153:
-    // Never suppress Team Inbox live alerts by very short suffixes such as "395".
-    // That suffix accidentally matches real customer/tester numbers ending in 2395
-    // and makes customer rows invisible to the bell/toast notification system.
-    // Keep full internal/staff numbers suppressed, but ignore short suffix-only rules.
-    if (cleanNumber.length < 8) return false;
+    // V31.5.8.60.3.9.154:
+    // Never suppress live alerts by very short suffixes like "395".
+    // A short suffix can accidentally match real customer numbers such as 0521322395.
+    // Exact short internal-test values are still suppressed only if the whole phone equals the value.
+    if (cleanNumber.length < 8) {
+      return value === cleanNumber;
+    }
 
     return value === cleanNumber || value.endsWith(cleanNumber) || cleanNumber.endsWith(value);
   });
