@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-150-notification-hard-visibility-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-151-notification-customer-row-detector-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -35557,7 +35557,7 @@ const liveNotificationStatus = document.getElementById("liveNotificationStatus")
 const liveNotificationPanel = document.getElementById("liveNotificationPanel");
 let liveNotificationPanelOpen = false;
 const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
-const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-150-notification-hard-visibility-fix';
+const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-151-notification-customer-row-detector-fix';
 let iconicBuildAutoReloading = false;
 let iconicBuildLastVersionCheckAt = 0;
 const customerProfilePhone = document.getElementById("customerProfilePhone");
@@ -37066,21 +37066,37 @@ function isLiveNotificationArchivedMessage(message) {
   return isArchivedStatusTextClient(state.status || "") || isArchivedStatusTextClient(overrideStatus || "");
 }
 
-function shouldIncludeInLiveCustomerNotifications(message) {
+function isLikelyLiveCustomerNotificationRow(message) {
   if (!message) return false;
 
   const sender = normalizeLiveBody(message.sender || "");
   const messageType = normalizeLiveBody(message.messageType || "");
   const status = normalizeLiveBody(message.status || "");
+  const combined = [sender, messageType, status].join(" ");
 
-  // V150: accept normal customer rows even if Google Sheet casing/label changes.
-  // Some Sheet rows arrive as Customer / Customer Reply / Customer Message, not strict lowercase "customer".
-  const isCustomerRow = sender === "customer" ||
-    status === "customer reply" ||
-    messageType === "customer message" ||
-    messageType === "whatsapp customer message";
+  // V151: Sheet rows are not guaranteed to keep sender exactly as "customer".
+  // Accept customer/client labels anywhere in sender, messageType, or status,
+  // while still rejecting staff/bot/team rows.
+  const hasCustomerSignal = sender === "customer" ||
+    combined.includes("customer") ||
+    combined.includes("client") ||
+    combined.includes("عميل");
 
-  if (!isCustomerRow) return false;
+  const hasInternalSenderSignal = sender === "staff" ||
+    sender === "bot" ||
+    combined.includes("human reply") ||
+    combined.includes("staff") ||
+    combined.includes("team reply") ||
+    combined.includes("bot reply") ||
+    combined.includes("bot");
+
+  return Boolean(hasCustomerSignal && !hasInternalSenderSignal);
+}
+
+function shouldIncludeInLiveCustomerNotifications(message) {
+  if (!message) return false;
+
+  if (!isLikelyLiveCustomerNotificationRow(message)) return false;
   if (!isLiveMessageAllowedForCurrentUser(message)) return false;
   if (isInternalNotificationPhone(message.phone)) return false;
   if (isOperationalReminderConsentMessage(message)) return false;
