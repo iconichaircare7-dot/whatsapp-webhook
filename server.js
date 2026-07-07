@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-151-notification-customer-row-detector-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-152-live-alert-remove-test-number-suppression";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -421,7 +421,7 @@ function normalizeWhatsAppRecipientDigits(value) {
 // V31.5.8.60.3.7.11: Also suppress the owner/internal test number ending 395
 // from Team Inbox unread counters and live notifications only.
 // These numbers are still allowed through the bot workflow for testing.
-const DEFAULT_SUPPRESSED_CUSTOMER_NOTIFICATION_NUMBERS = "971569979163,395";
+const DEFAULT_SUPPRESSED_CUSTOMER_NOTIFICATION_NUMBERS = "971569979163";
 
 function splitPhoneListToDigits(value) {
   return (value || "")
@@ -37098,7 +37098,12 @@ function shouldIncludeInLiveCustomerNotifications(message) {
 
   if (!isLikelyLiveCustomerNotificationRow(message)) return false;
   if (!isLiveMessageAllowedForCurrentUser(message)) return false;
-  if (isInternalNotificationPhone(message.phone)) return false;
+  // V152:
+  // Do NOT suppress live Team Inbox notifications by phone suffix.
+  // The previous hard-coded internal suffix "395" suppressed Osama's tester/customer
+  // number and made valid customer rows return includeInNotification=false.
+  // Staff/bot rows are already excluded by isLikelyLiveCustomerNotificationRow(),
+  // so customer rows should be allowed to trigger bell/toast alerts.
   if (isOperationalReminderConsentMessage(message)) return false;
   if (isLiveNotificationArchivedMessage(message)) return false;
   return true;
