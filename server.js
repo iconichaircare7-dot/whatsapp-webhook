@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-149-live-alert-transient-badge-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-150-notification-hard-visibility-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -34483,7 +34483,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     html body .reference-version-badge::after,
     html body .right-reference-panel .reference-version-badge::after,
     html body .customer-crm-profile .reference-version-badge::after {
-      content: "V148" !important;
+      content: "V146" !important;
     }
 
     html body .iconic-loading-card {
@@ -34887,7 +34887,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     html body .reference-version-badge::after,
     html body .right-reference-panel .reference-version-badge::after,
     html body .customer-crm-profile .reference-version-badge::after {
-      content: "V148" !important;
+      content: "V146" !important;
     }
 
 
@@ -35017,7 +35017,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     html body .reference-version-badge::after,
     html body .right-reference-panel .reference-version-badge::after,
     html body .customer-crm-profile .reference-version-badge::after {
-      content: "V148" !important;
+      content: "V146" !important;
     }
 
   </style>
@@ -35480,7 +35480,9 @@ let liveNotificationsReady = false;
 let knownCustomerMessageKeys = new Set();
 let liveAlertCount = 0;
 let liveAlertExpiresAt = 0;
-const LIVE_ALERT_TRANSIENT_VISIBLE_MS = 22000;
+const LIVE_ALERT_TRANSIENT_VISIBLE_MS = 24000;
+let liveNotificationLastCustomerCount = 0;
+let liveNotificationLastNewestKey = "";
 let liveNotificationsEnabled = localStorage.getItem("iconic_live_notifications_enabled") === "yes";
 let liveNotificationAudioContext = null;
 const INTERNAL_NOTIFICATION_PHONE_DIGITS = new Set(${JSON.stringify(getSuppressedCustomerNotificationNumbers())});
@@ -35492,12 +35494,6 @@ const recentLiveToastMap = new Map();
 let liveNotificationSoundLastPlayedAt = 0;
 const LIVE_NOTIFICATION_SOUND_COOLDOWN_MS = 15000;
 const LIVE_NOTIFICATION_SOUND_ON_VISIBLE_PAGE = false;
-
-// V31.5.8.60.3.9.148 - Safe live notification fallback state.
-// Tracks scoped customer-message count between successful polling cycles.
-// This catches real new messages even when Sheet timestamps or old read markers make the normal key logic too strict.
-let liveNotificationLastCustomerCount = 0;
-let liveNotificationLastNewestKey = "";
 
 let statusOverrideMap = {};
 try {
@@ -35561,7 +35557,7 @@ const liveNotificationStatus = document.getElementById("liveNotificationStatus")
 const liveNotificationPanel = document.getElementById("liveNotificationPanel");
 let liveNotificationPanelOpen = false;
 const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
-const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-149-live-alert-transient-badge-fix';
+const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-150-notification-hard-visibility-fix';
 let iconicBuildAutoReloading = false;
 let iconicBuildLastVersionCheckAt = 0;
 const customerProfilePhone = document.getElementById("customerProfilePhone");
@@ -35700,7 +35696,7 @@ function applyInitialBranchNotificationBaseline(messages) {
 
   latestCustomerMessageByConversation.forEach(function(message, key) {
     if (key) {
-      readMap[key] = getStableCustomerNotificationSignature(message);
+      readMap[key] = customerNotificationKey(message);
     }
   });
 
@@ -36948,7 +36944,7 @@ function markConversationRead(key) {
   if (!markerSource) return;
 
   readMap[key] = latestCustomerMessage
-    ? getStableCustomerNotificationSignature(latestCustomerMessage)
+    ? customerNotificationKey(latestCustomerMessage)
     : messageKey(markerSource);
   saveReadMap();
 }
@@ -36989,7 +36985,7 @@ function getConversationNotificationMessages(conversation) {
   (conversation.messages || []).forEach(function(message) {
     if (!shouldIncludeInLiveCustomerNotifications(message)) return;
 
-    const signature = getStableCustomerNotificationSignature(message);
+    const signature = customerNotificationKey(message);
     if (!signature || seen.has(signature)) return;
 
     seen.add(signature);
@@ -37008,7 +37004,7 @@ function getLatestCustomerNotificationMessage(conversation) {
 
 function isReadMarkerMatch(message, readMarker) {
   if (!message || !readMarker) return false;
-  return readMarker === getStableCustomerNotificationSignature(message) || readMarker === messageKey(message);
+  return readMarker === customerNotificationKey(message) || readMarker === getStableCustomerNotificationSignature(message) || readMarker === messageKey(message);
 }
 
 function isInternalNotificationPhone(phone) {
@@ -37071,7 +37067,20 @@ function isLiveNotificationArchivedMessage(message) {
 }
 
 function shouldIncludeInLiveCustomerNotifications(message) {
-  if (!message || message.sender !== "customer") return false;
+  if (!message) return false;
+
+  const sender = normalizeLiveBody(message.sender || "");
+  const messageType = normalizeLiveBody(message.messageType || "");
+  const status = normalizeLiveBody(message.status || "");
+
+  // V150: accept normal customer rows even if Google Sheet casing/label changes.
+  // Some Sheet rows arrive as Customer / Customer Reply / Customer Message, not strict lowercase "customer".
+  const isCustomerRow = sender === "customer" ||
+    status === "customer reply" ||
+    messageType === "customer message" ||
+    messageType === "whatsapp customer message";
+
+  if (!isCustomerRow) return false;
   if (!isLiveMessageAllowedForCurrentUser(message)) return false;
   if (isInternalNotificationPhone(message.phone)) return false;
   if (isOperationalReminderConsentMessage(message)) return false;
@@ -37083,6 +37092,7 @@ function liveToastDedupKey(message) {
   return [
     normalizePhoneDigitsClient(message.phone || ""),
     message.phoneNumberId || "",
+    (message.time || "").toString().trim(),
     normalizeLiveBody(message.body || "").slice(0, 160)
   ].join("|");
 }
@@ -37121,7 +37131,12 @@ function isFreshEnoughForLiveToast(message) {
 }
 
 function customerNotificationKey(message) {
-  return getStableCustomerNotificationSignature(message);
+  if (!message) return "";
+  // V150: include the Sheet time in the live-notification key so repeated short messages
+  // from the same customer (Hi / مرحبا) are not mistaken for the old read marker.
+  const stable = getStableCustomerNotificationSignature(message);
+  const time = (message.time || "").toString().trim();
+  return [stable, time].join("|t:");
 }
 
 function getCustomerNotificationKeys(messages) {
@@ -37156,34 +37171,10 @@ function updateLiveNotificationSnapshot(scopedMessages) {
   return snapshot;
 }
 
-function getFallbackLiveNotificationMessage(scopedMessages, previousCustomerCount) {
-  const snapshot = getLiveNotificationSnapshot(scopedMessages);
-
-  if (!previousCustomerCount || snapshot.count <= previousCustomerCount) {
-    return { message: null, count: 0 };
-  }
-
-  const newest = snapshot.newest;
-  if (!newest) return { message: null, count: 0 };
-
-  const conversationKeyValue = getMessageConversationKey(newest);
-  const readMarker = readMap[conversationKeyValue] || "";
-
-  // When the normal unread/read-marker system already considers it read, still allow
-  // a very small transient bell/toast if the total customer-message count increased.
-  // This is intentional: it fixes the case where all users receive new Sheet rows but
-  // no visible notification is produced because the row signature was treated as known.
-  return {
-    message: newest,
-    count: Math.max(1, Math.min(snapshot.count - previousCustomerCount, 9))
-  };
-}
-
 function getActiveLiveAlertCount() {
   if (!liveAlertCount) return 0;
 
-  const now = Date.now();
-  if (liveAlertExpiresAt && now > liveAlertExpiresAt) {
+  if (liveAlertExpiresAt && Date.now() > liveAlertExpiresAt) {
     liveAlertCount = 0;
     liveAlertExpiresAt = 0;
     clearLiveNotificationToasts();
@@ -37215,9 +37206,8 @@ function updateLiveNotificationUi() {
   const unreadCount = getUnreadConversationCount();
   const activeLiveAlertCount = getActiveLiveAlertCount();
 
-  // V149: keep short-lived live alerts visible even when the strict unread/read-marker
-  // system reports zero. This fixes the case where a real new Sheet row arrives,
-  // the list updates, but the bell/toast disappears immediately on renderAll().
+  // V150: the bell must also show a short live-alert count, even when the strict
+  // read-marker system currently thinks there are zero unread conversations.
   const visibleCount = Math.max(unreadCount, activeLiveAlertCount);
 
   if (liveNotificationCount) {
@@ -37575,10 +37565,11 @@ function processLiveInboxNotifications(nextMessages) {
 
   const scopedMessages = sourceMessages.filter(shouldIncludeInLiveCustomerNotifications);
   const previousCustomerCount = liveNotificationLastCustomerCount || 0;
+  const previousNewestKey = liveNotificationLastNewestKey || "";
   const newKnownKeys = getCustomerNotificationKeys(scopedMessages);
 
   const seenNewKeys = new Set();
-  const newCustomerMessages = scopedMessages.filter(function(message) {
+  let newCustomerMessages = scopedMessages.filter(function(message) {
     const key = customerNotificationKey(message);
     if (!key || knownCustomerMessageKeys.has(key) || seenNewKeys.has(key)) return false;
     seenNewKeys.add(key);
@@ -37590,33 +37581,36 @@ function processLiveInboxNotifications(nextMessages) {
     return true;
   });
 
+  const snapshot = updateLiveNotificationSnapshot(scopedMessages);
   knownCustomerMessageKeys = newKnownKeys;
-  updateLiveNotificationSnapshot(scopedMessages);
 
-  let alertMessages = newCustomerMessages
-    .filter(function(message) {
-      // Keep timestamp protection for normal alerts, but do not let an unparseable
-      // Sheet timestamp kill all notifications if the fallback count proves a new row arrived.
-      return isFreshEnoughForLiveToast(message);
-    })
-    .filter(shouldShowLiveToastForMessage);
-  let alertCount = alertMessages.length;
+  // V150 hard fallback: if the number of customer rows increased by a small amount,
+  // alert on the newest row even if old key/read-marker logic missed it.
+  // Suppress big jumps because those are usually historical Sheet batches after cold loading.
+  const countIncrease = snapshot.count - previousCustomerCount;
+  const newestChanged = snapshot.newestKey && snapshot.newestKey !== previousNewestKey;
 
-  if (!alertMessages.length) {
-    const fallback = getFallbackLiveNotificationMessage(scopedMessages, previousCustomerCount);
-    if (fallback.message && shouldShowLiveToastForMessage(fallback.message)) {
-      alertMessages = [fallback.message];
-      alertCount = fallback.count;
-    }
+  if (!newCustomerMessages.length && countIncrease > 0 && countIncrease <= 5 && snapshot.newest) {
+    newCustomerMessages = [snapshot.newest];
+  } else if (!newCustomerMessages.length && previousCustomerCount > 0 && newestChanged && snapshot.newest) {
+    newCustomerMessages = [snapshot.newest];
   }
 
-  if (!alertMessages.length) {
+  if (!newCustomerMessages.length) {
     updateLiveNotificationUi();
     return;
   }
 
-  const newestMessage = alertMessages[0];
-  liveAlertCount = Math.max(liveAlertCount, alertCount, getUnreadConversationCount());
+  const dedupedNewCustomerMessages = newCustomerMessages.filter(shouldShowLiveToastForMessage);
+
+  if (!dedupedNewCustomerMessages.length) {
+    updateLiveNotificationUi();
+    return;
+  }
+
+  const newestMessage = dedupedNewCustomerMessages[0];
+  const alertCount = Math.max(1, Math.min(dedupedNewCustomerMessages.length || countIncrease || 1, 9));
+  liveAlertCount = Math.max(getActiveLiveAlertCount(), alertCount, getUnreadConversationCount());
   liveAlertExpiresAt = Date.now() + LIVE_ALERT_TRANSIENT_VISIBLE_MS;
 
   window.setTimeout(function() {
