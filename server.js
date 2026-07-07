@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-148-notification-count-fallback-safe";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-149-live-alert-transient-badge-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -35479,6 +35479,8 @@ try {
 let liveNotificationsReady = false;
 let knownCustomerMessageKeys = new Set();
 let liveAlertCount = 0;
+let liveAlertExpiresAt = 0;
+const LIVE_ALERT_TRANSIENT_VISIBLE_MS = 22000;
 let liveNotificationsEnabled = localStorage.getItem("iconic_live_notifications_enabled") === "yes";
 let liveNotificationAudioContext = null;
 const INTERNAL_NOTIFICATION_PHONE_DIGITS = new Set(${JSON.stringify(getSuppressedCustomerNotificationNumbers())});
@@ -35559,7 +35561,7 @@ const liveNotificationStatus = document.getElementById("liveNotificationStatus")
 const liveNotificationPanel = document.getElementById("liveNotificationPanel");
 let liveNotificationPanelOpen = false;
 const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
-const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-148-notification-count-fallback-safe';
+const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-149-live-alert-transient-badge-fix';
 let iconicBuildAutoReloading = false;
 let iconicBuildLastVersionCheckAt = 0;
 const customerProfilePhone = document.getElementById("customerProfilePhone");
@@ -37177,6 +37179,20 @@ function getFallbackLiveNotificationMessage(scopedMessages, previousCustomerCoun
   };
 }
 
+function getActiveLiveAlertCount() {
+  if (!liveAlertCount) return 0;
+
+  const now = Date.now();
+  if (liveAlertExpiresAt && now > liveAlertExpiresAt) {
+    liveAlertCount = 0;
+    liveAlertExpiresAt = 0;
+    clearLiveNotificationToasts();
+    return 0;
+  }
+
+  return liveAlertCount;
+}
+
 function getUnreadConversationCount() {
   return buildConversations().filter(isUnreadConversation).length;
 }
@@ -37187,8 +37203,9 @@ function setLiveNotificationStatusText(text) {
 }
 
 function updatePageNotificationTitle() {
-  if (liveAlertCount > 0) {
-    document.title = "(" + liveAlertCount + ") " + originalPageTitle;
+  const activeAlertCount = getActiveLiveAlertCount();
+  if (activeAlertCount > 0) {
+    document.title = "(" + activeAlertCount + ") " + originalPageTitle;
   } else {
     document.title = originalPageTitle;
   }
@@ -37196,24 +37213,12 @@ function updatePageNotificationTitle() {
 
 function updateLiveNotificationUi() {
   const unreadCount = getUnreadConversationCount();
+  const activeLiveAlertCount = getActiveLiveAlertCount();
 
-  // If all relevant customer conversations are read/closed/archived, never keep a stale red badge,
-  // stale browser title count, or hanging toast from an older refresh.
-  if (unreadCount === 0 && liveAlertCount > 0) {
-    liveAlertCount = 0;
-    clearLiveNotificationToasts();
-  }
-
-  // Badge shows real unread conversations, plus a short transient fallback count when
-  // a fresh Sheet poll clearly received new customer rows but strict read markers hid them.
-  const visibleCount = Math.max(unreadCount, liveAlertCount);
-
-  if (unreadCount === 0) {
-    liveAlertCount = 0;
-    clearLiveNotificationToasts();
-  } else if (liveAlertCount > unreadCount) {
-    liveAlertCount = unreadCount;
-  }
+  // V149: keep short-lived live alerts visible even when the strict unread/read-marker
+  // system reports zero. This fixes the case where a real new Sheet row arrives,
+  // the list updates, but the bell/toast disappears immediately on renderAll().
+  const visibleCount = Math.max(unreadCount, activeLiveAlertCount);
 
   if (liveNotificationCount) {
     liveNotificationCount.textContent = visibleCount > 99 ? "99+" : String(visibleCount);
@@ -37402,6 +37407,7 @@ function getMessageConversationKey(message) {
 
 function resetLiveAlertCounter() {
   liveAlertCount = 0;
+  liveAlertExpiresAt = 0;
   updateLiveNotificationUi();
 }
 
@@ -37610,8 +37616,12 @@ function processLiveInboxNotifications(nextMessages) {
   }
 
   const newestMessage = alertMessages[0];
-  liveAlertCount = Math.max(liveAlertCount, alertCount);
-  liveAlertCount = Math.min(Math.max(getUnreadConversationCount(), alertCount), Math.max(liveAlertCount, alertCount));
+  liveAlertCount = Math.max(liveAlertCount, alertCount, getUnreadConversationCount());
+  liveAlertExpiresAt = Date.now() + LIVE_ALERT_TRANSIENT_VISIBLE_MS;
+
+  window.setTimeout(function() {
+    updateLiveNotificationUi();
+  }, LIVE_ALERT_TRANSIENT_VISIBLE_MS + 800);
 
   showLiveNotificationToast(newestMessage, alertCount);
   playLiveNotificationSound();
