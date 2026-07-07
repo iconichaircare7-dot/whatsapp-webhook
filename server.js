@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-152-live-alert-remove-test-number-suppression";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-146-root-notification-ui-auto-refresh";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -421,7 +421,7 @@ function normalizeWhatsAppRecipientDigits(value) {
 // V31.5.8.60.3.7.11: Also suppress the owner/internal test number ending 395
 // from Team Inbox unread counters and live notifications only.
 // These numbers are still allowed through the bot workflow for testing.
-const DEFAULT_SUPPRESSED_CUSTOMER_NOTIFICATION_NUMBERS = "971569979163";
+const DEFAULT_SUPPRESSED_CUSTOMER_NOTIFICATION_NUMBERS = "971569979163,395";
 
 function splitPhoneListToDigits(value) {
   return (value || "")
@@ -35479,10 +35479,6 @@ try {
 let liveNotificationsReady = false;
 let knownCustomerMessageKeys = new Set();
 let liveAlertCount = 0;
-let liveAlertExpiresAt = 0;
-const LIVE_ALERT_TRANSIENT_VISIBLE_MS = 24000;
-let liveNotificationLastCustomerCount = 0;
-let liveNotificationLastNewestKey = "";
 let liveNotificationsEnabled = localStorage.getItem("iconic_live_notifications_enabled") === "yes";
 let liveNotificationAudioContext = null;
 const INTERNAL_NOTIFICATION_PHONE_DIGITS = new Set(${JSON.stringify(getSuppressedCustomerNotificationNumbers())});
@@ -35557,7 +35553,7 @@ const liveNotificationStatus = document.getElementById("liveNotificationStatus")
 const liveNotificationPanel = document.getElementById("liveNotificationPanel");
 let liveNotificationPanelOpen = false;
 const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
-const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-151-notification-customer-row-detector-fix';
+const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-146-root-notification-ui-auto-refresh';
 let iconicBuildAutoReloading = false;
 let iconicBuildLastVersionCheckAt = 0;
 const customerProfilePhone = document.getElementById("customerProfilePhone");
@@ -35696,12 +35692,11 @@ function applyInitialBranchNotificationBaseline(messages) {
 
   latestCustomerMessageByConversation.forEach(function(message, key) {
     if (key) {
-      readMap[key] = customerNotificationKey(message);
+      readMap[key] = getStableCustomerNotificationSignature(message);
     }
   });
 
   knownCustomerMessageKeys = getCustomerNotificationKeys(scopedMessages);
-  updateLiveNotificationSnapshot(scopedMessages);
   liveNotificationsReady = true;
   saveReadMap();
   resetVisibleLiveNotifications();
@@ -36944,7 +36939,7 @@ function markConversationRead(key) {
   if (!markerSource) return;
 
   readMap[key] = latestCustomerMessage
-    ? customerNotificationKey(latestCustomerMessage)
+    ? getStableCustomerNotificationSignature(latestCustomerMessage)
     : messageKey(markerSource);
   saveReadMap();
 }
@@ -36985,7 +36980,7 @@ function getConversationNotificationMessages(conversation) {
   (conversation.messages || []).forEach(function(message) {
     if (!shouldIncludeInLiveCustomerNotifications(message)) return;
 
-    const signature = customerNotificationKey(message);
+    const signature = getStableCustomerNotificationSignature(message);
     if (!signature || seen.has(signature)) return;
 
     seen.add(signature);
@@ -37004,7 +36999,7 @@ function getLatestCustomerNotificationMessage(conversation) {
 
 function isReadMarkerMatch(message, readMarker) {
   if (!message || !readMarker) return false;
-  return readMarker === customerNotificationKey(message) || readMarker === getStableCustomerNotificationSignature(message) || readMarker === messageKey(message);
+  return readMarker === getStableCustomerNotificationSignature(message) || readMarker === messageKey(message);
 }
 
 function isInternalNotificationPhone(phone) {
@@ -37066,44 +37061,10 @@ function isLiveNotificationArchivedMessage(message) {
   return isArchivedStatusTextClient(state.status || "") || isArchivedStatusTextClient(overrideStatus || "");
 }
 
-function isLikelyLiveCustomerNotificationRow(message) {
-  if (!message) return false;
-
-  const sender = normalizeLiveBody(message.sender || "");
-  const messageType = normalizeLiveBody(message.messageType || "");
-  const status = normalizeLiveBody(message.status || "");
-  const combined = [sender, messageType, status].join(" ");
-
-  // V151: Sheet rows are not guaranteed to keep sender exactly as "customer".
-  // Accept customer/client labels anywhere in sender, messageType, or status,
-  // while still rejecting staff/bot/team rows.
-  const hasCustomerSignal = sender === "customer" ||
-    combined.includes("customer") ||
-    combined.includes("client") ||
-    combined.includes("عميل");
-
-  const hasInternalSenderSignal = sender === "staff" ||
-    sender === "bot" ||
-    combined.includes("human reply") ||
-    combined.includes("staff") ||
-    combined.includes("team reply") ||
-    combined.includes("bot reply") ||
-    combined.includes("bot");
-
-  return Boolean(hasCustomerSignal && !hasInternalSenderSignal);
-}
-
 function shouldIncludeInLiveCustomerNotifications(message) {
-  if (!message) return false;
-
-  if (!isLikelyLiveCustomerNotificationRow(message)) return false;
+  if (!message || message.sender !== "customer") return false;
   if (!isLiveMessageAllowedForCurrentUser(message)) return false;
-  // V152:
-  // Do NOT suppress live Team Inbox notifications by phone suffix.
-  // The previous hard-coded internal suffix "395" suppressed Osama's tester/customer
-  // number and made valid customer rows return includeInNotification=false.
-  // Staff/bot rows are already excluded by isLikelyLiveCustomerNotificationRow(),
-  // so customer rows should be allowed to trigger bell/toast alerts.
+  if (isInternalNotificationPhone(message.phone)) return false;
   if (isOperationalReminderConsentMessage(message)) return false;
   if (isLiveNotificationArchivedMessage(message)) return false;
   return true;
@@ -37113,7 +37074,6 @@ function liveToastDedupKey(message) {
   return [
     normalizePhoneDigitsClient(message.phone || ""),
     message.phoneNumberId || "",
-    (message.time || "").toString().trim(),
     normalizeLiveBody(message.body || "").slice(0, 160)
   ].join("|");
 }
@@ -37152,12 +37112,7 @@ function isFreshEnoughForLiveToast(message) {
 }
 
 function customerNotificationKey(message) {
-  if (!message) return "";
-  // V150: include the Sheet time in the live-notification key so repeated short messages
-  // from the same customer (Hi / مرحبا) are not mistaken for the old read marker.
-  const stable = getStableCustomerNotificationSignature(message);
-  const time = (message.time || "").toString().trim();
-  return [stable, time].join("|t:");
+  return getStableCustomerNotificationSignature(message);
 }
 
 function getCustomerNotificationKeys(messages) {
@@ -37165,44 +37120,6 @@ function getCustomerNotificationKeys(messages) {
     .filter(shouldIncludeInLiveCustomerNotifications)
     .slice(0, 500)
     .map(customerNotificationKey));
-}
-
-function getLiveNotificationSnapshot(scopedMessages) {
-  const list = (Array.isArray(scopedMessages) ? scopedMessages : [])
-    .filter(shouldIncludeInLiveCustomerNotifications)
-    .slice()
-    .sort(function(a, b) {
-      const timeDiff = getMessageTimeValue(b) - getMessageTimeValue(a);
-      if (timeDiff) return timeDiff;
-      return String(b.time || "").localeCompare(String(a.time || ""));
-    });
-
-  const newest = list[0] || null;
-  return {
-    count: list.length,
-    newest,
-    newestKey: newest ? customerNotificationKey(newest) : ""
-  };
-}
-
-function updateLiveNotificationSnapshot(scopedMessages) {
-  const snapshot = getLiveNotificationSnapshot(scopedMessages);
-  liveNotificationLastCustomerCount = snapshot.count;
-  liveNotificationLastNewestKey = snapshot.newestKey || "";
-  return snapshot;
-}
-
-function getActiveLiveAlertCount() {
-  if (!liveAlertCount) return 0;
-
-  if (liveAlertExpiresAt && Date.now() > liveAlertExpiresAt) {
-    liveAlertCount = 0;
-    liveAlertExpiresAt = 0;
-    clearLiveNotificationToasts();
-    return 0;
-  }
-
-  return liveAlertCount;
 }
 
 function getUnreadConversationCount() {
@@ -37215,9 +37132,8 @@ function setLiveNotificationStatusText(text) {
 }
 
 function updatePageNotificationTitle() {
-  const activeAlertCount = getActiveLiveAlertCount();
-  if (activeAlertCount > 0) {
-    document.title = "(" + activeAlertCount + ") " + originalPageTitle;
+  if (liveAlertCount > 0) {
+    document.title = "(" + liveAlertCount + ") " + originalPageTitle;
   } else {
     document.title = originalPageTitle;
   }
@@ -37225,11 +37141,24 @@ function updatePageNotificationTitle() {
 
 function updateLiveNotificationUi() {
   const unreadCount = getUnreadConversationCount();
-  const activeLiveAlertCount = getActiveLiveAlertCount();
 
-  // V150: the bell must also show a short live-alert count, even when the strict
-  // read-marker system currently thinks there are zero unread conversations.
-  const visibleCount = Math.max(unreadCount, activeLiveAlertCount);
+  // If all relevant customer conversations are read/closed/archived, never keep a stale red badge,
+  // stale browser title count, or hanging toast from an older refresh.
+  if (unreadCount === 0 && liveAlertCount > 0) {
+    liveAlertCount = 0;
+    clearLiveNotificationToasts();
+  }
+
+  // Badge/panel must reflect the real unread open conversations only.
+  // liveAlertCount is only a temporary browser-title/toast signal and must never inflate/repeat the bell count.
+  const visibleCount = unreadCount;
+
+  if (unreadCount === 0) {
+    liveAlertCount = 0;
+    clearLiveNotificationToasts();
+  } else if (liveAlertCount > unreadCount) {
+    liveAlertCount = unreadCount;
+  }
 
   if (liveNotificationCount) {
     liveNotificationCount.textContent = visibleCount > 99 ? "99+" : String(visibleCount);
@@ -37418,7 +37347,6 @@ function getMessageConversationKey(message) {
 
 function resetLiveAlertCounter() {
   liveAlertCount = 0;
-  liveAlertExpiresAt = 0;
   updateLiveNotificationUi();
 }
 
@@ -37585,12 +37513,10 @@ function processLiveInboxNotifications(nextMessages) {
   }
 
   const scopedMessages = sourceMessages.filter(shouldIncludeInLiveCustomerNotifications);
-  const previousCustomerCount = liveNotificationLastCustomerCount || 0;
-  const previousNewestKey = liveNotificationLastNewestKey || "";
   const newKnownKeys = getCustomerNotificationKeys(scopedMessages);
 
   const seenNewKeys = new Set();
-  let newCustomerMessages = scopedMessages.filter(function(message) {
+  const newCustomerMessages = scopedMessages.filter(function(message) {
     const key = customerNotificationKey(message);
     if (!key || knownCustomerMessageKeys.has(key) || seenNewKeys.has(key)) return false;
     seenNewKeys.add(key);
@@ -37602,27 +37528,16 @@ function processLiveInboxNotifications(nextMessages) {
     return true;
   });
 
-  const snapshot = updateLiveNotificationSnapshot(scopedMessages);
   knownCustomerMessageKeys = newKnownKeys;
-
-  // V150 hard fallback: if the number of customer rows increased by a small amount,
-  // alert on the newest row even if old key/read-marker logic missed it.
-  // Suppress big jumps because those are usually historical Sheet batches after cold loading.
-  const countIncrease = snapshot.count - previousCustomerCount;
-  const newestChanged = snapshot.newestKey && snapshot.newestKey !== previousNewestKey;
-
-  if (!newCustomerMessages.length && countIncrease > 0 && countIncrease <= 5 && snapshot.newest) {
-    newCustomerMessages = [snapshot.newest];
-  } else if (!newCustomerMessages.length && previousCustomerCount > 0 && newestChanged && snapshot.newest) {
-    newCustomerMessages = [snapshot.newest];
-  }
 
   if (!newCustomerMessages.length) {
     updateLiveNotificationUi();
     return;
   }
 
-  const dedupedNewCustomerMessages = newCustomerMessages.filter(shouldShowLiveToastForMessage);
+  const dedupedNewCustomerMessages = newCustomerMessages
+    .filter(isFreshEnoughForLiveToast)
+    .filter(shouldShowLiveToastForMessage);
 
   if (!dedupedNewCustomerMessages.length) {
     updateLiveNotificationUi();
@@ -37630,17 +37545,11 @@ function processLiveInboxNotifications(nextMessages) {
   }
 
   const newestMessage = dedupedNewCustomerMessages[0];
-  const alertCount = Math.max(1, Math.min(dedupedNewCustomerMessages.length || countIncrease || 1, 9));
-  liveAlertCount = Math.max(getActiveLiveAlertCount(), alertCount, getUnreadConversationCount());
-  liveAlertExpiresAt = Date.now() + LIVE_ALERT_TRANSIENT_VISIBLE_MS;
+  liveAlertCount = Math.min(getUnreadConversationCount(), liveAlertCount + dedupedNewCustomerMessages.length);
 
-  window.setTimeout(function() {
-    updateLiveNotificationUi();
-  }, LIVE_ALERT_TRANSIENT_VISIBLE_MS + 800);
-
-  showLiveNotificationToast(newestMessage, alertCount);
+  showLiveNotificationToast(newestMessage, dedupedNewCustomerMessages.length);
   playLiveNotificationSound();
-  showBrowserLiveNotification(newestMessage, alertCount);
+  showBrowserLiveNotification(newestMessage, dedupedNewCustomerMessages.length);
   updateLiveNotificationUi();
 }
 
