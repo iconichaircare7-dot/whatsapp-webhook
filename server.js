@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-146-root-notification-ui-auto-refresh";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-147-live-notification-repeat-message-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -34483,7 +34483,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     html body .reference-version-badge::after,
     html body .right-reference-panel .reference-version-badge::after,
     html body .customer-crm-profile .reference-version-badge::after {
-      content: "V146" !important;
+      content: "V147" !important;
     }
 
     html body .iconic-loading-card {
@@ -34887,7 +34887,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     html body .reference-version-badge::after,
     html body .right-reference-panel .reference-version-badge::after,
     html body .customer-crm-profile .reference-version-badge::after {
-      content: "V146" !important;
+      content: "V147" !important;
     }
 
 
@@ -35017,7 +35017,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     html body .reference-version-badge::after,
     html body .right-reference-panel .reference-version-badge::after,
     html body .customer-crm-profile .reference-version-badge::after {
-      content: "V146" !important;
+      content: "V147" !important;
     }
 
   </style>
@@ -35553,7 +35553,7 @@ const liveNotificationStatus = document.getElementById("liveNotificationStatus")
 const liveNotificationPanel = document.getElementById("liveNotificationPanel");
 let liveNotificationPanelOpen = false;
 const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
-const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-146-root-notification-ui-auto-refresh';
+const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-147-live-notification-repeat-message-fix';
 let iconicBuildAutoReloading = false;
 let iconicBuildLastVersionCheckAt = 0;
 const customerProfilePhone = document.getElementById("customerProfilePhone");
@@ -36801,11 +36801,49 @@ function messageKey(m) {
 }
 
 function getMessageTimeValue(message) {
-  const value = message?.time || "";
-  const direct = new Date(value).getTime();
+  const rawValue = (message?.time || message?.opt_in_date || message?.opt_out_date || "").toString().trim();
+  if (!rawValue) return 0;
 
+  const cleanedValue = rawValue
+    .replace(/[\u200E\u200F]/g, "")
+    .replace(/،/g, ",")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const direct = new Date(cleanedValue).getTime();
   if (!Number.isNaN(direct)) {
     return direct;
+  }
+
+  // V31.5.8.60.3.9.147:
+  // Browser Date parsing can fail on some iOS/Safari locale strings returned by Google Sheets.
+  // Parse common Sheet formats manually so live notifications can distinguish repeated customer
+  // messages like "مرحبا" / "Hi" sent at different times. UI-only notification logic.
+  const match = cleanedValue.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?:,)?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|am|pm)?$/);
+  if (match) {
+    let first = Number(match[1]);
+    let second = Number(match[2]);
+    let year = Number(match[3]);
+    let hour = Number(match[4]);
+    const minute = Number(match[5]);
+    const secondValue = Number(match[6] || 0);
+    const suffix = (match[7] || "").toString().toLowerCase();
+
+    if (year < 100) year += 2000;
+    if (suffix === "pm" && hour < 12) hour += 12;
+    if (suffix === "am" && hour === 12) hour = 0;
+
+    // Most Team Inbox rows are saved using en-US date strings (month/day/year).
+    // If the first number cannot be a month, safely treat it as day/month/year.
+    let month = first;
+    let day = second;
+    if (first > 12 && second <= 12) {
+      day = first;
+      month = second;
+    }
+
+    const parsed = new Date(year, month - 1, day, hour, minute, secondValue).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
   }
 
   return 0;
@@ -36957,7 +36995,7 @@ function normalizeLiveBody(value) {
 // is reloaded with a slightly different time/order, and keeps branch/user scoped storage.
 // Does not touch /api/messages, loadMessagesFromGoogleSheet, Google Sheet backend,
 // send logic, webhook, booking, media/images/audio, or history loading.
-function getStableCustomerNotificationSignature(message) {
+function getLegacyCustomerNotificationSignature(message) {
   if (!message) return "";
 
   const conversation = getMessageConversationKey(message);
@@ -36969,6 +37007,33 @@ function getStableCustomerNotificationSignature(message) {
   const line = (message.phoneNumberId || "").toString().trim();
 
   return [conversation, branch, phone, line, sender, type, body].join("|");
+}
+
+function getCustomerNotificationTimeSignature(message) {
+  const timeValue = getMessageTimeValue(message);
+  if (timeValue) return String(timeValue);
+
+  // Fallback: use the raw Sheet time string if parsing fails. This still separates
+  // repeated identical customer messages when Google Sheet provides a timestamp string.
+  return (message?.time || message?.opt_in_date || message?.opt_out_date || "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .slice(0, 90);
+}
+
+function getStableCustomerNotificationSignature(message) {
+  if (!message) return "";
+
+  const legacySignature = getLegacyCustomerNotificationSignature(message);
+  const timeSignature = getCustomerNotificationTimeSignature(message);
+
+  // V31.5.8.60.3.9.147:
+  // Keep the previous body-based identity as the base, but add a stable time token.
+  // Without this, a customer sending the same short text twice in the same chat
+  // could be treated as already known/read, so no bell/toast appeared for the new row.
+  return [legacySignature, timeSignature].join("|");
 }
 
 function getConversationNotificationMessages(conversation) {
@@ -36999,7 +37064,9 @@ function getLatestCustomerNotificationMessage(conversation) {
 
 function isReadMarkerMatch(message, readMarker) {
   if (!message || !readMarker) return false;
-  return readMarker === getStableCustomerNotificationSignature(message) || readMarker === messageKey(message);
+  return readMarker === getStableCustomerNotificationSignature(message) ||
+    readMarker === getLegacyCustomerNotificationSignature(message) ||
+    readMarker === messageKey(message);
 }
 
 function isInternalNotificationPhone(phone) {
@@ -37074,7 +37141,8 @@ function liveToastDedupKey(message) {
   return [
     normalizePhoneDigitsClient(message.phone || ""),
     message.phoneNumberId || "",
-    normalizeLiveBody(message.body || "").slice(0, 160)
+    normalizeLiveBody(message.body || "").slice(0, 160),
+    getCustomerNotificationTimeSignature(message)
   ].join("|");
 }
 
@@ -37106,9 +37174,10 @@ function isFreshEnoughForLiveToast(message) {
     return timeValue >= (liveNotificationsPageStartedAt - LIVE_TOAST_MAX_HISTORICAL_AGE_MS);
   }
 
-  // No reliable timestamp: keep the message in the panel/read logic, but do not
-  // generate a toast from it because it may be an old imported row.
-  return false;
+  // V147 fallback: after the first meaningful payload is already baselined, a truly new
+  // customer row with an unparseable but present time string should still show a live toast.
+  // Old rows are already absorbed by applyInitialBranchNotificationBaseline().
+  return Boolean((message?.time || "").toString().trim());
 }
 
 function customerNotificationKey(message) {
