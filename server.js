@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-154-live-alert-time-signature-safe-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-156-admin-switch-user-logout";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -10605,6 +10605,69 @@ async function getInboxBootstrapDataForServerRender() {
   }
 }
 
+app.get("/logout", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("WWW-Authenticate", 'Basic realm="Iconic Inbox"');
+
+  return res.status(401).send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Switch Team Inbox user</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: Arial, sans-serif; background: #f1f8ee; color: #10251c; }
+    .card { width: min(460px, calc(100vw - 32px)); background: white; border: 1px solid rgba(15, 23, 42, .10); border-radius: 22px; padding: 28px; box-shadow: 0 18px 44px rgba(15, 23, 42, .14); text-align: center; }
+    h1 { margin: 0 0 10px; font-size: 22px; }
+    p { margin: 8px 0; color: #52615a; line-height: 1.55; }
+    a { display: inline-flex; align-items: center; justify-content: center; margin-top: 18px; min-height: 42px; padding: 0 18px; border-radius: 999px; background: #22c55e; color: white; text-decoration: none; font-weight: 800; }
+
+    /* V156 - Admin-only switch user button. UI only; does not touch notifications, sheet, send, media, or webhook logic. */
+    .topbar-switch-user {
+      height: 40px !important;
+      min-width: 112px !important;
+      padding: 0 15px !important;
+      border-radius: 9px !important;
+      border: 1px solid rgba(15,23,42,.14) !important;
+      background: rgba(255,255,255,.96) !important;
+      color: #16352b !important;
+      box-shadow: none !important;
+      font-size: 12px !important;
+      font-weight: 900 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 6px !important;
+      cursor: pointer !important;
+      white-space: nowrap !important;
+    }
+
+    .topbar-switch-user:hover {
+      border-color: rgba(120,184,62,.45) !important;
+      background: #f2faee !important;
+    }
+
+    .topbar-switch-user:disabled {
+      opacity: .62 !important;
+      cursor: wait !important;
+    }
+
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Switch Team Inbox user</h1>
+    <p>Your browser may ask for the new username and password now.</p>
+    <p>If it does not, cancel the prompt once, then open Team Inbox again.</p>
+    <a href="/inbox">Open Team Inbox</a>
+  </main>
+</body>
+</html>`);
+});
+
 app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
@@ -10614,6 +10677,10 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
   const inboxQuickReplyLocationText = buildInboxQuickReplyLocationAttribute(req.inboxBranchScope || "");
   const inboxSidebarBranchControls = buildInboxSidebarBranchControls(req.inboxBranchScope || "");
   const inboxReferenceBranchTabs = buildInboxReferenceBranchTabs(req.inboxBranchScope || "");
+  const inboxIsMainUser = !(req.inboxBranchScope || "").toString().trim();
+  const inboxSwitchUserButton = inboxIsMainUser
+    ? `<button type="button" class="topbar-switch-user" id="switchInboxUserBtn" title="Log out and switch Team Inbox user" aria-label="Log out and switch Team Inbox user">⇄ Switch User</button>`
+    : "";
 
   res.send(`<!doctype html>
 <html lang="en">
@@ -35116,6 +35183,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
               </div>
             </div>
           </div>
+          ${inboxSwitchUserButton}
           <button type="button" class="topbar-notification notifications-disabled" id="liveNotificationBtn" aria-label="Live inbox notifications" aria-expanded="false" aria-controls="liveNotificationPanel" title="Open live notifications">🔔<span class="notification-count" id="liveNotificationCount">0</span></button>
           <div class="live-notification-panel" id="liveNotificationPanel" role="dialog" aria-label="Open live notifications"></div>
           <div class="topbar-profile-avatar" aria-label="Iconic profile">ICONIC</div>
@@ -35551,9 +35619,10 @@ const liveNotificationBtn = document.getElementById("liveNotificationBtn");
 const liveNotificationCount = document.getElementById("liveNotificationCount");
 const liveNotificationStatus = document.getElementById("liveNotificationStatus");
 const liveNotificationPanel = document.getElementById("liveNotificationPanel");
+const switchInboxUserBtn = document.getElementById("switchInboxUserBtn");
 let liveNotificationPanelOpen = false;
 const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
-const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-154-live-alert-time-signature-safe-fix';
+const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-156-admin-switch-user-logout';
 let iconicBuildAutoReloading = false;
 let iconicBuildLastVersionCheckAt = 0;
 const customerProfilePhone = document.getElementById("customerProfilePhone");
@@ -38930,6 +38999,37 @@ if (archiveConversationBtn) {
 function insertQuickReply(text) {
   inputBody.value = text || "";
   inputBody.focus();
+}
+
+async function switchTeamInboxUser() {
+  if (!switchInboxUserBtn) return;
+
+  const confirmed = window.confirm(
+    "Switch Team Inbox user?\n\nThis will clear the current browser login so you can sign in as Osama, Mariam, or Angela."
+  );
+
+  if (!confirmed) return;
+
+  switchInboxUserBtn.disabled = true;
+  switchInboxUserBtn.textContent = "Switching...";
+
+  try {
+    const fakeUser = "switch-user-" + Date.now();
+    await fetch("/api/messages?switchUser=" + Date.now(), {
+      cache: "no-store",
+      headers: {
+        Authorization: "Basic " + btoa(fakeUser + ":logout")
+      }
+    });
+  } catch (error) {
+    // Browser auth cache clearing is best-effort for Basic Auth.
+  }
+
+  window.location.href = "/inbox?switchUser=" + Date.now();
+}
+
+if (switchInboxUserBtn) {
+  switchInboxUserBtn.addEventListener("click", switchTeamInboxUser);
 }
 
 Array.from(document.querySelectorAll(".quick-btn")).forEach(function(btn) {
