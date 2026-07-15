@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-154-live-alert-time-signature-safe-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-158-inbound-waiting-state-server-only";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -2784,6 +2784,41 @@ function buildCustomerActionBody(profileName = "", actionText = "") {
   return cleanName ? `${cleanName}: ${cleanAction}` : cleanAction;
 }
 
+// V31.5.8.60.3.9.158 - Inbound customer Waiting state, server-side only:
+// When a customer sends a message, the conversation state is moved to Waiting.
+// Reading/opening notifications must not clear this workflow state; the team clears it manually with Closed / Close + Next.
+const INBOUND_CUSTOMER_WAITING_STATUS = "Waiting";
+const INBOUND_CUSTOMER_WAITING_CLEAR_TAG = "Close to clear";
+
+function getInboundCustomerWaitingTags(sourceStatus = "") {
+  const tags = ["Waiting", INBOUND_CUSTOMER_WAITING_CLEAR_TAG];
+  const cleanSourceStatus = (sourceStatus || "").toString().trim();
+  if (cleanSourceStatus && !tags.includes(cleanSourceStatus)) tags.push(cleanSourceStatus);
+  return tags;
+}
+
+function queueInboundCustomerWaitingState({ phone, phoneNumberId, branch = "", sourceStatus = "", updatedBy = "Inbound Customer Message" } = {}) {
+  const cleanPhone = (phone || "").toString().trim();
+  const cleanPhoneNumberId = normalizePhoneNumberId(phoneNumberId || "");
+
+  if (!cleanPhone || !cleanPhoneNumberId) return;
+
+  const finalBranch = (branch || getLineConfig(cleanPhoneNumberId).branch || "").toString().trim();
+
+  saveConversationStateToGoogleSheetFromServer({
+    phone: cleanPhone,
+    phoneNumberId: cleanPhoneNumberId,
+    branch: finalBranch,
+    status: INBOUND_CUSTOMER_WAITING_STATUS,
+    assignee: getBranchTeamAssignee(finalBranch),
+    tags: getInboundCustomerWaitingTags(sourceStatus),
+    updatedBy
+  }).catch((error) => {
+    console.log("Inbound customer waiting state save failed:");
+    console.log(error);
+  });
+}
+
 function logCustomerActionForInbox({ from, message, profileName = "", rawText = "", fallbackAction = "", status = "Bot", phoneNumberId = DUBAI_PHONE_NUMBER_ID, messageType = "Customer Message" }) {
   const actionText = getSmartCustomerActionText(message, rawText) || fallbackAction;
   const customerBody = buildCustomerActionBody(profileName, actionText);
@@ -2792,9 +2827,19 @@ function logCustomerActionForInbox({ from, message, profileName = "", rawText = 
     return;
   }
 
-  addInboxMessage(from, "customer", customerBody, status, phoneNumberId, {
+  conversationStatus[from] = INBOUND_CUSTOMER_WAITING_STATUS;
+
+  addInboxMessage(from, "customer", customerBody, INBOUND_CUSTOMER_WAITING_STATUS, phoneNumberId, {
     customerName: profileName,
     messageType
+  });
+
+  queueInboundCustomerWaitingState({
+    phone: from,
+    phoneNumberId,
+    branch: getLineConfig(phoneNumberId || DUBAI_PHONE_NUMBER_ID).branch,
+    sourceStatus: status,
+    updatedBy: "Customer Message - Waiting until Closed"
   });
 }
 
@@ -6739,7 +6784,15 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
       requestType: finalDraft.requestType || "WhatsApp Smart Natural Booking V3.14",
       bookingStatus: "Pending"
     });
-    addInboxMessage(from, "customer", requestMessage, "Booking Request", incomingPhoneNumberId, { customerName: profileName, messageType: "WhatsApp Smart Natural Booking Submit" });
+    conversationStatus[from] = INBOUND_CUSTOMER_WAITING_STATUS;
+    addInboxMessage(from, "customer", requestMessage, INBOUND_CUSTOMER_WAITING_STATUS, incomingPhoneNumberId, { customerName: profileName, messageType: "WhatsApp Smart Natural Booking Submit" });
+    queueInboundCustomerWaitingState({
+      phone: from,
+      phoneNumberId: incomingPhoneNumberId,
+      branch: lineConfig.branch,
+      sourceStatus: "Booking Request",
+      updatedBy: "Customer Booking Submit - Waiting until Closed"
+    });
 
     let staffNotifyResult = null;
     try {
@@ -6947,7 +7000,15 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
   };
   smartBookingDrafts[from] = draft;
 
-  addInboxMessage(from, "customer", buildCustomerActionBody(profileName, input), "Smart Booking", incomingPhoneNumberId, { customerName: profileName, messageType: "Customer Smart Natural Booking Request" });
+  conversationStatus[from] = INBOUND_CUSTOMER_WAITING_STATUS;
+  addInboxMessage(from, "customer", buildCustomerActionBody(profileName, input), INBOUND_CUSTOMER_WAITING_STATUS, incomingPhoneNumberId, { customerName: profileName, messageType: "Customer Smart Natural Booking Request" });
+  queueInboundCustomerWaitingState({
+    phone: from,
+    phoneNumberId: incomingPhoneNumberId,
+    branch: lineConfig.branch,
+    sourceStatus: "Smart Booking",
+    updatedBy: "Customer Smart Booking - Waiting until Closed"
+  });
 
   if (!draft.preferredDay) {
     setConversationStatus(from, "Smart Booking - Choose Day");
