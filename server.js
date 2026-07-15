@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-160-live-alert-panel-card-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-161-conversation-card-live-badge-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -35559,7 +35559,7 @@ const liveNotificationStatus = document.getElementById("liveNotificationStatus")
 const liveNotificationPanel = document.getElementById("liveNotificationPanel");
 let liveNotificationPanelOpen = false;
 const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
-const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-160-live-alert-panel-card-fix';
+const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-161-conversation-card-live-badge-fix';
 let iconicBuildAutoReloading = false;
 let iconicBuildLastVersionCheckAt = 0;
 const customerProfilePhone = document.getElementById("customerProfilePhone");
@@ -37250,6 +37250,30 @@ function getRecentLiveAlertConversationKeys() {
   return keys;
 }
 
+// V31.5.8.60.3.9.161 - Conversation card live badge bridge:
+// The bell/panel may be driven by a recent live alert even when unreadCount is 0
+// because the selected/open conversation can be locally marked as read. Keep the
+// same recent live event visible on the conversation card itself until the staff
+// opens the conversation or marks notifications as read.
+function getRecentLiveAlertCountForConversationKey(key) {
+  const cleanKey = (key || "").toString();
+  if (!cleanKey) return 0;
+
+  const stored = recentLiveAlertMessagesByConversationKey.get(cleanKey);
+  if (!stored) return 0;
+
+  const now = Date.now();
+  if (!stored || now - Number(stored.at || 0) > LIVE_ALERT_PANEL_TTL_MS) {
+    recentLiveAlertMessagesByConversationKey.delete(cleanKey);
+    return 0;
+  }
+
+  const message = stored.message || {};
+  if (!isLiveMessageAllowedForCurrentUser(message)) return 0;
+
+  return 1;
+}
+
 function getRecentLiveAlertConversations(existingKeys) {
   const existing = existingKeys || new Set();
   const allConversations = buildConversations();
@@ -38304,7 +38328,9 @@ function renderConversationList() {
   conversationList.innerHTML = conversations.map(function(c) {
     const active = c.key === selectedConversationKey ? " active" : "";
     const unreadCustomerCount = getUnreadCustomerMessageCount(c);
-    const unread = unreadCustomerCount > 0 ? " unread card-live-alert" : "";
+    const recentLiveAlertCount = getRecentLiveAlertCountForConversationKey(c.key);
+    const cardLiveAlertCount = Math.max(unreadCustomerCount, recentLiveAlertCount);
+    const unread = cardLiveAlertCount > 0 ? " unread card-live-alert" : "";
     const listSenderFilter = statusToSenderFilter(statusFilter.value);
     const filteredLatest = listSenderFilter ? (c.messages || []).find(function(m) { return m.sender === listSenderFilter; }) : null;
     const latest = filteredLatest || c.latest || {};
@@ -38312,8 +38338,8 @@ function renderConversationList() {
     const preview = formatConversationPreview(latest);
     const displayName = formatConversationDisplayName(c);
     const messageCount = (c.messages || []).length;
-    const liveBadge = unreadCustomerCount > 0
-      ? '<span class="live-card-badge"><span class="live-card-dot"></span>New ' + escapeHtml(String(unreadCustomerCount > 99 ? "99+" : unreadCustomerCount)) + '</span>'
+    const liveBadge = cardLiveAlertCount > 0
+      ? '<span class="live-card-badge"><span class="live-card-dot"></span>New ' + escapeHtml(String(cardLiveAlertCount > 99 ? "99+" : cardLiveAlertCount)) + '</span>'
       : '';
     const tagRow = (c.tags || []).length ? '<div class="conversation-tags-row">' + tagBadges(c.tags, "conversation-tag-chip", 3) + '</div>' : '';
 
@@ -38358,6 +38384,8 @@ function selectConversation(key) {
   inputTo.value = c.phone;
   inputLine.value = c.phoneNumberId || "";
   markConversationRead(c.key);
+  recentLiveAlertMessagesByConversationKey.delete(c.key);
+  resetLiveAlertCounter();
   renderAll();
   inputBody.focus();
 }
