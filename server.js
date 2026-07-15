@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-154-live-alert-time-signature-safe-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-159-live-alert-visible-badge-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -35553,7 +35553,7 @@ const liveNotificationStatus = document.getElementById("liveNotificationStatus")
 const liveNotificationPanel = document.getElementById("liveNotificationPanel");
 let liveNotificationPanelOpen = false;
 const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
-const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-154-live-alert-time-signature-safe-fix';
+const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-159-live-alert-visible-badge-fix';
 let iconicBuildAutoReloading = false;
 let iconicBuildLastVersionCheckAt = 0;
 const customerProfilePhone = document.getElementById("customerProfilePhone");
@@ -37157,23 +37157,14 @@ function updatePageNotificationTitle() {
 function updateLiveNotificationUi() {
   const unreadCount = getUnreadConversationCount();
 
-  // If all relevant customer conversations are read/closed/archived, never keep a stale red badge,
-  // stale browser title count, or hanging toast from an older refresh.
-  if (unreadCount === 0 && liveAlertCount > 0) {
-    liveAlertCount = 0;
-    clearLiveNotificationToasts();
-  }
+  // V31.5.8.60.3.9.159 - Live alert visible badge fix:
+  // A fresh customer message can be eligible for live alert while the conversation is already
+  // marked read locally (for example when the conversation is selected/open, or after rapid
+  // refreshes). In that case getUnreadConversationCount() can be 0, but the browser still
+  // needs a visible bell/toast signal for the new inbound event.
+  // Keep the bell visible from either source: real unread conversations OR fresh live events.
+  const visibleCount = Math.max(unreadCount, liveAlertCount);
 
-  // Badge/panel must reflect the real unread open conversations only.
-  // liveAlertCount is only a temporary browser-title/toast signal and must never inflate/repeat the bell count.
-  const visibleCount = unreadCount;
-
-  if (unreadCount === 0) {
-    liveAlertCount = 0;
-    clearLiveNotificationToasts();
-  } else if (liveAlertCount > unreadCount) {
-    liveAlertCount = unreadCount;
-  }
 
   if (liveNotificationCount) {
     liveNotificationCount.textContent = visibleCount > 99 ? "99+" : String(visibleCount);
@@ -37560,7 +37551,9 @@ function processLiveInboxNotifications(nextMessages) {
   }
 
   const newestMessage = dedupedNewCustomerMessages[0];
-  liveAlertCount = Math.min(getUnreadConversationCount(), liveAlertCount + dedupedNewCustomerMessages.length);
+  // V31.5.8.60.3.9.159: count fresh live events independently from readMap/unread state
+  // so the bell and toast still appear when a selected/open conversation receives a new message.
+  liveAlertCount = Math.min(99, Math.max(liveAlertCount + dedupedNewCustomerMessages.length, dedupedNewCustomerMessages.length));
 
   showLiveNotificationToast(newestMessage, dedupedNewCustomerMessages.length);
   playLiveNotificationSound();
@@ -39152,13 +39145,17 @@ document.addEventListener("keydown", function(event) {
   }
 });
 
+// V31.5.8.60.3.9.159:
+// Do not auto-clear fresh live alerts merely because the browser window regains focus
+// or the tab becomes visible. The operator should clear them by opening the notification,
+// marking the conversation read, closing/archiving, or using Mark all as read.
 window.addEventListener("focus", function() {
-  resetVisibleLiveNotifications();
+  updateLiveNotificationUi();
 });
 
 document.addEventListener("visibilitychange", function() {
   if (document.visibilityState === "visible") {
-    resetVisibleLiveNotifications();
+    updateLiveNotificationUi();
   }
 });
 
