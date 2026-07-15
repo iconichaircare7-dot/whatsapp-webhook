@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-154-live-alert-time-signature-safe-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-157-inbound-customer-waiting-lock";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -817,6 +817,42 @@ const conversationPhoneNumberId = {};
 const conversationLanguage = {};
 const conversationSmartContext = {};
 
+
+// V31.5.8.60.3.9.157 - Inbound customer Waiting workflow:
+// Every real customer message moves the conversation into Waiting immediately.
+// Opening the live notifications panel or reading the chat must not clear the workflow status.
+// Only an explicit team status action such as Closed / Close + Next should remove it.
+const INBOUND_CUSTOMER_WAITING_STATUS = "Waiting";
+const INBOUND_CUSTOMER_WAITING_TAGS = ["Waiting", "Close to clear"];
+
+function isInboundCustomerSender(sender = "") {
+  return (sender || "").toString().trim().toLowerCase() === "customer";
+}
+
+function getInboundWaitingBranch(phoneNumberId = "", fallbackBranch = "") {
+  return (fallbackBranch || getLineConfig(phoneNumberId || DUBAI_PHONE_NUMBER_ID).branch || "").toString().trim();
+}
+
+function queueInboundCustomerWaitingStateSave({ phone, phoneNumberId, branch, customerName = "" } = {}) {
+  const cleanPhone = (phone || "").toString().trim();
+  const cleanPhoneNumberId = normalizePhoneNumberId(phoneNumberId || "");
+  if (!cleanPhone || !cleanPhoneNumberId) return;
+
+  const finalBranch = getInboundWaitingBranch(cleanPhoneNumberId, branch);
+
+  saveConversationStateToGoogleSheetFromServer({
+    phone: cleanPhone,
+    phoneNumberId: cleanPhoneNumberId,
+    branch: finalBranch,
+    status: INBOUND_CUSTOMER_WAITING_STATUS,
+    tags: INBOUND_CUSTOMER_WAITING_TAGS,
+    updatedBy: customerName ? `Customer Message Auto-Waiting (${customerName})` : "Customer Message Auto-Waiting"
+  }).catch((error) => {
+    console.log("Inbound customer waiting state save failed:");
+    console.log(error);
+  });
+}
+
 function getDefaultMessageType(sender, status) {
   if (sender === "customer") return "Customer Message";
   if (sender === "bot") return "Bot Reply";
@@ -913,6 +949,15 @@ function addInboxMessage(phone, sender, body, status = "Bot", phoneNumberId = nu
     ? localizeInboxBotLogBody(phone, body, options)
     : body;
 
+  const isInboundCustomerMessage = isInboundCustomerSender(sender) && !options.skipInboundWaitingStatus;
+  const finalStatus = isInboundCustomerMessage
+    ? INBOUND_CUSTOMER_WAITING_STATUS
+    : (options.statusOverride || conversationStatus[phone] || status);
+
+  if (isInboundCustomerMessage) {
+    conversationStatus[phone] = INBOUND_CUSTOMER_WAITING_STATUS;
+  }
+
   const item = {
     time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }),
     phone,
@@ -920,10 +965,19 @@ function addInboxMessage(phone, sender, body, status = "Bot", phoneNumberId = nu
     branch: lineConfig.branch,
     sender,
     body: inboxBody,
-    status: options.statusOverride || conversationStatus[phone] || status,
+    status: finalStatus,
     messageType: options.messageType || getDefaultMessageType(sender, status),
     phoneNumberId: finalPhoneNumberId
   };
+
+  if (isInboundCustomerMessage) {
+    queueInboundCustomerWaitingStateSave({
+      phone,
+      phoneNumberId: finalPhoneNumberId,
+      branch: lineConfig.branch,
+      customerName: options.customerName || ""
+    });
+  }
 
   // Extra fields are used for opt-in / opt-out rows.
   // Existing Google Sheet logging still receives the normal message fields.
@@ -10034,7 +10088,10 @@ app.post("/api/send", protectInbox, async (req, res) => {
       });
     }
 
-    setConversationStatus(to, "Human Reply");
+    // V31.5.8.60.3.9.157:
+    // A staff reply should not remove the customer from Waiting.
+    // The conversation leaves Waiting only when the team explicitly closes it / Close + Next.
+    setConversationStatus(to, INBOUND_CUSTOMER_WAITING_STATUS);
     const sentMessage = addInboxMessage(to, "staff", body, "Human Reply - Sent", phoneNumberId, {
       messageType: "Human Reply - Sent",
       statusOverride: "Human Reply - Sent"
@@ -10047,10 +10104,10 @@ app.post("/api/send", protectInbox, async (req, res) => {
       phone: to,
       phoneNumberId,
       branch: getLineConfig(phoneNumberId).branch,
-      status: "Human Reply",
+      status: INBOUND_CUSTOMER_WAITING_STATUS,
       assignee: getBranchTeamAssignee(getLineConfig(phoneNumberId).branch),
-      tags: ["Human Support", "Bot Paused"],
-      updatedBy: "Team Inbox Human Reply"
+      tags: ["Waiting", "Human Support", "Close to clear"],
+      updatedBy: "Team Inbox Human Reply - Keep Waiting"
     }).catch((error) => {
       console.log("Conversation state background save failed after staff reply:");
       console.log(error);
@@ -10174,7 +10231,7 @@ app.post("/api/send-image", protectInbox, async (req, res) => {
       });
     }
 
-    setConversationStatus(to, "Human Reply");
+    setConversationStatus(to, INBOUND_CUSTOMER_WAITING_STATUS);
 
     const safeImageFilename = sanitizeMediaFilename(
       filename,
@@ -10196,10 +10253,10 @@ app.post("/api/send-image", protectInbox, async (req, res) => {
       phone: to,
       phoneNumberId,
       branch: getLineConfig(phoneNumberId).branch,
-      status: "Human Reply",
+      status: INBOUND_CUSTOMER_WAITING_STATUS,
       assignee: getBranchTeamAssignee(getLineConfig(phoneNumberId).branch),
-      tags: ["Human Support", "Bot Paused"],
-      updatedBy: "Team Inbox Human Image Reply"
+      tags: ["Waiting", "Human Support", "Close to clear"],
+      updatedBy: "Team Inbox Human Image Reply - Keep Waiting"
     });
 
     return res.json({ ok: true, mediaId: sendResult.mediaId, result: sendResult.result });
@@ -10264,7 +10321,7 @@ app.post("/api/send-audio", protectInbox, async (req, res) => {
       });
     }
 
-    setConversationStatus(to, "Human Reply");
+    setConversationStatus(to, INBOUND_CUSTOMER_WAITING_STATUS);
 
     const safeAudioFilename = sanitizeMediaFilename(
       filename,
@@ -10286,10 +10343,10 @@ app.post("/api/send-audio", protectInbox, async (req, res) => {
       phone: to,
       phoneNumberId,
       branch: getLineConfig(phoneNumberId).branch,
-      status: "Human Reply",
+      status: INBOUND_CUSTOMER_WAITING_STATUS,
       assignee: getBranchTeamAssignee(getLineConfig(phoneNumberId).branch),
-      tags: ["Human Support", "Bot Paused"],
-      updatedBy: "Team Inbox Human Voice Reply"
+      tags: ["Waiting", "Human Support", "Close to clear"],
+      updatedBy: "Team Inbox Human Voice Reply - Keep Waiting"
     });
 
     return res.json({ ok: true, mediaId: sendResult.mediaId, result: sendResult.result });
