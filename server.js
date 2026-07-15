@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-159-live-alert-visible-badge-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-160-live-alert-panel-card-fix";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -35485,6 +35485,12 @@ const INTERNAL_NOTIFICATION_PHONE_DIGITS = new Set(${JSON.stringify(getSuppresse
 const LIVE_TOAST_DEDUP_WINDOW_MS = 12000;
 const LIVE_TOAST_MAX_VISIBLE = 3;
 const recentLiveToastMap = new Map();
+// V31.5.8.60.3.9.160 - Notification center live-card bridge:
+// The bell badge can now be driven by fresh live events even when the selected conversation is
+// already marked read. Keep those fresh events available for the notification drawer so clicking
+// the bell shows the actual conversation instead of an empty "All clear" panel.
+const recentLiveAlertMessagesByConversationKey = new Map();
+const LIVE_ALERT_PANEL_TTL_MS = 10 * 60 * 1000;
 
 // V31.5.8.60.3.9.146 - Sound guard: prevent admin/visible-page sound-only alerts.
 let liveNotificationSoundLastPlayedAt = 0;
@@ -35553,7 +35559,7 @@ const liveNotificationStatus = document.getElementById("liveNotificationStatus")
 const liveNotificationPanel = document.getElementById("liveNotificationPanel");
 let liveNotificationPanelOpen = false;
 const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
-const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-159-live-alert-visible-badge-fix';
+const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-160-live-alert-panel-card-fix';
 let iconicBuildAutoReloading = false;
 let iconicBuildLastVersionCheckAt = 0;
 const customerProfilePhone = document.getElementById("customerProfilePhone");
@@ -37205,8 +37211,94 @@ function clearLiveNotificationToasts() {
 }
 
 
+function rememberRecentLiveAlertMessages(messages) {
+  const now = Date.now();
+  const list = Array.isArray(messages) ? messages : [];
+
+  list.forEach(function(message) {
+    if (!message) return;
+    const key = getMessageConversationKey(message);
+    if (!key) return;
+    recentLiveAlertMessagesByConversationKey.set(key, {
+      message: message,
+      at: now
+    });
+  });
+
+  recentLiveAlertMessagesByConversationKey.forEach(function(value, key) {
+    if (!value || now - Number(value.at || 0) > LIVE_ALERT_PANEL_TTL_MS) {
+      recentLiveAlertMessagesByConversationKey.delete(key);
+    }
+  });
+}
+
+function getRecentLiveAlertConversationKeys() {
+  const now = Date.now();
+  const keys = [];
+
+  recentLiveAlertMessagesByConversationKey.forEach(function(value, key) {
+    if (!value || now - Number(value.at || 0) > LIVE_ALERT_PANEL_TTL_MS) {
+      recentLiveAlertMessagesByConversationKey.delete(key);
+      return;
+    }
+
+    const message = value.message || {};
+    if (!isLiveMessageAllowedForCurrentUser(message)) return;
+    keys.push(key);
+  });
+
+  return keys;
+}
+
+function getRecentLiveAlertConversations(existingKeys) {
+  const existing = existingKeys || new Set();
+  const allConversations = buildConversations();
+  const conversationsByKey = new Map();
+
+  allConversations.forEach(function(conversation) {
+    if (conversation && conversation.key) {
+      conversationsByKey.set(conversation.key, conversation);
+    }
+  });
+
+  return getRecentLiveAlertConversationKeys()
+    .filter(function(key) {
+      return key && !existing.has(key);
+    })
+    .map(function(key) {
+      const stored = recentLiveAlertMessagesByConversationKey.get(key) || {};
+      const message = stored.message || {};
+      const conversation = conversationsByKey.get(key);
+
+      if (conversation) {
+        return Object.assign({}, conversation, {
+          latest: message || conversation.latest,
+          liveAlertFallback: true,
+          liveAlertAt: stored.at || Date.now()
+        });
+      }
+
+      return {
+        key: key,
+        phone: message.phone || "",
+        phoneNumberId: message.phoneNumberId || "",
+        branch: message.branch || "",
+        status: message.status || "New customer message",
+        replyFilterStatus: message.status || "New customer message",
+        customerName: message.customerName || "",
+        messages: message ? [message] : [],
+        latest: message,
+        liveAlertFallback: true,
+        liveAlertAt: stored.at || Date.now()
+      };
+    })
+    .sort(function(a, b) {
+      return Number(b.liveAlertAt || 0) - Number(a.liveAlertAt || 0);
+    });
+}
+
 function getOpenLiveNotificationConversations() {
-  return buildConversations().filter(function(conversation) {
+  const unreadConversations = buildConversations().filter(function(conversation) {
     if (!conversation) return false;
     if (!isLiveConversationAllowedForCurrentUser(conversation)) return false;
     if (typeof isClosedOrArchivedConversation === "function" && isClosedOrArchivedConversation(conversation)) return false;
@@ -37216,12 +37308,23 @@ function getOpenLiveNotificationConversations() {
     if (unreadDiff) return unreadDiff;
     return getMessageTimeValue(b.latest || {}) - getMessageTimeValue(a.latest || {});
   });
+
+  // V160: the top bell may be raised by a fresh live event even when unreadCount is 0.
+  // Add those recent live-alert conversations to the drawer so the user can click the bell
+  // and jump to the exact conversation that triggered the alert.
+  const existingKeys = new Set(unreadConversations.map(function(conversation) {
+    return conversation && conversation.key;
+  }).filter(Boolean));
+  const recentAlertConversations = getRecentLiveAlertConversations(existingKeys);
+
+  return unreadConversations.concat(recentAlertConversations);
 }
 
 function getOpenLiveNotificationTotals(conversations) {
   const list = conversations || getOpenLiveNotificationConversations();
   return list.reduce(function(total, conversation) {
-    return total + getUnreadCustomerMessageCount(conversation);
+    const unread = getUnreadCustomerMessageCount(conversation);
+    return total + (unread > 0 ? unread : (conversation && conversation.liveAlertFallback ? 1 : 0));
   }, 0);
 }
 
@@ -37296,6 +37399,7 @@ function renderLiveNotificationPanel() {
       conversations.slice(0, 12).map(function(conversation) {
         const latest = conversation.latest || (conversation.messages || [])[0] || {};
         const unreadCount = getUnreadCustomerMessageCount(conversation);
+        const visibleUnreadCount = unreadCount > 0 ? unreadCount : (conversation.liveAlertFallback ? 1 : 0);
         const displayName = formatConversationDisplayName(conversation);
         const preview = formatConversationPreview(latest) || "New customer message";
         const status = conversation.status || conversation.replyFilterStatus || "Open";
@@ -37304,7 +37408,7 @@ function renderLiveNotificationPanel() {
           '<div class="live-notification-main">' +
             '<div class="live-notification-name-row">' +
               '<div class="live-notification-name">' + escapeHtml(displayName) + '</div>' +
-              '<span class="live-notification-unread-pill">' + escapeHtml(String(unreadCount > 99 ? "99+" : unreadCount)) + '</span>' +
+              '<span class="live-notification-unread-pill">' + escapeHtml(String(visibleUnreadCount > 99 ? "99+" : visibleUnreadCount)) + '</span>' +
             '</div>' +
             '<div class="live-notification-preview">' + escapeHtml(shortText(preview, 96)) + '</div>' +
             '<div class="live-notification-meta">' +
@@ -37341,6 +37445,7 @@ function markAllLiveNotificationConversationsRead() {
   });
 
   resetLiveAlertCounter();
+  recentLiveAlertMessagesByConversationKey.clear();
   clearLiveNotificationToasts();
   renderConversationList();
   renderLiveNotificationPanel();
@@ -37363,6 +37468,7 @@ function openConversationFromLiveMessage(message) {
   selectedPhone = message.phone || selectedPhone;
   selectedPhoneNumberId = message.phoneNumberId || selectedPhoneNumberId || "";
   markConversationRead(key);
+  recentLiveAlertMessagesByConversationKey.delete(key);
   resetLiveAlertCounter();
   closeLiveNotificationPanel();
   renderAll();
@@ -37549,6 +37655,8 @@ function processLiveInboxNotifications(nextMessages) {
     updateLiveNotificationUi();
     return;
   }
+
+  rememberRecentLiveAlertMessages(dedupedNewCustomerMessages);
 
   const newestMessage = dedupedNewCustomerMessages[0];
   // V31.5.8.60.3.9.159: count fresh live events independently from readMap/unread state
@@ -39124,6 +39232,7 @@ if (liveNotificationPanel) {
     if (inputTo) inputTo.value = selectedPhone;
     if (inputLine) inputLine.value = selectedPhoneNumberId;
     markConversationRead(conversation.key);
+    recentLiveAlertMessagesByConversationKey.delete(conversation.key);
     resetLiveAlertCounter();
     closeLiveNotificationPanel();
     renderAll();
