@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-161-conversation-card-live-badge-fix";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-162-unified-303-bridge";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -89,6 +89,14 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const DUBAI_PHONE_NUMBER_ID = process.env.DUBAI_PHONE_NUMBER_ID || PHONE_NUMBER_ID || "1100042333191350";
 const ABU_DHABI_PHONE_NUMBER_ID = process.env.ABU_DHABI_PHONE_NUMBER_ID || "1000146433192239";
 
+// Unified Team Inbox: 303 stays on its isolated Render service, but is displayed
+// and routed from this main 04/02 Team Inbox.
+const AI_303_PHONE_NUMBER_ID = process.env.AI_303_PHONE_NUMBER_ID || "1110840048789988";
+const AI_303_BRANCH_NAME = "303 AI";
+const AI_303_CALL_NUMBER = "050 338 2303";
+const AI_303_DISPLAY_NUMBER = "+971 50 338 2303";
+const AI_303_LOCATION_URL = (process.env.AI_303_LOCATION_URL || "").toString().trim();
+
 // V31.5.8.60.3.9.42 - Temporary WhatsApp Automation Pause:
 // Default is ON so Dubai + Abu Dhabi landline WhatsApp automation stops immediately after deploy.
 // This keeps Meta webhook verification/status ACK working, but blocks customer auto-replies, typing,
@@ -103,6 +111,9 @@ const WHATSAPP_AUTOMATION_PAUSED_DUBAI = ["true", "1", "yes", "on"].includes(
 const WHATSAPP_AUTOMATION_PAUSED_ABU_DHABI = ["true", "1", "yes", "on"].includes(
   (process.env.WHATSAPP_AUTOMATION_PAUSED_ABU_DHABI || "false").toString().trim().toLowerCase()
 );
+const WHATSAPP_AUTOMATION_PAUSED_303 = !["false", "0", "no", "off"].includes(
+  (process.env.WHATSAPP_AUTOMATION_PAUSED_303 || "true").toString().trim().toLowerCase()
+);
 const STAFF_NUMBER = process.env.STAFF_NUMBER;
 // Smart Booking staff notification fallbacks.
 // Render ENV still has priority, but these keep branch notifications working if an ENV is accidentally missing.
@@ -110,8 +121,20 @@ const DEFAULT_DUBAI_STAFF_NUMBER = "971503424811";
 const DEFAULT_ABU_DHABI_STAFF_NUMBER = "971503750616";
 const DUBAI_STAFF_NUMBER = process.env.DUBAI_STAFF_NUMBER || DEFAULT_DUBAI_STAFF_NUMBER || STAFF_NUMBER || "";
 const ABU_DHABI_STAFF_NUMBER = process.env.ABU_DHABI_STAFF_NUMBER || DEFAULT_ABU_DHABI_STAFF_NUMBER || STAFF_NUMBER || "";
+const AI_303_STAFF_NUMBER = process.env.AI_303_STAFF_NUMBER || "";
 const INBOX_USER = process.env.INBOX_USER || "admin";
 const INBOX_PASS = process.env.INBOX_PASS || "123456";
+
+// Private server-to-server bridge to the isolated 303 Render service.
+// Keep credentials in Render ENV; never hard-code them in GitHub.
+const AI_303_SERVICE_URL = (
+  process.env.AI_303_SERVICE_URL ||
+  "https://iconic-team-inbox-staging.onrender.com"
+).toString().trim().replace(/\/+$/, "");
+const AI_303_INBOX_USER = (process.env.AI_303_INBOX_USER || INBOX_USER || "").toString().trim();
+const AI_303_INBOX_PASS = (process.env.AI_303_INBOX_PASS || INBOX_PASS || "").toString();
+const AI_303_PROXY_TIMEOUT_MS = Number(process.env.AI_303_PROXY_TIMEOUT_MS || 4500);
+const AI_303_REMOTE_CACHE_TTL_MS = Number(process.env.AI_303_REMOTE_CACHE_TTL_MS || 5000);
 
 // V31.5 Auto Video Reply:
 // Put iconic-auto-reply-video-13s.mp4 in the same GitHub/Render folder as server.js.
@@ -393,6 +416,223 @@ function normalizePhoneDigits(value) {
   return (value || "").toString().replace(/\D/g, "");
 }
 
+function isAi303Line(phoneNumberId, displayPhoneNumber = "") {
+  const id = normalizePhoneNumberId(phoneNumberId);
+  const displayDigits = normalizePhoneDigits(displayPhoneNumber);
+
+  return (
+    id === normalizePhoneNumberId(AI_303_PHONE_NUMBER_ID) ||
+    displayDigits.endsWith("971503382303") ||
+    displayDigits.endsWith("503382303")
+  );
+}
+
+function getAi303ProxyAuthorizationHeader() {
+  if (!AI_303_INBOX_USER || !AI_303_INBOX_PASS) return "";
+  return "Basic " + Buffer.from(`${AI_303_INBOX_USER}:${AI_303_INBOX_PASS}`).toString("base64");
+}
+
+function isAi303ProxyConfigured() {
+  return Boolean(AI_303_SERVICE_URL && getAi303ProxyAuthorizationHeader());
+}
+
+async function requestAi303Service(pathname = "", options = {}) {
+  if (!isAi303ProxyConfigured()) {
+    return {
+      ok: false,
+      status: 503,
+      data: {
+        ok: false,
+        error: "303 service bridge is not configured"
+      }
+    };
+  }
+
+  const cleanPath = pathname.toString().startsWith("/") ? pathname.toString() : `/${pathname}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Math.max(1500, AI_303_PROXY_TIMEOUT_MS));
+  const expectBinary = Boolean(options.expectBinary);
+  const headers = {
+    Authorization: getAi303ProxyAuthorizationHeader(),
+    Accept: expectBinary ? "*/*" : "application/json",
+    ...(options.headers || {})
+  };
+
+  let requestBody;
+  if (Object.prototype.hasOwnProperty.call(options, "body")) {
+    headers["Content-Type"] = "application/json";
+    requestBody = JSON.stringify(options.body);
+  }
+
+  try {
+    const response = await fetch(`${AI_303_SERVICE_URL}${cleanPath}`, {
+      method: options.method || "GET",
+      headers,
+      body: requestBody,
+      signal: controller.signal
+    });
+
+    if (expectBinary) {
+      const buffer = Buffer.from(await response.arrayBuffer());
+      return {
+        ok: response.ok,
+        status: response.status,
+        buffer,
+        contentType: response.headers.get("content-type") || "application/octet-stream"
+      };
+    }
+
+    const text = await response.text();
+    let data;
+
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch (error) {
+      data = {
+        ok: false,
+        error: text || "Invalid response from 303 service"
+      };
+    }
+
+    return {
+      ok: response.ok && data?.ok !== false,
+      status: response.status,
+      data
+    };
+  } catch (error) {
+    const timeoutError = error?.name === "AbortError";
+    return {
+      ok: false,
+      status: timeoutError ? 504 : 502,
+      data: {
+        ok: false,
+        error: timeoutError ? "303 service timed out" : "303 service unavailable"
+      }
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+let ai303RemoteInboxCache = {
+  messages: [],
+  conversationStates: [],
+  bookingRequests: []
+};
+let ai303RemoteInboxCacheAt = 0;
+let ai303RemoteInboxPromise = null;
+
+function normalizeAi303RemoteInboxPayload(data = {}) {
+  return {
+    messages: Array.isArray(data.messages) ? data.messages : [],
+    conversationStates: Array.isArray(data.conversationStates) ? data.conversationStates : [],
+    bookingRequests: Array.isArray(data.bookingRequests) ? data.bookingRequests : []
+  };
+}
+
+async function loadAi303RemoteInboxData(force = false) {
+  if (!isAi303ProxyConfigured()) {
+    return {
+      ...ai303RemoteInboxCache,
+      ok: false,
+      source: "303_bridge_not_configured"
+    };
+  }
+
+  const cacheAge = Date.now() - ai303RemoteInboxCacheAt;
+  if (!force && ai303RemoteInboxCacheAt && cacheAge < AI_303_REMOTE_CACHE_TTL_MS) {
+    return {
+      ...ai303RemoteInboxCache,
+      ok: true,
+      source: "303_remote_cache"
+    };
+  }
+
+  if (ai303RemoteInboxPromise) {
+    return ai303RemoteInboxPromise;
+  }
+
+  ai303RemoteInboxPromise = requestAi303Service("/api/messages?includeArchived=true")
+    .then((result) => {
+      if (result.ok) {
+        ai303RemoteInboxCache = normalizeAi303RemoteInboxPayload(result.data || {});
+        ai303RemoteInboxCacheAt = Date.now();
+        return {
+          ...ai303RemoteInboxCache,
+          ok: true,
+          source: "303_remote"
+        };
+      }
+
+      console.log("[303 Bridge] inbox load failed", result.status, result.data?.error || "");
+      return {
+        ...ai303RemoteInboxCache,
+        ok: false,
+        source: "303_remote_stale_cache",
+        error: result.data?.error || "303 inbox load failed"
+      };
+    })
+    .finally(() => {
+      ai303RemoteInboxPromise = null;
+    });
+
+  return ai303RemoteInboxPromise;
+}
+
+function mergeInboxRecordsByKey(primary = [], secondary = [], keyBuilder = () => "") {
+  const map = new Map();
+
+  [...(primary || []), ...(secondary || [])].forEach((item) => {
+    const key = keyBuilder(item || {});
+    if (!key) return;
+
+    const current = map.get(key);
+    if (!current) {
+      map.set(key, item);
+      return;
+    }
+
+    const currentTime = new Date(
+      current.last_updated_at ||
+      current.lastUpdated ||
+      current.time ||
+      current.date ||
+      0
+    ).getTime() || 0;
+    const nextTime = new Date(
+      item.last_updated_at ||
+      item.lastUpdated ||
+      item.time ||
+      item.date ||
+      0
+    ).getTime() || 0;
+
+    if (nextTime >= currentTime) {
+      map.set(key, item);
+    }
+  });
+
+  return Array.from(map.values());
+}
+
+function mergeConversationStateRecords(primary = [], secondary = []) {
+  return mergeInboxRecordsByKey(primary, secondary, (item) => [
+    normalizePhoneDigits(item.phone || ""),
+    normalizePhoneNumberId(item.phoneNumberId || ""),
+    normalizeInboxBranchName(item.branch || "")
+  ].join("|"));
+}
+
+function mergeBookingRequestRecords(primary = [], secondary = []) {
+  return mergeInboxRecordsByKey(primary, secondary, (item) => [
+    (item.rowNumber || "").toString().trim(),
+    normalizePhoneDigits(item.phone || ""),
+    normalizePhoneNumberId(item.phoneNumberId || ""),
+    (item.date || "").toString().trim(),
+    (item.requestType || "").toString().trim()
+  ].join("|"));
+}
+
 function normalizeWhatsAppRecipientDigits(value) {
   let digits = normalizePhoneDigits(value);
 
@@ -438,6 +678,7 @@ function getSuppressedCustomerNotificationNumbers() {
     STAFF_NUMBER,
     DUBAI_STAFF_NUMBER,
     ABU_DHABI_STAFF_NUMBER,
+    AI_303_STAFF_NUMBER,
     process.env.STAFF_NOTIFICATION_NUMBER,
     process.env.DUBAI_STAFF_NOTIFICATION_NUMBER,
     process.env.ABU_DHABI_STAFF_NOTIFICATION_NUMBER,
@@ -476,6 +717,10 @@ function isAbuDhabiLine(phoneNumberId, displayPhoneNumber = "") {
 function shouldPauseWhatsAppAutomationForLine(phoneNumberId, displayPhoneNumber = "") {
   if (WHATSAPP_AUTOMATION_PAUSED) {
     return true;
+  }
+
+  if (isAi303Line(phoneNumberId, displayPhoneNumber)) {
+    return WHATSAPP_AUTOMATION_PAUSED_303;
   }
 
   if (isAbuDhabiLine(phoneNumberId, displayPhoneNumber)) {
@@ -541,6 +786,10 @@ function getIncomingPhoneNumberId(value) {
   const incomingId = normalizePhoneNumberId(value?.metadata?.phone_number_id);
   const displayPhoneNumber = value?.metadata?.display_phone_number || "";
 
+  if (isAi303Line(incomingId, displayPhoneNumber)) {
+    return AI_303_PHONE_NUMBER_ID;
+  }
+
   if (isAbuDhabiLine(incomingId, displayPhoneNumber)) {
     return ABU_DHABI_PHONE_NUMBER_ID;
   }
@@ -550,6 +799,16 @@ function getIncomingPhoneNumberId(value) {
 
 function getLineConfig(phoneNumberId, displayPhoneNumber = "") {
   const id = normalizePhoneNumberId(phoneNumberId);
+
+  if (isAi303Line(id, displayPhoneNumber)) {
+    return {
+      phoneNumberId: AI_303_PHONE_NUMBER_ID,
+      branch: AI_303_BRANCH_NAME,
+      callNumber: AI_303_CALL_NUMBER,
+      displayNumber: AI_303_DISPLAY_NUMBER,
+      locationUrl: AI_303_LOCATION_URL
+    };
+  }
 
   if (isAbuDhabiLine(id, displayPhoneNumber)) {
     return {
@@ -574,6 +833,7 @@ function getLineConfig(phoneNumberId, displayPhoneNumber = "") {
 function normalizeInboxBranchName(value = "") {
   const clean = (value || "").toString().trim().toLowerCase();
   if (!clean) return "";
+  if (clean.includes("303") || clean.includes("ai line") || clean === "ai" || clean.includes("ذكاء")) return AI_303_BRANCH_NAME;
   if (clean.includes("abu") || clean.includes("dhabi") || clean.includes("ابوظ") || clean.includes("أبوظ")) return "Abu Dhabi";
   if (clean.includes("dubai") || clean.includes("دبي")) return "Dubai";
   return value.toString().trim();
@@ -685,18 +945,24 @@ function getServiceBookingFlowConfigForLine(phoneNumberId, displayPhoneNumber = 
 
 function getBranchTeamAssignee(branch = "") {
   const value = (branch || "").toString().toLowerCase();
+  if (value.includes("303")) return "303 AI Team";
   return value.includes("abu") ? "Abu Dhabi Team" : "Dubai Team";
 }
 
 function getStaffNotificationRouting(phoneNumberId, displayPhoneNumber = "") {
   const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const is303 = isAi303Line(finalPhoneNumberId, displayPhoneNumber);
   const isAbuDhabi = isAbuDhabiLine(finalPhoneNumberId, displayPhoneNumber);
-  const branchEnvName = isAbuDhabi ? "ABU_DHABI_STAFF_NUMBER" : "DUBAI_STAFF_NUMBER";
+  const branchEnvName = is303
+    ? "AI_303_STAFF_NUMBER"
+    : (isAbuDhabi ? "ABU_DHABI_STAFF_NUMBER" : "DUBAI_STAFF_NUMBER");
   const branchStaffNumber = (process.env[branchEnvName] || "").toString().trim();
-  const fallbackStaffNumber = (process.env.STAFF_NUMBER || "").toString().trim();
+  const fallbackStaffNumber = is303 ? "" : (process.env.STAFF_NUMBER || "").toString().trim();
   const number = branchStaffNumber || fallbackStaffNumber || "";
   const usedEnvName = branchStaffNumber ? branchEnvName : (fallbackStaffNumber ? "STAFF_NUMBER" : "NONE");
-  const resolvedPhoneNumberId = isAbuDhabi ? ABU_DHABI_PHONE_NUMBER_ID : (finalPhoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const resolvedPhoneNumberId = is303
+    ? AI_303_PHONE_NUMBER_ID
+    : (isAbuDhabi ? ABU_DHABI_PHONE_NUMBER_ID : (finalPhoneNumberId || DUBAI_PHONE_NUMBER_ID));
   const lineConfig = getLineConfig(resolvedPhoneNumberId, displayPhoneNumber);
 
   return {
@@ -9639,12 +9905,28 @@ function filterArchivedInboxPayload(messages = [], conversationStates = [], book
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
-  const sheetData = await loadMessagesFromGoogleSheetForMessagesApi();
+
+  const [sheetData, remote303Data] = await Promise.all([
+    loadMessagesFromGoogleSheetForMessagesApi(),
+    loadAi303RemoteInboxData()
+  ]);
   const sheetMessages = sheetData.messages || [];
   const memoryMessages = inboxMessages || [];
-  const conversationStates = sheetData.conversationStates || [];
-  const bookingRequests = sheetData.bookingRequests || [];
-  const mergedMessages = mergeInboxHistory(sheetMessages, memoryMessages);
+  const remote303Messages = remote303Data.messages || [];
+  const localConversationStates = sheetData.conversationStates || [];
+  const remote303ConversationStates = remote303Data.conversationStates || [];
+  const localBookingRequests = sheetData.bookingRequests || [];
+  const remote303BookingRequests = remote303Data.bookingRequests || [];
+  const localMergedMessages = mergeInboxHistory(sheetMessages, memoryMessages);
+  const mergedMessages = mergeInboxHistory(localMergedMessages, remote303Messages);
+  const conversationStates = mergeConversationStateRecords(
+    localConversationStates,
+    remote303ConversationStates
+  );
+  const bookingRequests = mergeBookingRequestRecords(
+    localBookingRequests,
+    remote303BookingRequests
+  );
   const branchFilteredPayload = filterInboxPayloadByBranchAccess(
     mergedMessages,
     conversationStates,
@@ -9664,9 +9946,11 @@ function filterArchivedInboxPayload(messages = [], conversationStates = [], book
     includeArchived,
     archiveOnly
   );
-  const source = sheetMessages.length > 0 && memoryMessages.length > 0
-    ? "google_sheet_plus_memory"
-    : (sheetMessages.length > 0 ? "google_sheet" : "memory");
+  const sourceParts = [];
+  if (sheetMessages.length) sourceParts.push("google_sheet");
+  if (memoryMessages.length) sourceParts.push("memory");
+  if (remote303Messages.length || remote303Data.ok) sourceParts.push(remote303Data.source || "303_remote");
+  const source = sourceParts.length ? sourceParts.join("_plus_") : "memory";
 
   return res.json({
     ok: true,
@@ -9676,14 +9960,21 @@ function filterArchivedInboxPayload(messages = [], conversationStates = [], book
     bookingRequests: archiveFilteredPayload.bookingRequests,
     debug: {
       botVersion: BOT_VERSION,
+      unified303: true,
+      ai303BridgeConfigured: isAi303ProxyConfigured(),
+      ai303RemoteOk: Boolean(remote303Data.ok),
+      ai303RemoteSource: remote303Data.source || "",
       sheetMessagesCount: sheetMessages.length,
       memoryMessagesCount: memoryMessages.length,
+      remote303MessagesCount: remote303Messages.length,
       returnedMessagesCount: archiveFilteredPayload.messages.length,
       unfilteredMessagesCount: mergedMessages.length,
       conversationStatesCount: archiveFilteredPayload.conversationStates.length,
       unfilteredConversationStatesCount: conversationStates.length,
+      remote303ConversationStatesCount: remote303ConversationStates.length,
       bookingRequestsCount: archiveFilteredPayload.bookingRequests.length,
       unfilteredBookingRequestsCount: bookingRequests.length,
+      remote303BookingRequestsCount: remote303BookingRequests.length,
       includeArchived,
       archiveOnly,
       archivedConversationCount: archiveFilteredPayload.archivedConversationCount,
@@ -9697,6 +9988,7 @@ function filterArchivedInboxPayload(messages = [], conversationStates = [], book
     }
   });
 });
+
 
 app.get("/api/bookings", protectInbox, async (req, res) => {
   try {
@@ -9737,6 +10029,26 @@ app.post("/api/bookings/send-update", protectInbox, async (req, res) => {
 
     if (!to) {
       return res.status(400).json({ ok: false, error: "Missing customer phone" });
+    }
+
+    if (isAi303Line(phoneNumberId)) {
+      const remoteResult = await requestAi303Service("/api/bookings/send-update", {
+        method: "POST",
+        body: {
+          ...req.body,
+          to,
+          phoneNumberId: AI_303_PHONE_NUMBER_ID
+        }
+      });
+
+      if (remoteResult.ok) {
+        ai303RemoteInboxCacheAt = 0;
+      }
+
+      return res.status(remoteResult.status || (remoteResult.ok ? 200 : 502)).json(remoteResult.data || {
+        ok: false,
+        error: "303 booking update request failed"
+      });
     }
 
     const replyLanguage = getConversationLanguage(to);
@@ -10003,6 +10315,26 @@ app.post("/api/send", protectInbox, async (req, res) => {
       return res.status(403).json({ ok: false, error: "This inbox user cannot send from this branch" });
     }
 
+    if (isAi303Line(phoneNumberId)) {
+      const remoteResult = await requestAi303Service("/api/send", {
+        method: "POST",
+        body: {
+          ...req.body,
+          to,
+          phoneNumberId: AI_303_PHONE_NUMBER_ID
+        }
+      });
+
+      if (remoteResult.ok) {
+        ai303RemoteInboxCacheAt = 0;
+      }
+
+      return res.status(remoteResult.status || (remoteResult.ok ? 200 : 502)).json(remoteResult.data || {
+        ok: false,
+        error: "303 service request failed"
+      });
+    }
+
     conversationPhoneNumberId[to] = phoneNumberId;
 
     const staffSendGuard = await blockStaffSendIfNeeded({
@@ -10147,6 +10479,26 @@ app.post("/api/send-image", protectInbox, async (req, res) => {
       return res.status(403).json({ ok: false, error: "This inbox user cannot send from this branch" });
     }
 
+    if (isAi303Line(phoneNumberId)) {
+      const remoteResult = await requestAi303Service("/api/send-image", {
+        method: "POST",
+        body: {
+          ...req.body,
+          to,
+          phoneNumberId: AI_303_PHONE_NUMBER_ID
+        }
+      });
+
+      if (remoteResult.ok) {
+        ai303RemoteInboxCacheAt = 0;
+      }
+
+      return res.status(remoteResult.status || (remoteResult.ok ? 200 : 502)).json(remoteResult.data || {
+        ok: false,
+        error: "303 service request failed"
+      });
+    }
+
     conversationPhoneNumberId[to] = phoneNumberId;
 
     const staffSendGuard = await blockStaffSendIfNeeded({
@@ -10237,6 +10589,26 @@ app.post("/api/send-audio", protectInbox, async (req, res) => {
       return res.status(403).json({ ok: false, error: "This inbox user cannot send from this branch" });
     }
 
+    if (isAi303Line(phoneNumberId)) {
+      const remoteResult = await requestAi303Service("/api/send-audio", {
+        method: "POST",
+        body: {
+          ...req.body,
+          to,
+          phoneNumberId: AI_303_PHONE_NUMBER_ID
+        }
+      });
+
+      if (remoteResult.ok) {
+        ai303RemoteInboxCacheAt = 0;
+      }
+
+      return res.status(remoteResult.status || (remoteResult.ok ? 200 : 502)).json(remoteResult.data || {
+        ok: false,
+        error: "303 service request failed"
+      });
+    }
+
     conversationPhoneNumberId[to] = phoneNumberId;
 
     const staffSendGuard = await blockStaffSendIfNeeded({
@@ -10307,9 +10679,27 @@ app.post("/api/send-audio", protectInbox, async (req, res) => {
 app.get("/api/media/:mediaId", protectInbox, async (req, res) => {
   try {
     const mediaId = (req.params?.mediaId || "").toString().trim().replace(/[^a-zA-Z0-9_-]/g, "");
+    const phoneNumberId = normalizePhoneNumberId(
+      (req.query?.phoneNumberId || "").toString().trim()
+    );
 
     if (!mediaId) {
       return res.status(400).send("Missing media id");
+    }
+
+    if (isAi303Line(phoneNumberId)) {
+      const remoteResult = await requestAi303Service(
+        `/api/media/${encodeURIComponent(mediaId)}`,
+        { expectBinary: true }
+      );
+
+      if (!remoteResult.ok) {
+        return res.status(remoteResult.status || 502).send("Could not load 303 media");
+      }
+
+      res.setHeader("Content-Type", remoteResult.contentType || "application/octet-stream");
+      res.setHeader("Cache-Control", "private, max-age=3600");
+      return res.send(remoteResult.buffer);
     }
 
     const mediaMetaResponse = await fetch(`https://graph.facebook.com/v18.0/${mediaId}`, {
@@ -10335,9 +10725,9 @@ app.get("/api/media/:mediaId", protectInbox, async (req, res) => {
     });
 
     if (!imageResponse.ok) {
-      const text = await imageResponse.text();
+      const responseText = await imageResponse.text();
       console.log("WhatsApp media download failed:");
-      console.log(imageResponse.status, text);
+      console.log(imageResponse.status, responseText);
       return res.status(imageResponse.status || 500).send("Could not download media");
     }
 
@@ -10353,6 +10743,7 @@ app.get("/api/media/:mediaId", protectInbox, async (req, res) => {
     return res.status(500).send("Media proxy failed");
   }
 });
+
 
 app.post("/api/status", protectInbox, (req, res) => {
   try {
@@ -10413,6 +10804,7 @@ function getInboxServerConversationName(conversation = {}) {
 
 function getInboxServerBranchClass(branch = "") {
   const cleanBranch = (branch || "").toString().toLowerCase();
+  if (cleanBranch.includes("303")) return "branch-pill branch-303";
   return cleanBranch.includes("abu") ? "branch-pill branch-abu" : "branch-pill branch-dubai";
 }
 
@@ -10497,6 +10889,11 @@ function buildInboxQuickReplyLocationAttribute(branchScope = "") {
     return escapeInboxServerHtml(`موقع فرع أبوظبي:\n${ABU_DHABI_LOCATION_URL}\n\nAbu Dhabi branch location:\n${ABU_DHABI_LOCATION_URL}`).replace(/\n/g, "&#10;");
   }
 
+  if (branch === AI_303_BRANCH_NAME) {
+    const aiLocation = AI_303_LOCATION_URL || "Location is handled by the Iconic team.";
+    return escapeInboxServerHtml(`303 AI:\n${aiLocation}`).replace(/\n/g, "&#10;");
+  }
+
   return escapeInboxServerHtml(`فروعنا:\nDubai: ${DUBAI_LOCATION_URL}\nAbu Dhabi: ${ABU_DHABI_LOCATION_URL}\n\nOur branches:\nDubai: ${DUBAI_LOCATION_URL}\nAbu Dhabi: ${ABU_DHABI_LOCATION_URL}`).replace(/\n/g, "&#10;");
 }
 
@@ -10513,6 +10910,7 @@ function buildInboxSidebarBranchControls(branchScope = "") {
   const scope = normalizeInboxBranchName(branchScope || "");
   const includeDubai = !scope || scope === "Dubai";
   const includeAbuDhabi = !scope || scope === "Abu Dhabi";
+  const includeAi303 = !scope || scope === AI_303_BRANCH_NAME;
 
   return [
     '<div class="sidebar-branches premium-branch-card">',
@@ -10525,23 +10923,28 @@ function buildInboxSidebarBranchControls(branchScope = "") {
     '  </div>',
     includeDubai ? '  <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Dubai" data-branch-scope-item="Dubai"><span class="branch-left"><i class="branch-dot branch-dot-dubai"></i><span><strong>Dubai</strong><small>Main branch</small></span></span><b id="sideDubaiCount">0</b></button>' : '',
     includeAbuDhabi ? '  <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Abu Dhabi" data-branch-scope-item="Abu Dhabi"><span class="branch-left"><i class="branch-dot branch-dot-abu"></i><span><strong>Abu Dhabi</strong><small>Second branch</small></span></span><b id="sideAbuCount">0</b></button>' : '',
+    includeAi303 ? '  <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="303 AI" data-branch-scope-item="303 AI"><span class="branch-left"><i class="branch-dot branch-dot-303"></i><span><strong>303 AI</strong><small>Coexistence line</small></span></span><b id="side303Count">0</b></button>' : '',
     '</div>'
   ].filter(Boolean).join("\n");
 }
+
 
 function buildInboxReferenceBranchTabs(branchScope = "") {
   const scope = normalizeInboxBranchName(branchScope || "");
   const includeDubai = !scope || scope === "Dubai";
   const includeAbuDhabi = !scope || scope === "Abu Dhabi";
+  const includeAi303 = !scope || scope === AI_303_BRANCH_NAME;
 
   const buttons = [
     includeDubai ? '<button type="button" class="reference-branch-tab" data-branch="Dubai" data-branch-scope-item="Dubai"><span class="branch-tab-label">Dubai</span><span id="tabDubaiCount" class="branch-tab-count" aria-hidden="true"></span></button>' : '',
-    includeAbuDhabi ? '<button type="button" class="reference-branch-tab" data-branch="Abu Dhabi" data-branch-scope-item="Abu Dhabi"><span class="branch-tab-label">Abu Dhabi</span><span id="tabAbuCount" class="branch-tab-count" aria-hidden="true"></span></button>' : ''
+    includeAbuDhabi ? '<button type="button" class="reference-branch-tab" data-branch="Abu Dhabi" data-branch-scope-item="Abu Dhabi"><span class="branch-tab-label">Abu Dhabi</span><span id="tabAbuCount" class="branch-tab-count" aria-hidden="true"></span></button>' : '',
+    includeAi303 ? '<button type="button" class="reference-branch-tab" data-branch="303 AI" data-branch-scope-item="303 AI"><span class="branch-tab-label">303 AI</span><span id="tab303Count" class="branch-tab-count" aria-hidden="true"></span></button>' : ''
   ].filter(Boolean).join("\n");
 
   if (!buttons) return "";
   return '<div class="reference-branch-tabs" aria-label="Branch filters">\n' + buttons + '\n</div>';
 }
+
 
 function safeInboxBootstrapJson(value = {}) {
   return JSON.stringify(value || {})
@@ -10554,12 +10957,23 @@ function safeInboxBootstrapJson(value = {}) {
 
 async function getInboxBootstrapDataForServerRender() {
   try {
-    const sheetData = await loadMessagesFromGoogleSheetForMessagesApi();
+    const [sheetData, remote303Data] = await Promise.all([
+      loadMessagesFromGoogleSheetForMessagesApi(),
+      loadAi303RemoteInboxData()
+    ]);
     const sheetMessages = sheetData.messages || [];
     const memoryMessages = inboxMessages || [];
-    const mergedMessages = mergeInboxHistory(sheetMessages, memoryMessages);
-    const conversationStates = sheetData.conversationStates || [];
-    const bookingRequests = sheetData.bookingRequests || [];
+    const remote303Messages = remote303Data.messages || [];
+    const localMergedMessages = mergeInboxHistory(sheetMessages, memoryMessages);
+    const mergedMessages = mergeInboxHistory(localMergedMessages, remote303Messages);
+    const conversationStates = mergeConversationStateRecords(
+      sheetData.conversationStates || [],
+      remote303Data.conversationStates || []
+    );
+    const bookingRequests = mergeBookingRequestRecords(
+      sheetData.bookingRequests || [],
+      remote303Data.bookingRequests || []
+    );
     const archiveFilteredPayload = filterArchivedInboxPayload(
       mergedMessages,
       conversationStates,
@@ -10568,19 +10982,26 @@ async function getInboxBootstrapDataForServerRender() {
     );
     const messages = archiveFilteredPayload.messages;
     const conversations = buildInboxBootstrapConversations(messages);
+    const sourceParts = [];
+    if (sheetMessages.length) sourceParts.push("google_sheet");
+    if (memoryMessages.length) sourceParts.push("memory");
+    if (remote303Messages.length || remote303Data.ok) sourceParts.push(remote303Data.source || "303_remote");
 
     return {
       ok: true,
-      source: sheetMessages.length > 0 && memoryMessages.length > 0
-        ? "google_sheet_plus_memory"
-        : (sheetMessages.length > 0 ? "google_sheet" : "memory"),
+      source: sourceParts.length ? sourceParts.join("_plus_") : "memory",
       messages,
       conversationStates: archiveFilteredPayload.conversationStates,
       bookingRequests: archiveFilteredPayload.bookingRequests,
       conversations,
       debug: {
+        unified303: true,
+        ai303BridgeConfigured: isAi303ProxyConfigured(),
+        ai303RemoteOk: Boolean(remote303Data.ok),
+        ai303RemoteSource: remote303Data.source || "",
         sheetMessagesCount: sheetMessages.length,
         memoryMessagesCount: memoryMessages.length,
+        remote303MessagesCount: remote303Messages.length,
         returnedMessagesCount: messages.length,
         unfilteredMessagesCount: mergedMessages.length,
         conversationsCount: conversations.length,
@@ -10604,6 +11025,7 @@ async function getInboxBootstrapDataForServerRender() {
     };
   }
 }
+
 
 app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -11233,6 +11655,11 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     .branch-abu {
       background: rgba(120,184,62,.17);
       color: var(--iconic-green-dark);
+    }
+
+    .branch-303 {
+      background: rgba(168,85,247,.13);
+      color: #6b21a8;
     }
 
     .status {
@@ -13255,6 +13682,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
 
     .assignee-chip.assignee-dubai { color: #2f6e18; background: #eff9ea; }
     .assignee-chip.assignee-abu { color: #075985; background: #eef7ff; border-color: rgba(14,165,233,.22); }
+    .assignee-chip.assignee-303 { color: #6b21a8; background: #f5f0ff; border-color: rgba(139,92,246,.24); }
     .assignee-chip.assignee-consultation { color: #6d4c00; background: #fff8df; border-color: rgba(245,158,11,.25); }
     .assignee-chip.assignee-followup { color: #5b21b6; background: #f3edff; border-color: rgba(139,92,246,.25); }
 
@@ -20988,6 +21416,11 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     .branch-dot-abu {
       background: #128c7e !important;
       box-shadow: 0 0 0 5px rgba(18,140,126,.12) !important;
+    }
+
+    .branch-dot-303 {
+      background: #8b5cf6 !important;
+      box-shadow: 0 0 0 5px rgba(139,92,246,.13) !important;
     }
 
     .branch-row b {
@@ -35181,6 +35614,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
               <option value="">All branches</option>
               <option value="Dubai">Dubai</option>
               <option value="Abu Dhabi">Abu Dhabi</option>
+              <option value="303 AI">303 AI</option>
             </select>
             <select id="statusFilter">
               <option value="">All status / replies</option>
@@ -35189,6 +35623,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
               <option value="">All assigned</option>
               <option value="Dubai Team">Dubai Team</option>
               <option value="Abu Dhabi Team">Abu Dhabi Team</option>
+              <option value="303 AI Team">303 AI Team</option>
             </select>
             <select id="tagFilter">
               <option value="">All tags</option>
@@ -35302,6 +35737,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
                   <option value="">Auto — same received line</option>
                   <option value="${DUBAI_PHONE_NUMBER_ID}">Iconic Hair Care Team (Dubai)</option>
                   <option value="${ABU_DHABI_PHONE_NUMBER_ID}">Iconic Hair Care Team (Abu Dhabi)</option>
+                  <option value="${AI_303_PHONE_NUMBER_ID}">Iconic Hair Care (303 AI)</option>
                 </select>
               </div>
             </div>
@@ -35644,6 +36080,7 @@ loadScopedReadMap();
 function normalizeLiveBranchName(value) {
   const clean = (value || "").toString().trim().toLowerCase();
   if (!clean) return "";
+  if (clean.includes("303") || clean.includes("ai line") || clean === "ai" || clean.includes("ذكاء")) return "303 AI";
   if (clean.includes("abu") || clean.includes("dhabi") || clean.includes("ابوظ") || clean.includes("أبوظ")) return "Abu Dhabi";
   if (clean.includes("dubai") || clean.includes("دبي")) return "Dubai";
   return value.toString().trim();
@@ -36015,12 +36452,13 @@ function saveAssigneeMap() {
 
 function getDefaultBranchAssignee(branch) {
   const value = (branch || "").toString().toLowerCase();
+  if (value.includes("303")) return "303 AI Team";
   return value.includes("abu") ? "Abu Dhabi Team" : "Dubai Team";
 }
 
 function normalizeAssigneeValue(assignee, branch) {
   const value = (assignee || "").toString().trim();
-  const allowed = ["Dubai Team", "Abu Dhabi Team"];
+  const allowed = ["Dubai Team", "Abu Dhabi Team", "303 AI Team"];
 
   // V31.5.8.32 keeps assignment branch-team only.
   // Old values such as Unassigned / Consultation Team / Follow-up Team safely fall back to the branch team.
@@ -36040,6 +36478,7 @@ function getAssignee(key, branch) {
 
 function assigneeClass(assignee) {
   const value = (assignee || "").toString().toLowerCase();
+  if (value.includes("303")) return "assignee-303";
   if (value.includes("abu")) return "assignee-abu";
   if (value.includes("dubai")) return "assignee-dubai";
   if (value.includes("consult")) return "assignee-consultation";
@@ -36721,9 +37160,12 @@ function parseInlineAudioMessage(body) {
 function renderMessageBody(message) {
   const image = parseInlineImageMessage(message?.body || "");
   const audio = parseInlineAudioMessage(message?.body || "");
+  const mediaLineQuery = message?.phoneNumberId
+    ? ("?phoneNumberId=" + encodeURIComponent(message.phoneNumberId))
+    : "";
 
   if (audio) {
-    const audioSrc = "/api/media/" + encodeURIComponent(audio.mediaId);
+    const audioSrc = "/api/media/" + encodeURIComponent(audio.mediaId) + mediaLineQuery;
     return '<div class="inline-audio-message">' +
       '<audio controls preload="none" src="' + audioSrc + '"></audio>' +
       '<div class="inline-audio-filename">🎙️ ' + escapeHtml(audio.filename || "WhatsApp voice note") + '</div>' +
@@ -36734,7 +37176,7 @@ function renderMessageBody(message) {
     return escapeHtml(message?.body || "");
   }
 
-  const mediaSrc = "/api/media/" + encodeURIComponent(image.mediaId);
+  const mediaSrc = "/api/media/" + encodeURIComponent(image.mediaId) + mediaLineQuery;
   return '<div class="inline-image-message">' +
     '<a class="inline-image-link" href="' + mediaSrc + '" target="_blank" rel="noopener">' +
       '<img src="' + mediaSrc + '" alt="' + escapeHtml(image.filename || "WhatsApp image") + '" loading="lazy" />' +
@@ -36753,6 +37195,7 @@ function conversationKey(phone, phoneNumberId, branch) {
 }
 
 function branchBadge(branch) {
+  if (branch === "303 AI") return '<span class="branch branch-303">303 AI</span>';
   if (branch === "Abu Dhabi") return '<span class="branch branch-abu">Abu Dhabi</span>';
   return '<span class="branch branch-dubai">Dubai</span>';
 }
@@ -37845,7 +38288,7 @@ function buildAdvancedFilterOptions() {
   const currentTag = tagFilter ? tagFilter.value : "";
 
   if (assigneeFilter) {
-    const assigneeOptions = ["Dubai Team", "Abu Dhabi Team"];
+    const assigneeOptions = ["Dubai Team", "Abu Dhabi Team", "303 AI Team"];
     assigneeFilter.innerHTML = '<option value="">All assigned</option>' + assigneeOptions.map(function(value) {
       return '<option value="' + escapeHtml(value) + '">' + escapeHtml(value) + '</option>';
     }).join("");
@@ -37873,6 +38316,8 @@ function buildAdvancedFilterOptions() {
 
 function normalizedMessageBranch(message) {
   const branch = (message?.branch || "").toString().trim();
+  const phoneNumberId = (message?.phoneNumberId || "").toString().trim();
+  if (branch === "303 AI" || phoneNumberId === "${AI_303_PHONE_NUMBER_ID}") return "303 AI";
   if (branch === "Abu Dhabi") return "Abu Dhabi";
   return "Dubai";
 }
@@ -38090,25 +38535,30 @@ function updateStats() {
   if (statUnread) statUnread.textContent = conversations.filter(isUnreadConversation).length;
   const dubaiSidebarCount = allMessages.filter(function(m) { return normalizedMessageBranch(m) === "Dubai"; }).length;
   const abuSidebarCount = allMessages.filter(function(m) { return normalizedMessageBranch(m) === "Abu Dhabi"; }).length;
+  const ai303SidebarCount = allMessages.filter(function(m) { return normalizedMessageBranch(m) === "303 AI"; }).length;
   const statDubai = document.getElementById("statDubai");
   const statAbu = document.getElementById("statAbu");
   if (statDubai) statDubai.textContent = dubaiSidebarCount;
   if (statAbu) statAbu.textContent = abuSidebarCount;
   const sideDubaiCount = document.getElementById("sideDubaiCount");
   const sideAbuCount = document.getElementById("sideAbuCount");
+  const side303Count = document.getElementById("side303Count");
   if (sideDubaiCount) sideDubaiCount.textContent = dubaiSidebarCount;
   if (sideAbuCount) sideAbuCount.textContent = abuSidebarCount;
+  if (side303Count) side303Count.textContent = ai303SidebarCount;
   const tabDubaiCount = document.getElementById("tabDubaiCount");
   const tabAbuCount = document.getElementById("tabAbuCount");
+  const tab303Count = document.getElementById("tab303Count");
   const conversationBranchCounts = buildConversations().reduce(function(acc, c) {
-    if (c.branch === "Abu Dhabi") acc.abu += 1;
+    if (c.branch === "303 AI") acc.ai303 += 1;
+    else if (c.branch === "Abu Dhabi") acc.abu += 1;
     else acc.dubai += 1;
     return acc;
-  }, { dubai: 0, abu: 0 });
-  // V144: top branch tabs are filters, not notification counters.
-  // Keep sidebar branch totals available, but do not show noisy numbers beside Dubai / Abu Dhabi tabs.
+  }, { dubai: 0, abu: 0, ai303: 0 });
+  // Top branch tabs are filters, not notification counters.
   if (tabDubaiCount) tabDubaiCount.textContent = "";
   if (tabAbuCount) tabAbuCount.textContent = "";
+  if (tab303Count) tab303Count.textContent = "";
   applyBranchScopeUiVisibility();
   updateNeedsActionCommandCenter(conversations);
   updateLiveNotificationUi();
@@ -39620,6 +40070,18 @@ app.post("/webhook", async (req, res) => {
   try {
     const value = req.body?.entry?.[0]?.changes?.[0]?.value;
     const message = value?.messages?.[0];
+    const webhookPhoneNumberId = normalizePhoneNumberId(value?.metadata?.phone_number_id || "");
+    const webhookDisplayPhoneNumber = value?.metadata?.display_phone_number || "";
+
+    // 303 has its own override webhook and isolated Render service.
+    // A duplicate/default webhook event must never be processed by the 04/02 backend.
+    if (isAi303Line(webhookPhoneNumberId, webhookDisplayPhoneNumber)) {
+      console.log("[Unified 303] duplicate 303 webhook ignored on 04/02 backend", {
+        phoneNumberId: webhookPhoneNumberId,
+        displayPhoneNumber: webhookDisplayPhoneNumber
+      });
+      return res.sendStatus(200);
+    }
 
     // Status webhooks do not include a customer message. They can still report
     // that a staff text notification failed later with 131047, after Graph API
