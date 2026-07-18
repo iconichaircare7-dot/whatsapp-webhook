@@ -21,6 +21,23 @@ app.get("/api/wake", (req, res) => {
   return res.status(200).json({
     ok: true,
     message: "Iconic server is awake",
+    service: "303 AI",
+    time: new Date().toISOString()
+  });
+});
+
+app.get("/api/303-health", (req, res) => {
+  const lineConfig = getLineConfig(DEFAULT_PHONE_NUMBER_ID);
+  return res.status(200).json({
+    ok: true,
+    service: "iconic-team-inbox-303-ai",
+    version: BOT_VERSION,
+    dedicated303Only: DEDICATED_303_ONLY,
+    disableRealSend: DISABLE_REAL_SEND,
+    automationPaused303: WHATSAPP_AUTOMATION_PAUSED_303,
+    phoneNumberId: lineConfig.phoneNumberId,
+    branch: lineConfig.branch,
+    displayNumber: lineConfig.displayNumber,
     time: new Date().toISOString()
   });
 });
@@ -66,7 +83,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-138-luxury-loading-polish-plus";
+const BOT_VERSION = "iconic-team-inbox-303-ai-isolated-v1";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -84,10 +101,31 @@ const OFFICIAL_INBOX_REDIRECT_ENABLED = !["false", "0", "no", "off"].includes(
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
-// Keep PHONE_NUMBER_ID as your default/Dubai number so old setup keeps working.
+
+// Dedicated 303 AI service identity:
+// PHONE_NUMBER_ID on this Render service is the Coexistence line +971 50 338 2303.
+// Dubai and Abu Dhabi IDs remain explicit so this branch never re-labels 303 as Dubai.
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
-const DUBAI_PHONE_NUMBER_ID = process.env.DUBAI_PHONE_NUMBER_ID || PHONE_NUMBER_ID || "1100042333191350";
+const AI_303_PHONE_NUMBER_ID = process.env.AI_303_PHONE_NUMBER_ID || PHONE_NUMBER_ID || "1110840048789988";
+const DEFAULT_PHONE_NUMBER_ID = AI_303_PHONE_NUMBER_ID;
+const DUBAI_PHONE_NUMBER_ID = process.env.DUBAI_PHONE_NUMBER_ID || "1100042333191350";
 const ABU_DHABI_PHONE_NUMBER_ID = process.env.ABU_DHABI_PHONE_NUMBER_ID || "1000146433192239";
+const AI_303_BRANCH_NAME = "303 AI";
+const AI_303_CALL_NUMBER = "050 338 2303";
+const AI_303_DISPLAY_NUMBER = "+971 50 338 2303";
+const AI_303_LOCATION_URL = (process.env.AI_303_LOCATION_URL || "").toString().trim();
+
+// Hard isolation for the repurposed staging Render service.
+// Non-303 WhatsApp events are acknowledged but ignored, protecting the 04/02 production backend.
+const DEDICATED_303_ONLY = !["false", "0", "no", "off"].includes(
+  (process.env.DEDICATED_303_ONLY || "true").toString().trim().toLowerCase()
+);
+
+// Real sends stay blocked during webhook/inbox validation. Render already has this set to true,
+// and the code also defaults to true so an omitted variable cannot accidentally send messages.
+const DISABLE_REAL_SEND = !["false", "0", "no", "off"].includes(
+  (process.env.DISABLE_REAL_SEND || "true").toString().trim().toLowerCase()
+);
 
 // V31.5.8.60.3.9.42 - Temporary WhatsApp Automation Pause:
 // Default is ON so Dubai + Abu Dhabi landline WhatsApp automation stops immediately after deploy.
@@ -103,6 +141,9 @@ const WHATSAPP_AUTOMATION_PAUSED_DUBAI = ["true", "1", "yes", "on"].includes(
 const WHATSAPP_AUTOMATION_PAUSED_ABU_DHABI = ["true", "1", "yes", "on"].includes(
   (process.env.WHATSAPP_AUTOMATION_PAUSED_ABU_DHABI || "false").toString().trim().toLowerCase()
 );
+const WHATSAPP_AUTOMATION_PAUSED_303 = !["false", "0", "no", "off"].includes(
+  (process.env.WHATSAPP_AUTOMATION_PAUSED_303 || "true").toString().trim().toLowerCase()
+);
 const STAFF_NUMBER = process.env.STAFF_NUMBER;
 // Smart Booking staff notification fallbacks.
 // Render ENV still has priority, but these keep branch notifications working if an ENV is accidentally missing.
@@ -110,6 +151,7 @@ const DEFAULT_DUBAI_STAFF_NUMBER = "971503424811";
 const DEFAULT_ABU_DHABI_STAFF_NUMBER = "971503750616";
 const DUBAI_STAFF_NUMBER = process.env.DUBAI_STAFF_NUMBER || DEFAULT_DUBAI_STAFF_NUMBER || STAFF_NUMBER || "";
 const ABU_DHABI_STAFF_NUMBER = process.env.ABU_DHABI_STAFF_NUMBER || DEFAULT_ABU_DHABI_STAFF_NUMBER || STAFF_NUMBER || "";
+const AI_303_STAFF_NUMBER = process.env.AI_303_STAFF_NUMBER || "";
 const INBOX_USER = process.env.INBOX_USER || "admin";
 const INBOX_PASS = process.env.INBOX_PASS || "123456";
 
@@ -130,6 +172,7 @@ const FOLLOW_UP_TEMPLATE_NAME_ABU_DHABI =
   process.env.FOLLOW_UP_TEMPLATE_NAME_ABU_DHABI ||
   process.env.ABU_DHABI_FOLLOW_UP_TEMPLATE_NAME ||
   "service_review_follow_up_abudhabi";
+const FOLLOW_UP_TEMPLATE_NAME_303 = (process.env.FOLLOW_UP_TEMPLATE_NAME_303 || "").toString().trim();
 const FOLLOW_UP_TEMPLATE_LANGUAGE = process.env.FOLLOW_UP_TEMPLATE_LANGUAGE || "en";
 const FOLLOW_UP_DELAY_DAYS = Number(process.env.FOLLOW_UP_DELAY_DAYS || process.env.REMINDER_DELAY_DAYS || 15);
 
@@ -146,6 +189,7 @@ const APPOINTMENT_REMINDER_TEMPLATE_NAME_ABU_DHABI = (
   process.env.ABU_DHABI_APPOINTMENT_REMINDER_TEMPLATE_NAME ||
   "appointment_reminder_abudhabi"
 ).toString().trim();
+const APPOINTMENT_REMINDER_TEMPLATE_NAME_303 = (process.env.APPOINTMENT_REMINDER_TEMPLATE_NAME_303 || "").toString().trim();
 const APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE = (
   process.env.APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE ||
   "en"
@@ -178,6 +222,7 @@ const CALL_NOW_TEMPLATE_NAME_ABU_DHABI =
   process.env.CALL_NOW_TEMPLATE_NAME_ABU_DHABI ||
   process.env.ABU_DHABI_CALL_NOW_TEMPLATE_NAME ||
   "iconic_call_now_abudhabi";
+const CALL_NOW_TEMPLATE_NAME_303 = (process.env.CALL_NOW_TEMPLATE_NAME_303 || "").toString().trim();
 const CALL_NOW_TEMPLATE_LANGUAGE = process.env.CALL_NOW_TEMPLATE_LANGUAGE || "en";
 
 // Staff booking alert templates:
@@ -189,6 +234,7 @@ const STAFF_BOOKING_ALERT_TEMPLATE_DUBAI =
 const STAFF_BOOKING_ALERT_TEMPLATE_ABU_DHABI =
   process.env.STAFF_BOOKING_ALERT_TEMPLATE_ABU_DHABI ||
   "staff_booking_alert_abudhabi";
+const STAFF_BOOKING_ALERT_TEMPLATE_303 = (process.env.STAFF_BOOKING_ALERT_TEMPLATE_303 || "").toString().trim();
 const STAFF_BOOKING_ALERT_TEMPLATE_LANGUAGE =
   process.env.STAFF_BOOKING_ALERT_TEMPLATE_LANGUAGE ||
   "en";
@@ -393,6 +439,26 @@ function normalizePhoneDigits(value) {
   return (value || "").toString().replace(/\D/g, "");
 }
 
+function buildRealSendDisabledResult(action = "WhatsApp send", phoneNumberId = "", to = "") {
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
+  const result = {
+    error: "Real WhatsApp sending is disabled on the 303 AI validation service.",
+    action,
+    phoneNumberId: finalPhoneNumberId,
+    to: normalizePhoneDigits(to || "")
+  };
+
+  console.log("[303 AI Safety] outbound action blocked", result);
+
+  return {
+    ok: false,
+    skipped: true,
+    disabled: true,
+    status: 423,
+    result
+  };
+}
+
 function normalizeWhatsAppRecipientDigits(value) {
   let digits = normalizePhoneDigits(value);
 
@@ -438,6 +504,7 @@ function getSuppressedCustomerNotificationNumbers() {
     STAFF_NUMBER,
     DUBAI_STAFF_NUMBER,
     ABU_DHABI_STAFF_NUMBER,
+    AI_303_STAFF_NUMBER,
     process.env.STAFF_NOTIFICATION_NUMBER,
     process.env.DUBAI_STAFF_NOTIFICATION_NUMBER,
     process.env.ABU_DHABI_STAFF_NOTIFICATION_NUMBER,
@@ -461,6 +528,18 @@ function isSuppressedCustomerNotificationNumber(value) {
   });
 }
 
+function isAi303Line(phoneNumberId, displayPhoneNumber = "") {
+  const id = normalizePhoneNumberId(phoneNumberId);
+  const ai303Id = normalizePhoneNumberId(AI_303_PHONE_NUMBER_ID);
+  const displayDigits = normalizePhoneDigits(displayPhoneNumber);
+
+  return (
+    id === ai303Id ||
+    displayDigits.endsWith("971503382303") ||
+    displayDigits.endsWith("503382303")
+  );
+}
+
 function isAbuDhabiLine(phoneNumberId, displayPhoneNumber = "") {
   const id = normalizePhoneNumberId(phoneNumberId);
   const abuDhabiId = normalizePhoneNumberId(ABU_DHABI_PHONE_NUMBER_ID);
@@ -476,6 +555,10 @@ function isAbuDhabiLine(phoneNumberId, displayPhoneNumber = "") {
 function shouldPauseWhatsAppAutomationForLine(phoneNumberId, displayPhoneNumber = "") {
   if (WHATSAPP_AUTOMATION_PAUSED) {
     return true;
+  }
+
+  if (isAi303Line(phoneNumberId, displayPhoneNumber)) {
+    return WHATSAPP_AUTOMATION_PAUSED_303;
   }
 
   if (isAbuDhabiLine(phoneNumberId, displayPhoneNumber)) {
@@ -541,15 +624,29 @@ function getIncomingPhoneNumberId(value) {
   const incomingId = normalizePhoneNumberId(value?.metadata?.phone_number_id);
   const displayPhoneNumber = value?.metadata?.display_phone_number || "";
 
+  if (isAi303Line(incomingId, displayPhoneNumber)) {
+    return AI_303_PHONE_NUMBER_ID;
+  }
+
   if (isAbuDhabiLine(incomingId, displayPhoneNumber)) {
     return ABU_DHABI_PHONE_NUMBER_ID;
   }
 
-  return incomingId || DUBAI_PHONE_NUMBER_ID;
+  return incomingId || DEFAULT_PHONE_NUMBER_ID;
 }
 
 function getLineConfig(phoneNumberId, displayPhoneNumber = "") {
-  const id = normalizePhoneNumberId(phoneNumberId);
+  const id = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
+
+  if (isAi303Line(id, displayPhoneNumber)) {
+    return {
+      phoneNumberId: AI_303_PHONE_NUMBER_ID,
+      branch: AI_303_BRANCH_NAME,
+      callNumber: AI_303_CALL_NUMBER,
+      displayNumber: AI_303_DISPLAY_NUMBER,
+      locationUrl: AI_303_LOCATION_URL
+    };
+  }
 
   if (isAbuDhabiLine(id, displayPhoneNumber)) {
     return {
@@ -570,10 +667,21 @@ function getLineConfig(phoneNumberId, displayPhoneNumber = "") {
   };
 }
 
+function resolvePhoneNumberIdForBranch(branch = "", fallbackPhoneNumberId = DEFAULT_PHONE_NUMBER_ID) {
+  const normalizedBranch = normalizeInboxBranchName(branch || "");
+
+  if (normalizedBranch === AI_303_BRANCH_NAME) return AI_303_PHONE_NUMBER_ID;
+  if (normalizedBranch === "Abu Dhabi") return ABU_DHABI_PHONE_NUMBER_ID;
+  if (normalizedBranch === "Dubai") return DUBAI_PHONE_NUMBER_ID;
+
+  return normalizePhoneNumberId(fallbackPhoneNumberId || DEFAULT_PHONE_NUMBER_ID);
+}
+
 
 function normalizeInboxBranchName(value = "") {
   const clean = (value || "").toString().trim().toLowerCase();
   if (!clean) return "";
+  if (clean.includes("303") || clean.includes("ai line") || clean === "ai" || clean.includes("ذكاء")) return AI_303_BRANCH_NAME;
   if (clean.includes("abu") || clean.includes("dhabi") || clean.includes("ابوظ") || clean.includes("أبوظ")) return "Abu Dhabi";
   if (clean.includes("dubai") || clean.includes("دبي")) return "Dubai";
   return value.toString().trim();
@@ -591,7 +699,7 @@ function isInboxBranchAllowed(access = {}, branch = "", phoneNumberId = "") {
   const scope = normalizeInboxBranchName(access?.branchScope || "");
   if (!scope) return true;
 
-  const resolvedBranch = normalizeInboxBranchName(branch || getLineConfig(phoneNumberId || DUBAI_PHONE_NUMBER_ID).branch || "");
+  const resolvedBranch = normalizeInboxBranchName(branch || getLineConfig(phoneNumberId || DEFAULT_PHONE_NUMBER_ID).branch || "");
   return resolvedBranch === scope;
 }
 
@@ -631,9 +739,20 @@ function filterInboxPayloadByBranchAccess(messages = [], conversationStates = []
 
 
 function getBookingFlowConfigForLine(phoneNumberId, displayPhoneNumber = "") {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const isAbuDhabi = isAbuDhabiLine(finalPhoneNumberId, displayPhoneNumber);
   const lineConfig = getLineConfig(finalPhoneNumberId, displayPhoneNumber);
+
+  if (isAi303Line(finalPhoneNumberId, displayPhoneNumber)) {
+    return {
+      branch: AI_303_BRANCH_NAME,
+      phoneNumberId: AI_303_PHONE_NUMBER_ID,
+      flowId: "",
+      tokenPrefix: "iconic_303_ai_flow",
+      envName: "AI_303_FLOW_ID",
+      requestType: "303 AI Consultation"
+    };
+  }
 
   if (isAbuDhabi) {
     return {
@@ -657,9 +776,20 @@ function getBookingFlowConfigForLine(phoneNumberId, displayPhoneNumber = "") {
 }
 
 function getServiceBookingFlowConfigForLine(phoneNumberId, displayPhoneNumber = "") {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const isAbuDhabi = isAbuDhabiLine(finalPhoneNumberId, displayPhoneNumber);
   const lineConfig = getLineConfig(finalPhoneNumberId, displayPhoneNumber);
+
+  if (isAi303Line(finalPhoneNumberId, displayPhoneNumber)) {
+    return {
+      branch: AI_303_BRANCH_NAME,
+      phoneNumberId: AI_303_PHONE_NUMBER_ID,
+      flowId: "",
+      tokenPrefix: "iconic_303_ai_service_flow",
+      envName: "AI_303_SERVICE_FLOW_ID",
+      requestType: "303 AI Service Appointment"
+    };
+  }
 
   if (isAbuDhabi) {
     return {
@@ -684,19 +814,26 @@ function getServiceBookingFlowConfigForLine(phoneNumberId, displayPhoneNumber = 
 
 
 function getBranchTeamAssignee(branch = "") {
-  const value = (branch || "").toString().toLowerCase();
-  return value.includes("abu") ? "Abu Dhabi Team" : "Dubai Team";
+  const normalizedBranch = normalizeInboxBranchName(branch || "");
+  if (normalizedBranch === AI_303_BRANCH_NAME) return "303 AI Team";
+  if (normalizedBranch === "Abu Dhabi") return "Abu Dhabi Team";
+  return "Dubai Team";
 }
 
 function getStaffNotificationRouting(phoneNumberId, displayPhoneNumber = "") {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
+  const is303 = isAi303Line(finalPhoneNumberId, displayPhoneNumber);
   const isAbuDhabi = isAbuDhabiLine(finalPhoneNumberId, displayPhoneNumber);
-  const branchEnvName = isAbuDhabi ? "ABU_DHABI_STAFF_NUMBER" : "DUBAI_STAFF_NUMBER";
+  const branchEnvName = is303
+    ? "AI_303_STAFF_NUMBER"
+    : (isAbuDhabi ? "ABU_DHABI_STAFF_NUMBER" : "DUBAI_STAFF_NUMBER");
   const branchStaffNumber = (process.env[branchEnvName] || "").toString().trim();
-  const fallbackStaffNumber = (process.env.STAFF_NUMBER || "").toString().trim();
+  const fallbackStaffNumber = is303 ? "" : (process.env.STAFF_NUMBER || "").toString().trim();
   const number = branchStaffNumber || fallbackStaffNumber || "";
   const usedEnvName = branchStaffNumber ? branchEnvName : (fallbackStaffNumber ? "STAFF_NUMBER" : "NONE");
-  const resolvedPhoneNumberId = isAbuDhabi ? ABU_DHABI_PHONE_NUMBER_ID : (finalPhoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const resolvedPhoneNumberId = is303
+    ? AI_303_PHONE_NUMBER_ID
+    : (isAbuDhabi ? ABU_DHABI_PHONE_NUMBER_ID : (finalPhoneNumberId || DUBAI_PHONE_NUMBER_ID));
   const lineConfig = getLineConfig(resolvedPhoneNumberId, displayPhoneNumber);
 
   return {
@@ -740,7 +877,7 @@ function buildStaffBookingNotificationBody(flowData = {}, customerPhone = "") {
   ].filter((line) => line !== "").join("\n");
 }
 
-async function notifyStaffAboutFlowBooking(flowData = {}, customerPhone = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID, displayPhoneNumber = "") {
+async function notifyStaffAboutFlowBooking(flowData = {}, customerPhone = "", phoneNumberId = DEFAULT_PHONE_NUMBER_ID, displayPhoneNumber = "") {
   const { routing, numbers } = getStaffNotificationNumbers(phoneNumberId, displayPhoneNumber);
   if (!numbers.length) {
     console.log("[Staff Booking Notify] skipped: no staff number configured", routing.envName);
@@ -763,8 +900,11 @@ async function notifyStaffAboutFlowBooking(flowData = {}, customerPhone = "", ph
   return { ok: results.every((item) => item.ok), results };
 }
 
-async function sendStaffNotificationTextMessage(to, body, phoneNumberId = DUBAI_PHONE_NUMBER_ID, routing = {}) {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+async function sendStaffNotificationTextMessage(to, body, phoneNumberId = DEFAULT_PHONE_NUMBER_ID, routing = {}) {
+  if (DISABLE_REAL_SEND) {
+    return buildRealSendDisabledResult("send staff text", phoneNumberId, to);
+  }
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
   const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
 
@@ -2306,7 +2446,7 @@ function getSmartContextAwareReply({ phone, text = "", customerName = "", langua
   return null;
 }
 
-function buildWorkingHoursBody(phoneNumberId = DUBAI_PHONE_NUMBER_ID, language = "en") {
+function buildWorkingHoursBody(phoneNumberId = DEFAULT_PHONE_NUMBER_ID, language = "en") {
   const lineConfig = getLineConfig(phoneNumberId);
   const branchNameAr = getArabicBranchName(lineConfig.branch);
 
@@ -2784,7 +2924,7 @@ function buildCustomerActionBody(profileName = "", actionText = "") {
   return cleanName ? `${cleanName}: ${cleanAction}` : cleanAction;
 }
 
-function logCustomerActionForInbox({ from, message, profileName = "", rawText = "", fallbackAction = "", status = "Bot", phoneNumberId = DUBAI_PHONE_NUMBER_ID, messageType = "Customer Message" }) {
+function logCustomerActionForInbox({ from, message, profileName = "", rawText = "", fallbackAction = "", status = "Bot", phoneNumberId = DEFAULT_PHONE_NUMBER_ID, messageType = "Customer Message" }) {
   const actionText = getSmartCustomerActionText(message, rawText) || fallbackAction;
   const customerBody = buildCustomerActionBody(profileName, actionText);
 
@@ -2816,8 +2956,11 @@ function sleep(ms = 0) {
   return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
-async function sendWhatsAppTypingIndicator(to, incomingMessageId = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+async function sendWhatsAppTypingIndicator(to, incomingMessageId = "", phoneNumberId = DEFAULT_PHONE_NUMBER_ID) {
+  if (DISABLE_REAL_SEND) {
+    return buildRealSendDisabledResult("send typing indicator", phoneNumberId, to);
+  }
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const cleanMessageId = (incomingMessageId || "").toString().trim();
 
   if (!BOT_TYPING_INDICATOR_ENABLED || !ACCESS_TOKEN || !finalPhoneNumberId || !cleanMessageId) {
@@ -2873,8 +3016,11 @@ async function showBotTypingBeforeReply({ to, incomingMessageId, phoneNumberId, 
   await sleep(BOT_TYPING_DELAY_MS);
 }
 
-async function sendWhatsAppMessage(to, body, phoneNumberId = DUBAI_PHONE_NUMBER_ID, options = {}) {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+async function sendWhatsAppMessage(to, body, phoneNumberId = DEFAULT_PHONE_NUMBER_ID, options = {}) {
+  if (DISABLE_REAL_SEND) {
+    return buildRealSendDisabledResult("send text message", phoneNumberId, to);
+  }
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
   const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
   const replyLanguage = options.replyLanguage || getConversationLanguage(to);
@@ -3164,8 +3310,11 @@ function sanitizeMediaFilename(filename, mimeType) {
   return safeBase + (extensionMap[mimeType] || ".jpg");
 }
 
-async function uploadWhatsAppMediaFromBuffer(buffer, mimeType, filename, phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+async function uploadWhatsAppMediaFromBuffer(buffer, mimeType, filename, phoneNumberId = DEFAULT_PHONE_NUMBER_ID) {
+  if (DISABLE_REAL_SEND) {
+    return buildRealSendDisabledResult("upload media", phoneNumberId, "");
+  }
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/media`;
 
   const form = new FormData();
@@ -3193,8 +3342,11 @@ async function uploadWhatsAppMediaFromBuffer(buffer, mimeType, filename, phoneNu
   return { ok: true, status: response.status, mediaId: result.id, result };
 }
 
-async function sendWhatsAppImageMessage(to, imageDataUrl, caption = "", filename = "iconic-image.jpg", phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+async function sendWhatsAppImageMessage(to, imageDataUrl, caption = "", filename = "iconic-image.jpg", phoneNumberId = DEFAULT_PHONE_NUMBER_ID) {
+  if (DISABLE_REAL_SEND) {
+    return buildRealSendDisabledResult("send image message", phoneNumberId, to);
+  }
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const parsedImage = parseImageDataUrl(imageDataUrl);
 
   if (!parsedImage) {
@@ -3268,8 +3420,11 @@ async function sendWhatsAppImageMessage(to, imageDataUrl, caption = "", filename
 }
 
 
-async function sendWhatsAppAudioMessage(to, audioDataUrl, filename = "iconic-voice-note.ogg", phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+async function sendWhatsAppAudioMessage(to, audioDataUrl, filename = "iconic-voice-note.ogg", phoneNumberId = DEFAULT_PHONE_NUMBER_ID) {
+  if (DISABLE_REAL_SEND) {
+    return buildRealSendDisabledResult("send audio message", phoneNumberId, to);
+  }
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const parsedAudio = parseAudioDataUrl(audioDataUrl);
   const allowedAudioTypes = ["audio/aac", "audio/mp4", "audio/mpeg", "audio/amr", "audio/ogg"];
 
@@ -3341,8 +3496,11 @@ async function sendWhatsAppAudioMessage(to, audioDataUrl, filename = "iconic-voi
   };
 }
 
-async function sendWhatsAppVideoMessage(to, videoUrl, caption = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID, options = {}) {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+async function sendWhatsAppVideoMessage(to, videoUrl, caption = "", phoneNumberId = DEFAULT_PHONE_NUMBER_ID, options = {}) {
+  if (DISABLE_REAL_SEND) {
+    return buildRealSendDisabledResult("send video message", phoneNumberId, to);
+  }
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
   const cleanVideoUrl = (videoUrl || "").toString().trim();
 
@@ -3398,8 +3556,11 @@ async function sendWhatsAppVideoMessage(to, videoUrl, caption = "", phoneNumberI
   };
 }
 
-async function sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId = DUBAI_PHONE_NUMBER_ID, options = {}) {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+async function sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId = DEFAULT_PHONE_NUMBER_ID, options = {}) {
+  if (DISABLE_REAL_SEND) {
+    return buildRealSendDisabledResult("send button message", phoneNumberId, to);
+  }
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
   const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
 
@@ -3467,8 +3628,11 @@ async function sendWhatsAppButtonMessage(to, body, buttons, phoneNumberId = DUBA
   return result;
 }
 
-async function uploadWhatsAppVideoFromUrl(videoUrl, phoneNumberId = DUBAI_PHONE_NUMBER_ID, filename = "iconic-video.mp4") {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+async function uploadWhatsAppVideoFromUrl(videoUrl, phoneNumberId = DEFAULT_PHONE_NUMBER_ID, filename = "iconic-video.mp4") {
+  if (DISABLE_REAL_SEND) {
+    return buildRealSendDisabledResult("upload video", phoneNumberId, "");
+  }
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const cleanVideoUrl = (videoUrl || "").toString().trim();
   const safeFilename = (filename || "iconic-video.mp4")
     .toString()
@@ -3582,13 +3746,16 @@ const videoHeaderMediaCache = new Map();
 
 function getVideoHeaderMediaCacheKey(videoUrl, phoneNumberId, filename) {
   return [
-    normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID),
+    normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID),
     (videoUrl || "").toString().trim(),
     (filename || "iconic-video.mp4").toString().trim()
   ].join("|");
 }
 
-async function sendWhatsAppVideoHeaderButtonMessage(to, body, buttons, videoUrl, phoneNumberId = DUBAI_PHONE_NUMBER_ID, options = {}) {
+async function sendWhatsAppVideoHeaderButtonMessage(to, body, buttons, videoUrl, phoneNumberId = DEFAULT_PHONE_NUMBER_ID, options = {}) {
+  if (DISABLE_REAL_SEND) {
+    return buildRealSendDisabledResult("send video-header button message", phoneNumberId, to);
+  }
   const cleanVideoUrl = (videoUrl || "").toString().trim();
   const fallbackImageUrl = (options.headerImageUrl || BOT_HEADER_IMAGE_URL || "").toString().trim();
   const filename = (options.filename || "iconic-video.mp4").toString().trim() || "iconic-video.mp4";
@@ -3628,8 +3795,11 @@ async function sendWhatsAppVideoHeaderButtonMessage(to, body, buttons, videoUrl,
 }
 
 
-async function sendWhatsAppCtaUrlMessage(to, body, displayText, targetUrl, phoneNumberId = DUBAI_PHONE_NUMBER_ID, options = {}) {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+async function sendWhatsAppCtaUrlMessage(to, body, displayText, targetUrl, phoneNumberId = DEFAULT_PHONE_NUMBER_ID, options = {}) {
+  if (DISABLE_REAL_SEND) {
+    return buildRealSendDisabledResult("send CTA URL message", phoneNumberId, to);
+  }
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
   const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
 
@@ -3685,8 +3855,11 @@ async function sendWhatsAppCtaUrlMessage(to, body, displayText, targetUrl, phone
   };
 }
 
-async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID, options = {}) {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+async function sendWhatsAppFlowMessage(to, phoneNumberId = DEFAULT_PHONE_NUMBER_ID, options = {}) {
+  if (DISABLE_REAL_SEND) {
+    return buildRealSendDisabledResult("send Flow message", phoneNumberId, to);
+  }
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
   const requestedFlowType = (options.flowType || options.requestType || "").toString().toLowerCase();
   const isServiceBookingFlow = requestedFlowType.includes("service");
@@ -3868,12 +4041,12 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DUBAI_PHONE_NUMBER_ID
   };
 }
 
-function getLocationBodyForLog(phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
+function getLocationBodyForLog(phoneNumberId = DEFAULT_PHONE_NUMBER_ID) {
   const lineConfig = getLineConfig(phoneNumberId);
   return `Location CTA sent: ${lineConfig.branch} (${lineConfig.locationUrl})`;
 }
 
-function buildLocationMessageBody(phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
+function buildLocationMessageBody(phoneNumberId = DEFAULT_PHONE_NUMBER_ID) {
   const lineConfig = getLineConfig(phoneNumberId);
   const branchNameAr = getArabicBranchName(lineConfig.branch);
 
@@ -5497,7 +5670,7 @@ function getStaffActionNumbersForBranch(branch = "Dubai") {
     .filter(Boolean);
 }
 
-function getStaffActionRouteFromNumber(staffPhone = "", incomingPhoneNumberId = DUBAI_PHONE_NUMBER_ID) {
+function getStaffActionRouteFromNumber(staffPhone = "", incomingPhoneNumberId = DEFAULT_PHONE_NUMBER_ID) {
   const cleanStaffPhone = normalizeWhatsAppRecipientDigits(staffPhone);
   const dubaiNumbers = getStaffActionNumbersForBranch("Dubai");
   const abuDhabiNumbers = getStaffActionNumbersForBranch("Abu Dhabi");
@@ -5631,7 +5804,7 @@ function rememberStaffBookingActionContextFromTemplateResult(templateResult = {}
     staffNumber,
     customerPhone,
     branch: context.flowData?.branch || context.routing?.branch || "",
-    phoneNumberId: normalizePhoneNumberId(context.phoneNumberId || context.routing?.phoneNumberId || DUBAI_PHONE_NUMBER_ID),
+    phoneNumberId: normalizePhoneNumberId(context.phoneNumberId || context.routing?.phoneNumberId || DEFAULT_PHONE_NUMBER_ID),
     createdAt: Date.now()
   });
   cleanupStaffBookingActionContexts();
@@ -5834,7 +6007,7 @@ async function sendStaffActionAck(staffNumber = "", body = "", route = {}) {
   const to = normalizeWhatsAppRecipientDigits(staffNumber);
   if (!to || !body) return null;
 
-  return sendWhatsAppMessage(to, body, route.phoneNumberId || DUBAI_PHONE_NUMBER_ID, {
+  return sendWhatsAppMessage(to, body, route.phoneNumberId || DEFAULT_PHONE_NUMBER_ID, {
     replyLanguage: "en",
     skipAutoLanguage: true
   });
@@ -5849,7 +6022,7 @@ function cleanupSuggestedTimeCustomerContexts() {
   }
 }
 
-function rememberCustomerSuggestedTimeAction({ customerPhone = "", staffNumber = "", booking = {}, suggestedTime = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID, branch = "" } = {}) {
+function rememberCustomerSuggestedTimeAction({ customerPhone = "", staffNumber = "", booking = {}, suggestedTime = "", phoneNumberId = DEFAULT_PHONE_NUMBER_ID, branch = "" } = {}) {
   const cleanPhone = normalizePhoneDigits(customerPhone || booking.phone || "");
   const cleanStaffNumber = normalizeWhatsAppRecipientDigits(staffNumber || "");
 
@@ -5860,8 +6033,8 @@ function rememberCustomerSuggestedTimeAction({ customerPhone = "", staffNumber =
     staffNumber: cleanStaffNumber,
     bookingRowNumber: booking.rowNumber || "",
     suggestedTime: (suggestedTime || "").toString().trim(),
-    phoneNumberId: normalizePhoneNumberId(phoneNumberId || booking.phoneNumberId || DUBAI_PHONE_NUMBER_ID),
-    branch: branch || booking.branch || getLineConfig(phoneNumberId || booking.phoneNumberId || DUBAI_PHONE_NUMBER_ID).branch,
+    phoneNumberId: normalizePhoneNumberId(phoneNumberId || booking.phoneNumberId || DEFAULT_PHONE_NUMBER_ID),
+    branch: branch || booking.branch || getLineConfig(phoneNumberId || booking.phoneNumberId || DEFAULT_PHONE_NUMBER_ID).branch,
     customerName: booking.customerName || "",
     createdAt: Date.now()
   });
@@ -6054,8 +6227,8 @@ function buildSuggestedTimeStaffNotifyBody({ booking = {}, customerPhone = "", c
   ].filter(Boolean).join("\n");
 }
 
-async function notifyStaffAboutSuggestedTimeCustomerReply({ booking = {}, customerPhone = "", profileName = "", suggestedTime = "", customerReply = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID, rememberedContext = null, action = "accepted" } = {}) {
-  const cleanPhoneNumberId = normalizePhoneNumberId(phoneNumberId || booking.phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+async function notifyStaffAboutSuggestedTimeCustomerReply({ booking = {}, customerPhone = "", profileName = "", suggestedTime = "", customerReply = "", phoneNumberId = DEFAULT_PHONE_NUMBER_ID, rememberedContext = null, action = "accepted" } = {}) {
+  const cleanPhoneNumberId = normalizePhoneNumberId(phoneNumberId || booking.phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(cleanPhoneNumberId);
   const body = buildSuggestedTimeStaffNotifyBody({
     booking,
@@ -6258,7 +6431,7 @@ async function handleCustomerSuggestedTimeReply({ from, message, originalText, t
   return true;
 }
 
-async function sendBookingActionUpdateToCustomer({ booking = {}, status = "", notes = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID, updatedBy = "Staff Booking Action" }) {
+async function sendBookingActionUpdateToCustomer({ booking = {}, status = "", notes = "", phoneNumberId = DEFAULT_PHONE_NUMBER_ID, updatedBy = "Staff Booking Action" }) {
   const customerPhone = normalizePhoneDigits(booking.phone || "");
   if (!customerPhone) {
     return { ok: false, error: "missing_customer_phone" };
@@ -6327,7 +6500,7 @@ async function sendBookingActionUpdateToCustomer({ booking = {}, status = "", no
   return { ok: true, customerPhone, result: sendResult };
 }
 
-async function handleStaffBookingAction({ from, message = null, originalText = "", incomingPhoneNumberId = DUBAI_PHONE_NUMBER_ID }) {
+async function handleStaffBookingAction({ from, message = null, originalText = "", incomingPhoneNumberId = DEFAULT_PHONE_NUMBER_ID }) {
   const route = getStaffActionRouteFromNumber(from, incomingPhoneNumberId);
   if (!route.isStaff) return false;
 
@@ -6527,12 +6700,16 @@ Please check Team Inbox.`,
 
 async function notifyStaffAboutSmartBooking(draft = {}, customerPhone = "", profileName = "", preferredTime = "") {
   const finalDraft = mergeSmartBookingStaffIntoDraft(draft, draft.rawRequest || "");
-  const isAbuDhabi = finalDraft.branch === "Abu Dhabi";
-  const routingPhoneNumberId = isAbuDhabi ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID;
-  const envName = isAbuDhabi ? "ABU_DHABI_STAFF_NUMBER" : "DUBAI_STAFF_NUMBER";
-  const rawStaffNumber = isAbuDhabi
-    ? (process.env.ABU_DHABI_STAFF_NUMBER || ABU_DHABI_STAFF_NUMBER || DEFAULT_ABU_DHABI_STAFF_NUMBER || "")
-    : (process.env.DUBAI_STAFF_NUMBER || DUBAI_STAFF_NUMBER || DEFAULT_DUBAI_STAFF_NUMBER || "");
+  const normalizedBranch = normalizeInboxBranchName(finalDraft.branch || "");
+  const is303 = normalizedBranch === AI_303_BRANCH_NAME;
+  const isAbuDhabi = normalizedBranch === "Abu Dhabi";
+  const routingPhoneNumberId = resolvePhoneNumberIdForBranch(normalizedBranch, DEFAULT_PHONE_NUMBER_ID);
+  const envName = is303 ? "AI_303_STAFF_NUMBER" : (isAbuDhabi ? "ABU_DHABI_STAFF_NUMBER" : "DUBAI_STAFF_NUMBER");
+  const rawStaffNumber = is303
+    ? (process.env.AI_303_STAFF_NUMBER || AI_303_STAFF_NUMBER || "")
+    : (isAbuDhabi
+      ? (process.env.ABU_DHABI_STAFF_NUMBER || ABU_DHABI_STAFF_NUMBER || DEFAULT_ABU_DHABI_STAFF_NUMBER || "")
+      : (process.env.DUBAI_STAFF_NUMBER || DUBAI_STAFF_NUMBER || DEFAULT_DUBAI_STAFF_NUMBER || ""));
   const staffNumber = normalizeWhatsAppRecipientDigits(rawStaffNumber);
 
   const smartRequestType = finalDraft.requestType || (finalDraft.serviceType ? "Service Appointment" : "WhatsApp Smart Natural Booking V3.9.14");
@@ -6745,7 +6922,7 @@ async function handleSmartWhatsAppBooking({ from, message, originalText, text, i
     try {
       staffNotifyResult = await notifyStaffAboutSmartBooking(finalDraft, from, profileName, selectedTime);
     } catch (error) {
-      staffNotifyResult = { ok: false, error: error?.message || String(error), routingPhoneNumberId: finalDraft.branch === "Abu Dhabi" ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID };
+      staffNotifyResult = { ok: false, error: error?.message || String(error), routingPhoneNumberId: resolvePhoneNumberIdForBranch(finalDraft.branch, DEFAULT_PHONE_NUMBER_ID) };
       console.log("Smart booking staff notification failed:");
       console.log(error);
     }
@@ -7509,7 +7686,11 @@ function formatCtaLog(body, displayText) {
 }
 
 function getFollowUpTemplateName(phoneNumberId) {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
+
+  if (isAi303Line(finalPhoneNumberId)) {
+    return FOLLOW_UP_TEMPLATE_NAME_303;
+  }
 
   if (isAbuDhabiLine(finalPhoneNumberId)) {
     return FOLLOW_UP_TEMPLATE_NAME_ABU_DHABI;
@@ -7521,12 +7702,14 @@ function getFollowUpTemplateName(phoneNumberId) {
 function getFollowUpTemplateMap() {
   return {
     dubai: FOLLOW_UP_TEMPLATE_NAME_DUBAI,
-    abuDhabi: FOLLOW_UP_TEMPLATE_NAME_ABU_DHABI
+    abuDhabi: FOLLOW_UP_TEMPLATE_NAME_ABU_DHABI,
+    ai303: FOLLOW_UP_TEMPLATE_NAME_303
   };
 }
 
-function getAppointmentReminderTemplateName(phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
+function getAppointmentReminderTemplateName(phoneNumberId = DEFAULT_PHONE_NUMBER_ID) {
   const lineConfig = getLineConfig(phoneNumberId);
+  if (lineConfig.branch === AI_303_BRANCH_NAME) return APPOINTMENT_REMINDER_TEMPLATE_NAME_303;
   return lineConfig.branch === "Abu Dhabi"
     ? APPOINTMENT_REMINDER_TEMPLATE_NAME_ABU_DHABI
     : APPOINTMENT_REMINDER_TEMPLATE_NAME_DUBAI;
@@ -7535,12 +7718,17 @@ function getAppointmentReminderTemplateName(phoneNumberId = DUBAI_PHONE_NUMBER_I
 function getAppointmentReminderTemplateMap() {
   return {
     dubai: APPOINTMENT_REMINDER_TEMPLATE_NAME_DUBAI,
-    abuDhabi: APPOINTMENT_REMINDER_TEMPLATE_NAME_ABU_DHABI
+    abuDhabi: APPOINTMENT_REMINDER_TEMPLATE_NAME_ABU_DHABI,
+    ai303: APPOINTMENT_REMINDER_TEMPLATE_NAME_303
   };
 }
 
 function getCallNowTemplateName(phoneNumberId) {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
+
+  if (isAi303Line(finalPhoneNumberId)) {
+    return CALL_NOW_TEMPLATE_NAME_303;
+  }
 
   if (isAbuDhabiLine(finalPhoneNumberId)) {
     return CALL_NOW_TEMPLATE_NAME_ABU_DHABI;
@@ -7552,11 +7740,12 @@ function getCallNowTemplateName(phoneNumberId) {
 function getCallNowTemplateMap() {
   return {
     dubai: CALL_NOW_TEMPLATE_NAME_DUBAI,
-    abuDhabi: CALL_NOW_TEMPLATE_NAME_ABU_DHABI
+    abuDhabi: CALL_NOW_TEMPLATE_NAME_ABU_DHABI,
+    ai303: CALL_NOW_TEMPLATE_NAME_303
   };
 }
 
-function getCallNowBodyForLog(phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
+function getCallNowBodyForLog(phoneNumberId = DEFAULT_PHONE_NUMBER_ID) {
   const lineConfig = getLineConfig(phoneNumberId);
   return `Call Now template sent: ${getCallNowTemplateName(phoneNumberId)} (${lineConfig.branch})`;
 }
@@ -7602,8 +7791,11 @@ function buildTemplateComponents(options = {}) {
   return components;
 }
 
-async function sendWhatsAppTemplate(to, templateName = FOLLOW_UP_TEMPLATE_NAME, phoneNumberId = DUBAI_PHONE_NUMBER_ID, languageCode = FOLLOW_UP_TEMPLATE_LANGUAGE, options = {}) {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+async function sendWhatsAppTemplate(to, templateName = FOLLOW_UP_TEMPLATE_NAME, phoneNumberId = DEFAULT_PHONE_NUMBER_ID, languageCode = FOLLOW_UP_TEMPLATE_LANGUAGE, options = {}) {
+  if (DISABLE_REAL_SEND) {
+    return buildRealSendDisabledResult("send template message", phoneNumberId, to);
+  }
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const lineConfig = getLineConfig(finalPhoneNumberId);
   const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
   const components = buildTemplateComponents(options);
@@ -7677,15 +7869,16 @@ function isReengagementStatus(status = {}) {
 }
 
 function getStaffBookingAlertTemplateName(branch = "") {
-  const value = compactText(branch);
-  return value.includes("abu")
+  const normalizedBranch = normalizeInboxBranchName(branch || "");
+  if (normalizedBranch === AI_303_BRANCH_NAME) return STAFF_BOOKING_ALERT_TEMPLATE_303;
+  return normalizedBranch === "Abu Dhabi"
     ? STAFF_BOOKING_ALERT_TEMPLATE_ABU_DHABI
     : STAFF_BOOKING_ALERT_TEMPLATE_DUBAI;
 }
 
 function buildStaffBookingAlertTemplateValues(flowData = {}, customerPhone = "") {
   return [
-    flowData.branch || "Dubai",
+    flowData.branch || getLineConfig(DEFAULT_PHONE_NUMBER_ID).branch,
     flowData.customerName || "Customer",
     customerPhone || flowData.phone || "",
     flowData.preferredDay || "",
@@ -7694,8 +7887,8 @@ function buildStaffBookingAlertTemplateValues(flowData = {}, customerPhone = "")
   ].map((value) => (value || "-").toString());
 }
 
-async function sendStaffBookingAlertTemplateMessage(to, flowData = {}, customerPhone = "", phoneNumberId = DUBAI_PHONE_NUMBER_ID, routing = {}) {
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+async function sendStaffBookingAlertTemplateMessage(to, flowData = {}, customerPhone = "", phoneNumberId = DEFAULT_PHONE_NUMBER_ID, routing = {}) {
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const templateName = getStaffBookingAlertTemplateName(flowData.branch || routing.branch || "");
   const templateValues = buildStaffBookingAlertTemplateValues(flowData, customerPhone);
 
@@ -7861,7 +8054,7 @@ function parseSheetDate(value) {
 
 function getReminderKey(message) {
   const phone = normalizePhoneDigits(message.phone);
-  const phoneNumberId = normalizePhoneNumberId(message.phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const phoneNumberId = normalizePhoneNumberId(message.phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   return `${phone}|${phoneNumberId}`;
 }
 
@@ -7893,7 +8086,7 @@ function buildLatestOptInRecords(messages) {
     const phone = normalizePhoneDigits(message.phone);
     if (!phone) continue;
 
-    const phoneNumberId = normalizePhoneNumberId(message.phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+    const phoneNumberId = normalizePhoneNumberId(message.phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
     const key = getReminderKey({ phone, phoneNumberId });
     const current = records.get(key) || {
       phone,
@@ -7977,11 +8170,11 @@ function isCustomerOptedOutForFollowUps(messages = [], phone = "", phoneNumberId
   return Boolean(record && record.optedOut);
 }
 
-function getReminderBodyForLog(phoneNumberId = DUBAI_PHONE_NUMBER_ID) {
+function getReminderBodyForLog(phoneNumberId = DEFAULT_PHONE_NUMBER_ID) {
   return `Template sent: ${getFollowUpTemplateName(phoneNumberId)}`;
 }
 
-function getAppointmentReminderBodyForLog(phoneNumberId = DUBAI_PHONE_NUMBER_ID, appointmentAt = null) {
+function getAppointmentReminderBodyForLog(phoneNumberId = DEFAULT_PHONE_NUMBER_ID, appointmentAt = null) {
   const templateName = getAppointmentReminderTemplateName(phoneNumberId);
   const at = appointmentAt instanceof Date && !Number.isNaN(appointmentAt.getTime())
     ? appointmentAt.toISOString()
@@ -8172,7 +8365,7 @@ function parseAppointmentDateTimeFromBooking(booking = {}) {
 
 function getAppointmentReminderKey(phone = "", phoneNumberId = "", appointmentAt = null) {
   const cleanPhone = normalizePhoneDigits(phone);
-  const cleanPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const cleanPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   const appointmentKey = appointmentAt instanceof Date && !Number.isNaN(appointmentAt.getTime())
     ? appointmentAt.toISOString()
     : "";
@@ -8203,7 +8396,7 @@ function getDueAppointmentReminders(bookings = [], messages = []) {
 
   return (bookings || []).map((booking) => {
     const phone = normalizePhoneDigits(booking.phone || "");
-    const phoneNumberId = normalizePhoneNumberId(booking.phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+    const phoneNumberId = normalizePhoneNumberId(booking.phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
     const appointmentAt = parseAppointmentDateTimeFromBooking(booking);
     const reminderAt = appointmentAt ? new Date(appointmentAt.getTime() - leadMs) : null;
 
@@ -8232,9 +8425,9 @@ function getDueAppointmentReminders(bookings = [], messages = []) {
   });
 }
 
-async function activateAppointmentReminderAfterConfirmation({ booking = {}, phoneNumberId = DUBAI_PHONE_NUMBER_ID, notes = "", updatedBy = "Booking Confirmation" } = {}) {
+async function activateAppointmentReminderAfterConfirmation({ booking = {}, phoneNumberId = DEFAULT_PHONE_NUMBER_ID, notes = "", updatedBy = "Booking Confirmation" } = {}) {
   const customerPhone = normalizePhoneDigits(booking.phone || "");
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || booking.phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || booking.phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
   if (!customerPhone) return { ok: false, skipped: true, reason: "missing_customer_phone" };
 
   const bookingWithNotes = { ...booking, notes: notes || booking.notes || "" };
@@ -8992,7 +9185,7 @@ app.get("/api/reminders/test", protectInbox, async (req, res) => {
     }
 
     const phoneNumberId = requestedPhoneNumberId ||
-      (branch.includes("abu") ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID);
+      resolvePhoneNumberIdForBranch(branch, DEFAULT_PHONE_NUMBER_ID);
 
     const sheetData = await loadMessagesFromGoogleSheet();
     const messages = sheetData.messages || [];
@@ -9056,7 +9249,7 @@ app.get("/api/call-now/test", protectInbox, async (req, res) => {
     }
 
     const phoneNumberId = requestedPhoneNumberId ||
-      (branch.includes("abu") ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID);
+      resolvePhoneNumberIdForBranch(branch, DEFAULT_PHONE_NUMBER_ID);
 
     const templateName = getCallNowTemplateName(phoneNumberId);
     const sendResult = await sendWhatsAppTemplate(
@@ -9115,7 +9308,7 @@ app.get("/api/location/test", protectInbox, async (req, res) => {
     }
 
     const phoneNumberId = requestedPhoneNumberId ||
-      (branch.includes("abu") ? ABU_DHABI_PHONE_NUMBER_ID : DUBAI_PHONE_NUMBER_ID);
+      resolvePhoneNumberIdForBranch(branch, DEFAULT_PHONE_NUMBER_ID);
     const lineConfig = getLineConfig(phoneNumberId);
     const locationBody = buildLocationMessageBody(phoneNumberId);
     const sendResult = await sendWhatsAppCtaUrlMessage(
@@ -9731,7 +9924,7 @@ app.post("/api/bookings/status", protectInbox, async (req, res) => {
 app.post("/api/bookings/send-update", protectInbox, async (req, res) => {
   try {
     const to = normalizePhoneDigits(req.body?.to || req.body?.phone || "");
-    const phoneNumberId = normalizePhoneNumberId(req.body?.phoneNumberId || DUBAI_PHONE_NUMBER_ID);
+    const phoneNumberId = normalizePhoneNumberId(req.body?.phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
     const status = (req.body?.status || req.body?.bookingStatus || "").toString().trim();
     const notes = (req.body?.notes || "").toString().trim();
 
@@ -10412,8 +10605,9 @@ function getInboxServerConversationName(conversation = {}) {
 }
 
 function getInboxServerBranchClass(branch = "") {
-  const cleanBranch = (branch || "").toString().toLowerCase();
-  return cleanBranch.includes("abu") ? "branch-pill branch-abu" : "branch-pill branch-dubai";
+  const normalizedBranch = normalizeInboxBranchName(branch || "");
+  if (normalizedBranch === AI_303_BRANCH_NAME) return "branch-pill branch-303";
+  return normalizedBranch === "Abu Dhabi" ? "branch-pill branch-abu" : "branch-pill branch-dubai";
 }
 
 function buildInboxBootstrapConversations(messages = []) {
@@ -10427,7 +10621,7 @@ function buildInboxBootstrapConversations(messages = []) {
       key,
       phone: (message.phone || "").toString().trim(),
       phoneNumberId: normalizePhoneNumberId(message.phoneNumberId || ""),
-      branch: (message.branch || getLineConfig(message.phoneNumberId || DUBAI_PHONE_NUMBER_ID).branch || "Dubai").toString().trim(),
+      branch: (message.branch || getLineConfig(message.phoneNumberId || DEFAULT_PHONE_NUMBER_ID).branch || "Dubai").toString().trim(),
       customerName: cleanCustomerName(message.customerName || ""),
       status: (message.status || "Open").toString().trim(),
       latest: null,
@@ -10462,7 +10656,7 @@ function renderInboxBootstrapConversationListHtml(conversations = []) {
     const sender = (latest.sender || "").toString().trim() || "message";
     const body = (latest.body || latest.messageType || "").toString().replace(/\s+/g, " ").trim();
     const preview = `${sender}: ${body}`.slice(0, 95);
-    const branch = conversation.branch || "Dubai";
+    const branch = conversation.branch || getLineConfig(DEFAULT_PHONE_NUMBER_ID).branch;
     const status = conversation.status || "Open";
 
     return [
@@ -10513,6 +10707,7 @@ function buildInboxSidebarBranchControls(branchScope = "") {
   const scope = normalizeInboxBranchName(branchScope || "");
   const includeDubai = !scope || scope === "Dubai";
   const includeAbuDhabi = !scope || scope === "Abu Dhabi";
+  const include303 = !scope || scope === AI_303_BRANCH_NAME;
 
   return [
     '<div class="sidebar-branches premium-branch-card">',
@@ -10523,6 +10718,7 @@ function buildInboxSidebarBranchControls(branchScope = "") {
     '    </div>',
     !scope ? '    <button class="sidebar-branch-add" type="button" data-sidebar-branch-reset="true" data-branch-all-control="true" aria-label="Show all branches" title="Show all branches">All</button>' : '',
     '  </div>',
+    include303 ? '  <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="303 AI" data-branch-scope-item="303 AI"><span class="branch-left"><i class="branch-dot branch-dot-303"></i><span><strong>303 AI</strong><small>Coexistence line</small></span></span><b id="side303Count">0</b></button>' : '',
     includeDubai ? '  <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Dubai" data-branch-scope-item="Dubai"><span class="branch-left"><i class="branch-dot branch-dot-dubai"></i><span><strong>Dubai</strong><small>Main branch</small></span></span><b id="sideDubaiCount">0</b></button>' : '',
     includeAbuDhabi ? '  <button class="branch-row sidebar-branch-filter" type="button" data-sidebar-branch="Abu Dhabi" data-branch-scope-item="Abu Dhabi"><span class="branch-left"><i class="branch-dot branch-dot-abu"></i><span><strong>Abu Dhabi</strong><small>Second branch</small></span></span><b id="sideAbuCount">0</b></button>' : '',
     '</div>'
@@ -10533,8 +10729,10 @@ function buildInboxReferenceBranchTabs(branchScope = "") {
   const scope = normalizeInboxBranchName(branchScope || "");
   const includeDubai = !scope || scope === "Dubai";
   const includeAbuDhabi = !scope || scope === "Abu Dhabi";
+  const include303 = !scope || scope === AI_303_BRANCH_NAME;
 
   const buttons = [
+    include303 ? '<button type="button" class="reference-branch-tab" data-branch="303 AI" data-branch-scope-item="303 AI">303 AI <span id="tab303Count">0</span></button>' : '',
     includeDubai ? '<button type="button" class="reference-branch-tab" data-branch="Dubai" data-branch-scope-item="Dubai">Dubai <span id="tabDubaiCount">0</span></button>' : '',
     includeAbuDhabi ? '<button type="button" class="reference-branch-tab" data-branch="Abu Dhabi" data-branch-scope-item="Abu Dhabi">Abu Dhabi <span id="tabAbuCount">0</span></button>' : ''
   ].filter(Boolean).join("\n");
@@ -11230,6 +11428,16 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     .branch-abu {
       background: rgba(120,184,62,.17);
       color: var(--iconic-green-dark);
+    }
+
+    .branch-303 {
+      background: rgba(124,58,237,.13);
+      color: #6d28d9;
+    }
+
+    .branch-dot-303 {
+      background: #7c3aed;
+      box-shadow: 0 0 0 4px rgba(124,58,237,.12);
     }
 
     .status {
@@ -30936,7 +31144,8 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
 
     .main-sidebar .branch-row b,
     .main-sidebar #sideDubaiCount,
-    .main-sidebar #sideAbuCount {
+    .main-sidebar #sideAbuCount,
+    .main-sidebar #side303Count {
       color: #062014 !important;
       background:
         linear-gradient(135deg, #25d366, #c6e36d) !important;
@@ -31403,6 +31612,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
     .crm-code-pill,
     .branch-dubai,
     .branch-abu,
+    .branch-303,
     .tag-chip,
     .message-count-badge {
       border-color: rgba(37,211,102,.22) !important;
@@ -31706,7 +31916,8 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
 
     html body .main-sidebar .branch-row b,
     html body .main-sidebar #sideDubaiCount,
-    html body .main-sidebar #sideAbuCount {
+    html body .main-sidebar #sideAbuCount,
+    html body .main-sidebar #side303Count {
       color: #064e3b !important;
       background:
         linear-gradient(180deg, #ecfdf3, #d1f8c9) !important;
@@ -35036,6 +35247,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
           <div class="reference-hidden-filters" aria-hidden="true">
             <select id="branchFilter">
               <option value="">All branches</option>
+              <option value="303 AI">303 AI</option>
               <option value="Dubai">Dubai</option>
               <option value="Abu Dhabi">Abu Dhabi</option>
             </select>
@@ -35044,6 +35256,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
             </select>
             <select id="assigneeFilter">
               <option value="">All assigned</option>
+              <option value="303 AI Team">303 AI Team</option>
               <option value="Dubai Team">Dubai Team</option>
               <option value="Abu Dhabi Team">Abu Dhabi Team</option>
             </select>
@@ -35157,6 +35370,7 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
                 <label for="phoneNumberId">Responding as</label>
                 <select id="phoneNumberId">
                   <option value="">Auto — same received line</option>
+                  <option value="${AI_303_PHONE_NUMBER_ID}">Iconic Hair Care (303 AI)</option>
                   <option value="${DUBAI_PHONE_NUMBER_ID}">Iconic Hair Care Team (Dubai)</option>
                   <option value="${ABU_DHABI_PHONE_NUMBER_ID}">Iconic Hair Care Team (Abu Dhabi)</option>
                 </select>
@@ -36448,7 +36662,9 @@ function conversationKey(phone, phoneNumberId, branch) {
 }
 
 function branchBadge(branch) {
-  if (branch === "Abu Dhabi") return '<span class="branch branch-abu">Abu Dhabi</span>';
+  const normalizedBranch = (branch || "").toString().trim();
+  if (normalizedBranch === "303 AI") return '<span class="branch branch-303">303 AI</span>';
+  if (normalizedBranch === "Abu Dhabi") return '<span class="branch branch-abu">Abu Dhabi</span>';
   return '<span class="branch branch-dubai">Dubai</span>';
 }
 
@@ -37311,6 +37527,7 @@ function buildAdvancedFilterOptions() {
 
 function normalizedMessageBranch(message) {
   const branch = (message?.branch || "").toString().trim();
+  if (branch === "303 AI") return "303 AI";
   if (branch === "Abu Dhabi") return "Abu Dhabi";
   return "Dubai";
 }
@@ -37526,23 +37743,29 @@ function updateStats() {
   if (statTotal) statTotal.textContent = allMessages.length;
   if (statCustomers) statCustomers.textContent = conversations.length;
   if (statUnread) statUnread.textContent = conversations.filter(isUnreadConversation).length;
+  const ai303SidebarCount = allMessages.filter(function(m) { return normalizedMessageBranch(m) === "303 AI"; }).length;
   const dubaiSidebarCount = allMessages.filter(function(m) { return normalizedMessageBranch(m) === "Dubai"; }).length;
   const abuSidebarCount = allMessages.filter(function(m) { return normalizedMessageBranch(m) === "Abu Dhabi"; }).length;
   const statDubai = document.getElementById("statDubai");
   const statAbu = document.getElementById("statAbu");
   if (statDubai) statDubai.textContent = dubaiSidebarCount;
   if (statAbu) statAbu.textContent = abuSidebarCount;
+  const side303Count = document.getElementById("side303Count");
   const sideDubaiCount = document.getElementById("sideDubaiCount");
   const sideAbuCount = document.getElementById("sideAbuCount");
+  if (side303Count) side303Count.textContent = ai303SidebarCount;
   if (sideDubaiCount) sideDubaiCount.textContent = dubaiSidebarCount;
   if (sideAbuCount) sideAbuCount.textContent = abuSidebarCount;
+  const tab303Count = document.getElementById("tab303Count");
   const tabDubaiCount = document.getElementById("tabDubaiCount");
   const tabAbuCount = document.getElementById("tabAbuCount");
   const conversationBranchCounts = buildConversations().reduce(function(acc, c) {
-    if (c.branch === "Abu Dhabi") acc.abu += 1;
+    if (c.branch === "303 AI") acc.ai303 += 1;
+    else if (c.branch === "Abu Dhabi") acc.abu += 1;
     else acc.dubai += 1;
     return acc;
-  }, { dubai: 0, abu: 0 });
+  }, { ai303: 0, dubai: 0, abu: 0 });
+  if (tab303Count) tab303Count.textContent = conversationBranchCounts.ai303;
   if (tabDubaiCount) tabDubaiCount.textContent = conversationBranchCounts.dubai;
   if (tabAbuCount) tabAbuCount.textContent = conversationBranchCounts.abu;
   applyBranchScopeUiVisibility();
@@ -38981,6 +39204,17 @@ app.post("/webhook", async (req, res) => {
   try {
     const value = req.body?.entry?.[0]?.changes?.[0]?.value;
     const message = value?.messages?.[0];
+    const webhookDisplayPhoneNumber = value?.metadata?.display_phone_number || "";
+    const webhookPhoneNumberId = getIncomingPhoneNumberId(value);
+
+    if (DEDICATED_303_ONLY && !isAi303Line(webhookPhoneNumberId, webhookDisplayPhoneNumber)) {
+      console.log("[303 AI Isolation] ignored non-303 webhook event", {
+        phoneNumberId: webhookPhoneNumberId,
+        displayPhoneNumber: webhookDisplayPhoneNumber,
+        hasMessage: Boolean(message)
+      });
+      return res.sendStatus(200);
+    }
 
     // Status webhooks do not include a customer message. They can still report
     // that a staff text notification failed later with 131047, after Graph API
@@ -38991,8 +39225,8 @@ app.post("/webhook", async (req, res) => {
     }
 
     const from = message.from;
-    const incomingPhoneNumberId = getIncomingPhoneNumberId(value);
-    const lineConfig = getLineConfig(incomingPhoneNumberId, value?.metadata?.display_phone_number || "");
+    const incomingPhoneNumberId = webhookPhoneNumberId;
+    const lineConfig = getLineConfig(incomingPhoneNumberId, webhookDisplayPhoneNumber);
     const profileName = getWhatsAppCustomerName(value?.contacts?.[0]);
     const suppressedInternalText = getIncomingMessageText(message);
     const whatsappAutomationPausedForLine = shouldPauseWhatsAppAutomationForLine(
