@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-163-unified-303-auth-popup-guard";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-164-unified-303-remote-normalization";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -543,10 +543,26 @@ let ai303RemoteInboxCacheAt = 0;
 let ai303RemoteInboxPromise = null;
 
 function normalizeAi303RemoteInboxPayload(data = {}) {
+  // Every record fetched from the isolated 303 service belongs to the 303 line.
+  // Do not trust historical branch/phoneNumberId values inherited from the old
+  // staging code or Sheet rows, because they can make the unified UI classify
+  // genuine 303 conversations as Dubai and hide them from the 303 AI filter.
+  const normalizeRemoteRecord = (record = {}) => ({
+    ...record,
+    branch: AI_303_BRANCH_NAME,
+    phoneNumberId: AI_303_PHONE_NUMBER_ID
+  });
+
   return {
-    messages: Array.isArray(data.messages) ? data.messages : [],
-    conversationStates: Array.isArray(data.conversationStates) ? data.conversationStates : [],
-    bookingRequests: Array.isArray(data.bookingRequests) ? data.bookingRequests : []
+    messages: Array.isArray(data.messages)
+      ? data.messages.map(normalizeRemoteRecord)
+      : [],
+    conversationStates: Array.isArray(data.conversationStates)
+      ? data.conversationStates.map(normalizeRemoteRecord)
+      : [],
+    bookingRequests: Array.isArray(data.bookingRequests)
+      ? data.bookingRequests.map(normalizeRemoteRecord)
+      : []
   };
 }
 
@@ -36015,7 +36031,7 @@ const liveNotificationStatus = document.getElementById("liveNotificationStatus")
 const liveNotificationPanel = document.getElementById("liveNotificationPanel");
 let liveNotificationPanelOpen = false;
 const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
-const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-163-unified-303-auth-popup-guard';
+const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-164-unified-303-remote-normalization';
 let iconicBuildAutoReloading = false;
 let iconicBuildLastVersionCheckAt = 0;
 const customerProfilePhone = document.getElementById("customerProfilePhone");
