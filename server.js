@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-165-unified-0204-proxy-bridge";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-166-unified-production-cutover-safe";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -134,7 +134,7 @@ const AI_303_SERVICE_URL = (
 const AI_303_INBOX_USER = (process.env.AI_303_INBOX_USER || INBOX_USER || "").toString().trim();
 const AI_303_INBOX_PASS = (process.env.AI_303_INBOX_PASS || INBOX_PASS || "").toString();
 const AI_303_PROXY_TIMEOUT_MS = Number(process.env.AI_303_PROXY_TIMEOUT_MS || 4500);
-const AI_303_REMOTE_CACHE_TTL_MS = Number(process.env.AI_303_REMOTE_CACHE_TTL_MS || 5000);
+const AI_303_REMOTE_CACHE_TTL_MS = Number(process.env.AI_303_REMOTE_CACHE_TTL_MS || 3000);
 
 // Private server-to-server bridge to the existing stable Dubai + Abu Dhabi service.
 // This lets the unified UI send/load media through production without copying
@@ -155,6 +155,17 @@ const CORE_0204_INBOX_PASS = (
 ).toString();
 const CORE_0204_PROXY_TIMEOUT_MS = Number(
   process.env.CORE_0204_PROXY_TIMEOUT_MS || 60000
+);
+const CORE_0204_PROXY_ENABLED = ["true", "1", "yes", "on"].includes(
+  (process.env.CORE_0204_PROXY_ENABLED || "false").toString().trim().toLowerCase()
+);
+const CURRENT_RENDER_SERVICE_URL = (
+  process.env.RENDER_EXTERNAL_URL ||
+  ""
+).toString().trim().replace(/\/+$/, "");
+const INBOX_POLL_INTERVAL_MS = Math.max(
+  2500,
+  Number(process.env.INBOX_POLL_INTERVAL_MS || 4000)
 );
 
 // V31.5 Auto Video Reply:
@@ -564,6 +575,17 @@ function getCore0204ProxyAuthorizationHeader() {
 }
 
 function isCore0204ProxyConfigured() {
+  if (!CORE_0204_PROXY_ENABLED) return false;
+
+  // Production safety guard: never allow the unified production service
+  // to proxy Dubai/Abu Dhabi requests back into itself.
+  if (
+    CURRENT_RENDER_SERVICE_URL &&
+    CORE_0204_SERVICE_URL === CURRENT_RENDER_SERVICE_URL
+  ) {
+    return false;
+  }
+
   return Boolean(
     CORE_0204_SERVICE_URL &&
     getCore0204ProxyAuthorizationHeader()
@@ -9134,6 +9156,14 @@ app.get("/api/version", (req, res) => {
   res.json({
     ok: true,
     version: BOT_VERSION,
+    unifiedRouting: {
+      inboxPollIntervalMs: INBOX_POLL_INTERVAL_MS,
+      ai303BridgeConfigured: isAi303BridgeConfigured(),
+      ai303RemoteCacheTtlMs: AI_303_REMOTE_CACHE_TTL_MS,
+      core0204ProxyEnabled: CORE_0204_PROXY_ENABLED,
+      core0204ProxyConfigured: isCore0204ProxyConfigured(),
+      core0204LocalMode: !isCore0204ProxyConfigured()
+    },
     callNowTemplates: getCallNowTemplateMap(),
     appointmentReminder: {
       enabled: APPOINTMENT_REMINDER_ENABLED,
@@ -36232,7 +36262,7 @@ const liveNotificationStatus = document.getElementById("liveNotificationStatus")
 const liveNotificationPanel = document.getElementById("liveNotificationPanel");
 let liveNotificationPanelOpen = false;
 const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
-const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-165-unified-0204-proxy-bridge';
+const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-166-unified-production-cutover-safe';
 let iconicBuildAutoReloading = false;
 let iconicBuildLastVersionCheckAt = 0;
 const customerProfilePhone = document.getElementById("customerProfilePhone");
@@ -40183,7 +40213,7 @@ loadMessages({ forceRender: true, reason: "initial" });
 setInterval(function() {
   if (document.visibilityState === "hidden") return;
   loadMessages({ reason: "auto" });
-}, 8000);
+}, ${INBOX_POLL_INTERVAL_MS});
 
 // Detect new Render/GitHub deploys and refresh the already-open inbox automatically.
 setTimeout(function() { checkForIconicInboxBuildUpdate(true); }, 12000);
