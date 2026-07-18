@@ -66,7 +66,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-164-unified-303-remote-normalization";
+const BOT_VERSION = "iconic-team-inbox-v31-5-8-60-3-9-165-unified-0204-proxy-bridge";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -135,6 +135,27 @@ const AI_303_INBOX_USER = (process.env.AI_303_INBOX_USER || INBOX_USER || "").to
 const AI_303_INBOX_PASS = (process.env.AI_303_INBOX_PASS || INBOX_PASS || "").toString();
 const AI_303_PROXY_TIMEOUT_MS = Number(process.env.AI_303_PROXY_TIMEOUT_MS || 4500);
 const AI_303_REMOTE_CACHE_TTL_MS = Number(process.env.AI_303_REMOTE_CACHE_TTL_MS || 5000);
+
+// Private server-to-server bridge to the existing stable Dubai + Abu Dhabi service.
+// This lets the unified UI send/load media through production without copying
+// WhatsApp access tokens into the unified Render service.
+const CORE_0204_SERVICE_URL = (
+  process.env.CORE_0204_SERVICE_URL ||
+  "https://whatsapp-webhook-g0c5.onrender.com"
+).toString().trim().replace(/\/+$/, "");
+const CORE_0204_INBOX_USER = (
+  process.env.CORE_0204_INBOX_USER ||
+  INBOX_USER ||
+  ""
+).toString().trim();
+const CORE_0204_INBOX_PASS = (
+  process.env.CORE_0204_INBOX_PASS ||
+  INBOX_PASS ||
+  ""
+).toString();
+const CORE_0204_PROXY_TIMEOUT_MS = Number(
+  process.env.CORE_0204_PROXY_TIMEOUT_MS || 60000
+);
 
 // V31.5 Auto Video Reply:
 // Put iconic-auto-reply-video-13s.mp4 in the same GitHub/Render folder as server.js.
@@ -527,6 +548,108 @@ async function requestAi303Service(pathname = "", options = {}) {
       data: {
         ok: false,
         error: timeoutError ? "303 service timed out" : "303 service unavailable"
+      }
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+
+function getCore0204ProxyAuthorizationHeader() {
+  if (!CORE_0204_INBOX_USER || !CORE_0204_INBOX_PASS) return "";
+  return "Basic " + Buffer.from(
+    `${CORE_0204_INBOX_USER}:${CORE_0204_INBOX_PASS}`
+  ).toString("base64");
+}
+
+function isCore0204ProxyConfigured() {
+  return Boolean(
+    CORE_0204_SERVICE_URL &&
+    getCore0204ProxyAuthorizationHeader()
+  );
+}
+
+async function requestCore0204Service(pathname = "", options = {}) {
+  if (!isCore0204ProxyConfigured()) {
+    return {
+      ok: false,
+      status: 503,
+      data: {
+        ok: false,
+        error: "Dubai/Abu Dhabi service bridge is not configured"
+      }
+    };
+  }
+
+  const cleanPath = pathname.toString().startsWith("/")
+    ? pathname.toString()
+    : `/${pathname}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    Math.max(1500, CORE_0204_PROXY_TIMEOUT_MS)
+  );
+  const expectBinary = Boolean(options.expectBinary);
+  const headers = {
+    Authorization: getCore0204ProxyAuthorizationHeader(),
+    Accept: expectBinary ? "*/*" : "application/json",
+    ...(options.headers || {})
+  };
+
+  let requestBody;
+  if (Object.prototype.hasOwnProperty.call(options, "body")) {
+    headers["Content-Type"] = "application/json";
+    requestBody = JSON.stringify(options.body);
+  }
+
+  try {
+    const response = await fetch(`${CORE_0204_SERVICE_URL}${cleanPath}`, {
+      method: options.method || "GET",
+      headers,
+      body: requestBody,
+      signal: controller.signal
+    });
+
+    if (expectBinary) {
+      const buffer = Buffer.from(await response.arrayBuffer());
+      return {
+        ok: response.ok,
+        status: response.status,
+        buffer,
+        contentType:
+          response.headers.get("content-type") ||
+          "application/octet-stream"
+      };
+    }
+
+    const responseText = await response.text();
+    let data;
+
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+    } catch (error) {
+      data = {
+        ok: false,
+        error: responseText || "Invalid response from Dubai/Abu Dhabi service"
+      };
+    }
+
+    return {
+      ok: response.ok && data?.ok !== false,
+      status: response.status,
+      data
+    };
+  } catch (error) {
+    const timeoutError = error?.name === "AbortError";
+    return {
+      ok: false,
+      status: timeoutError ? 504 : 502,
+      data: {
+        ok: false,
+        error: timeoutError
+          ? "Dubai/Abu Dhabi service timed out"
+          : "Dubai/Abu Dhabi service unavailable"
       }
     };
   } finally {
@@ -10371,6 +10494,25 @@ app.post("/api/send", protectInbox, async (req, res) => {
       });
     }
 
+    if (isCore0204ProxyConfigured()) {
+      const remoteResult = await requestCore0204Service("/api/send", {
+        method: "POST",
+        body: {
+          ...req.body,
+          to,
+          body,
+          phoneNumberId
+        }
+      });
+
+      return res.status(
+        remoteResult.status || (remoteResult.ok ? 200 : 502)
+      ).json(remoteResult.data || {
+        ok: false,
+        error: "Dubai/Abu Dhabi service request failed"
+      });
+    }
+
     conversationPhoneNumberId[to] = phoneNumberId;
 
     const staffSendGuard = await blockStaffSendIfNeeded({
@@ -10535,6 +10677,24 @@ app.post("/api/send-image", protectInbox, async (req, res) => {
       });
     }
 
+    if (isCore0204ProxyConfigured()) {
+      const remoteResult = await requestCore0204Service("/api/send-image", {
+        method: "POST",
+        body: {
+          ...req.body,
+          to,
+          phoneNumberId
+        }
+      });
+
+      return res.status(
+        remoteResult.status || (remoteResult.ok ? 200 : 502)
+      ).json(remoteResult.data || {
+        ok: false,
+        error: "Dubai/Abu Dhabi image request failed"
+      });
+    }
+
     conversationPhoneNumberId[to] = phoneNumberId;
 
     const staffSendGuard = await blockStaffSendIfNeeded({
@@ -10645,6 +10805,24 @@ app.post("/api/send-audio", protectInbox, async (req, res) => {
       });
     }
 
+    if (isCore0204ProxyConfigured()) {
+      const remoteResult = await requestCore0204Service("/api/send-audio", {
+        method: "POST",
+        body: {
+          ...req.body,
+          to,
+          phoneNumberId
+        }
+      });
+
+      return res.status(
+        remoteResult.status || (remoteResult.ok ? 200 : 502)
+      ).json(remoteResult.data || {
+        ok: false,
+        error: "Dubai/Abu Dhabi audio request failed"
+      });
+    }
+
     conversationPhoneNumberId[to] = phoneNumberId;
 
     const staffSendGuard = await blockStaffSendIfNeeded({
@@ -10734,6 +10912,29 @@ app.get("/api/media/:mediaId", protectInbox, async (req, res) => {
       }
 
       res.setHeader("Content-Type", remoteResult.contentType || "application/octet-stream");
+      res.setHeader("Cache-Control", "private, max-age=3600");
+      return res.send(remoteResult.buffer);
+    }
+
+    if (isCore0204ProxyConfigured()) {
+      const query = phoneNumberId
+        ? `?phoneNumberId=${encodeURIComponent(phoneNumberId)}`
+        : "";
+      const remoteResult = await requestCore0204Service(
+        `/api/media/${encodeURIComponent(mediaId)}${query}`,
+        { expectBinary: true }
+      );
+
+      if (!remoteResult.ok) {
+        return res.status(remoteResult.status || 502).send(
+          "Could not load Dubai/Abu Dhabi media"
+        );
+      }
+
+      res.setHeader(
+        "Content-Type",
+        remoteResult.contentType || "application/octet-stream"
+      );
       res.setHeader("Cache-Control", "private, max-age=3600");
       return res.send(remoteResult.buffer);
     }
@@ -36031,7 +36232,7 @@ const liveNotificationStatus = document.getElementById("liveNotificationStatus")
 const liveNotificationPanel = document.getElementById("liveNotificationPanel");
 let liveNotificationPanelOpen = false;
 const originalPageTitle = document.title || "Iconic Hair Care — Team Inbox";
-const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-164-unified-303-remote-normalization';
+const ICONIC_CLIENT_BUILD_VERSION = 'iconic-team-inbox-v31-5-8-60-3-9-165-unified-0204-proxy-bridge';
 let iconicBuildAutoReloading = false;
 let iconicBuildLastVersionCheckAt = 0;
 const customerProfilePhone = document.getElementById("customerProfilePhone");
