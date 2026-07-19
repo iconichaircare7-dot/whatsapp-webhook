@@ -35,6 +35,39 @@ app.get("/api/303-health", (req, res) => {
     dedicated303Only: DEDICATED_303_ONLY,
     disableRealSend: DISABLE_REAL_SEND,
     automationPaused303: WHATSAPP_AUTOMATION_PAUSED_303,
+    smartSalesVersion: SMART_SALES_VERSION,
+    smartSalesEnabled: SMART_SALES_ENABLED,
+    smartGoalVersion: SMART_GOAL_VERSION,
+    smartGoalEnabled: SMART_GOAL_ENABLED,
+    smartGoalStallLimit: SMART_GOAL_STALL_LIMIT,
+    smartNaturalVersion: SMART_NATURAL_VERSION,
+    smartNaturalEnabled: SMART_NATURAL_ENABLED,
+    smartKnowledgeVersion: SMART_KNOWLEDGE_VERSION,
+    smartKnowledgeEnabled: SMART_KNOWLEDGE_ENABLED,
+    smartKnowledgeCatalogSize: getSmartKnowledgeCatalog().length,
+    smartScenarioVersion: SMART_SCENARIO_VERSION,
+    smartScenarioEnabled: SMART_SCENARIO_ENABLED,
+    smartScenarioMaxSegments: SMART_SCENARIO_MAX_SEGMENTS,
+    smartScenarioLongMessageThreshold: SMART_SCENARIO_LONG_MESSAGE_THRESHOLD,
+    smartRecoveryVersion: SMART_RECOVERY_VERSION,
+    smartRecoveryEnabled: SMART_RECOVERY_ENABLED,
+    smartRecoveryMaxAttempts: SMART_RECOVERY_MAX_ATTEMPTS,
+    smartUnknownVersion: SMART_UNKNOWN_VERSION,
+    smartUnknownEnabled: SMART_UNKNOWN_ENABLED,
+    smartUnknownPersistEnabled: SMART_UNKNOWN_PERSIST_ENABLED,
+    smartUnknownScoreThreshold: SMART_UNKNOWN_SCORE_THRESHOLD,
+    smartUnknownQueueSize: smartUnknownLearningQueue.size,
+    smartLearningReviewVersion: SMART_LEARNING_REVIEW_VERSION,
+    smartLearningReviewEnabled: SMART_LEARNING_REVIEW_ENABLED,
+    smartLearningPromotedCount: getSmartLearningPromotedRules().length,
+    smartRuleIntegrationVersion: SMART_RULE_INTEGRATION_VERSION,
+    smartRuleIntegrationEnabled: SMART_RULE_INTEGRATION_ENABLED,
+    smartRuleRuntimeEnabled: SMART_RULE_RUNTIME_ENABLED,
+    smartRuleActiveCount: smartIntegratedRuleRegistry.size,
+    smartRuleIntegrationSummary: getSmartRuleIntegrationSummary(),
+    smartRuleAnalyticsVersion: SMART_RULE_ANALYTICS_VERSION,
+    smartRuleAnalyticsEnabled: SMART_RULE_ANALYTICS_ENABLED,
+    smartRuleAnalyticsSummary: getSmartRuleAnalyticsSummary(),
     phoneNumberId: lineConfig.phoneNumberId,
     branch: lineConfig.branch,
     displayNumber: lineConfig.displayNumber,
@@ -83,7 +116,355 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-303-ai-isolated-v2-shared-sheet-filtered";
+const BOT_VERSION = "iconic-team-inbox-303-ai-learning-analytics-v14";
+const SMART_UNDERSTANDING_VERSION = "smart-understanding-v1";
+const SMART_UNDERSTANDING_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_UNDERSTANDING_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_MULTI_INTENT_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_MULTI_INTENT_ENABLED || "true").toString().trim().toLowerCase()
+);
+
+// SMART CONVERSATION MEMORY V2 — deterministic, local, and API-free.
+// It remembers customer context, restores it from the existing Google Sheet log,
+// and uses that memory only to improve routing. It never invents business facts.
+const SMART_MEMORY_VERSION = "smart-conversation-memory-v2";
+const SMART_MEMORY_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_MEMORY_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_MEMORY_PERSIST_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_MEMORY_PERSIST_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_MEMORY_TTL_MS = Math.max(
+  6 * 60 * 60 * 1000,
+  Number(process.env.SMART_MEMORY_TTL_MS || (30 * 24 * 60 * 60 * 1000))
+);
+const SMART_MEMORY_SAVE_DEBOUNCE_MS = Math.max(
+  500,
+  Number(process.env.SMART_MEMORY_SAVE_DEBOUNCE_MS || 1800)
+);
+const SMART_MEMORY_HYDRATE_TTL_MS = Math.max(
+  60 * 1000,
+  Number(process.env.SMART_MEMORY_HYDRATE_TTL_MS || (10 * 60 * 1000))
+);
+const SMART_MEMORY_SNAPSHOT_MARKER = "[[ICONIC_SMART_MEMORY_V2]]";
+
+// SMART DECISION & REPLY COMPOSER V3 — deterministic, local, and API-free.
+// It combines safe approved facts, conversation memory, and detected intents into
+// one concise reply with one recommended next step. It never generates new facts.
+const SMART_DECISION_VERSION = "smart-decision-reply-v3";
+const SMART_DECISION_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_DECISION_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_DECISION_MIN_SCORE = Math.min(
+  1,
+  Math.max(0.2, Number(process.env.SMART_DECISION_MIN_SCORE || 0.42))
+);
+const SMART_DECISION_MAX_SECTIONS = Math.min(
+  3,
+  Math.max(2, Number(process.env.SMART_DECISION_MAX_SECTIONS || 3))
+);
+
+// OBJECTIONS & SALES INTELLIGENCE V4 — deterministic, local, and API-free.
+// It recognizes common buying concerns, responds without pressure or invented
+// promises, and chooses one safe next step. Complaints and human requests still
+// keep their higher-priority handoff routes.
+const SMART_SALES_VERSION = "objections-sales-intelligence-v4";
+const SMART_SALES_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_SALES_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_SALES_MIN_SCORE = Math.min(
+  1,
+  Math.max(0.45, Number(process.env.SMART_SALES_MIN_SCORE || 0.66))
+);
+
+// CONVERSATION STATE MACHINE & GOAL TRACKING V5 — deterministic, local, and API-free.
+// It tracks where the customer is in the journey, which verified details are
+// still missing, and whether the conversation is making progress. It does not
+// generate business facts and it keeps Unknown / Low Confidence as a later phase.
+const SMART_GOAL_VERSION = "conversation-state-goal-v5";
+const SMART_GOAL_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_GOAL_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_GOAL_STALL_LIMIT = Math.min(
+  5,
+  Math.max(1, Number(process.env.SMART_GOAL_STALL_LIMIT || 2))
+);
+const SMART_GOAL_HISTORY_LIMIT = Math.min(
+  20,
+  Math.max(4, Number(process.env.SMART_GOAL_HISTORY_LIMIT || 10))
+);
+
+// LEAD QUALIFICATION & SMART HANDOFF V6 — deterministic, local, and API-free.
+// It scores only verified conversational signals, creates a compact internal
+// summary for the team, and escalates only when human follow-up adds clear value.
+// Unknown / Low Confidence remains reserved for a later independent phase.
+const SMART_LEAD_VERSION = "lead-qualification-handoff-v6";
+const SMART_LEAD_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_LEAD_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_LEAD_WARM_SCORE = Math.min(
+  70,
+  Math.max(25, Number(process.env.SMART_LEAD_WARM_SCORE || 40))
+);
+const SMART_LEAD_HOT_SCORE = Math.min(
+  90,
+  Math.max(SMART_LEAD_WARM_SCORE + 5, Number(process.env.SMART_LEAD_HOT_SCORE || 70))
+);
+const SMART_LEAD_PRIORITY_SCORE = Math.min(
+  100,
+  Math.max(SMART_LEAD_HOT_SCORE + 5, Number(process.env.SMART_LEAD_PRIORITY_SCORE || 85))
+);
+const SMART_LEAD_HISTORY_LIMIT = Math.min(
+  20,
+  Math.max(4, Number(process.env.SMART_LEAD_HISTORY_LIMIT || 10))
+);
+
+// NATURAL CONVERSATION QUALITY & REPETITION CONTROL V7 — deterministic,
+// local, and API-free. It improves phrasing quality without creating business
+// facts, tracks recent bot replies, shortens acknowledgements, limits customer
+// name repetition, and replaces near-duplicate answers with one progress prompt.
+// Unknown / Low Confidence remains reserved for a later independent phase.
+const SMART_NATURAL_VERSION = "natural-conversation-repetition-v7";
+const SMART_NATURAL_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_NATURAL_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_NATURAL_HISTORY_LIMIT = Math.min(
+  16,
+  Math.max(4, Number(process.env.SMART_NATURAL_HISTORY_LIMIT || 8))
+);
+const SMART_NATURAL_SIMILARITY_THRESHOLD = Math.min(
+  0.95,
+  Math.max(0.55, Number(process.env.SMART_NATURAL_SIMILARITY_THRESHOLD || 0.76))
+);
+const SMART_NATURAL_NAME_COOLDOWN_TURNS = Math.min(
+  8,
+  Math.max(1, Number(process.env.SMART_NATURAL_NAME_COOLDOWN_TURNS || 3))
+);
+
+// KNOWLEDGE COVERAGE & ANSWER PRECISION V8 — deterministic, local, and API-free.
+// It expands approved Iconic-specific answers while separating verified facts,
+// case-dependent guidance, and team-only policies. It never invents prices,
+// durations, guarantees, availability, or unrestricted lifestyle promises.
+// Unknown / Low Confidence remains reserved for a later independent phase.
+const SMART_KNOWLEDGE_VERSION = "knowledge-coverage-answer-precision-v8";
+const SMART_KNOWLEDGE_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_KNOWLEDGE_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_KNOWLEDGE_MIN_SCORE = Math.min(
+  0.95,
+  Math.max(0.55, Number(process.env.SMART_KNOWLEDGE_MIN_SCORE || 0.70))
+);
+const SMART_KNOWLEDGE_MAX_TOPICS = Math.min(
+  3,
+  Math.max(1, Number(process.env.SMART_KNOWLEDGE_MAX_TOPICS || 3))
+);
+const SMART_KNOWLEDGE_HISTORY_LIMIT = Math.min(
+  12,
+  Math.max(3, Number(process.env.SMART_KNOWLEDGE_HISTORY_LIMIT || 6))
+);
+
+// SCENARIO SIMULATION & EDGE-CASE HARDENING V9 — deterministic, local, and API-free.
+// It strengthens long-message parsing, correction handling, code-switching, topic
+// changes, contradictory details, negation traps, and repeated inbound messages.
+// It only applies explicit/high-confidence evidence and does not implement the
+// reserved Unknown / Low Confidence learning phase.
+const SMART_SCENARIO_VERSION = "scenario-simulation-edge-hardening-v9";
+const SMART_SCENARIO_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_SCENARIO_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_SCENARIO_MAX_SEGMENTS = Math.min(
+  12,
+  Math.max(3, Number(process.env.SMART_SCENARIO_MAX_SEGMENTS || 8))
+);
+const SMART_SCENARIO_LONG_MESSAGE_THRESHOLD = Math.min(
+  1200,
+  Math.max(120, Number(process.env.SMART_SCENARIO_LONG_MESSAGE_THRESHOLD || 180))
+);
+const SMART_SCENARIO_HISTORY_LIMIT = Math.min(
+  20,
+  Math.max(4, Number(process.env.SMART_SCENARIO_HISTORY_LIMIT || 10))
+);
+
+// CONVERSATION RECOVERY & CLARIFICATION STRATEGY V10 — deterministic, local, and API-free.
+// It resolves short contextual references, resumes interrupted goals, and asks the
+// smallest possible clarification when the customer says things like "the second
+// one", "same one", "why?", or "continue". It never guesses without prior context.
+// Unknown / Low Confidence remains a separate reserved phase for later.
+const SMART_RECOVERY_VERSION = "conversation-recovery-clarification-v10";
+const SMART_RECOVERY_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_RECOVERY_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_RECOVERY_MAX_ATTEMPTS = Math.min(
+  4,
+  Math.max(1, Number(process.env.SMART_RECOVERY_MAX_ATTEMPTS || 2))
+);
+const SMART_RECOVERY_HISTORY_LIMIT = Math.min(
+  20,
+  Math.max(4, Number(process.env.SMART_RECOVERY_HISTORY_LIMIT || 10))
+);
+
+// UNKNOWN / LOW CONFIDENCE CAPTURE & LEARNING QUEUE V11 — deterministic,
+// local, and API-free. It records only messages the rules cannot understand
+// safely, redacts common sensitive data, deduplicates repeated wording, and
+// exposes a protected review queue. It never auto-learns or changes routing.
+const SMART_UNKNOWN_VERSION = "unknown-low-confidence-learning-v11";
+const SMART_UNKNOWN_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_UNKNOWN_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_UNKNOWN_PERSIST_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_UNKNOWN_PERSIST_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_UNKNOWN_SCORE_THRESHOLD = Math.min(
+  0.85,
+  Math.max(0.35, Number(process.env.SMART_UNKNOWN_SCORE_THRESHOLD || 0.62))
+);
+const SMART_UNKNOWN_AMBIGUITY_GAP = Math.min(
+  0.25,
+  Math.max(0.02, Number(process.env.SMART_UNKNOWN_AMBIGUITY_GAP || 0.08))
+);
+const SMART_UNKNOWN_QUEUE_LIMIT = Math.min(
+  2000,
+  Math.max(50, Number(process.env.SMART_UNKNOWN_QUEUE_LIMIT || 500))
+);
+const SMART_UNKNOWN_HISTORY_LIMIT = Math.min(
+  12,
+  Math.max(3, Number(process.env.SMART_UNKNOWN_HISTORY_LIMIT || 6))
+);
+const SMART_UNKNOWN_SAVE_DEBOUNCE_MS = Math.min(
+  10000,
+  Math.max(250, Number(process.env.SMART_UNKNOWN_SAVE_DEBOUNCE_MS || 1500))
+);
+const SMART_UNKNOWN_SNAPSHOT_MARKER = "[[ICONIC_UNKNOWN_LOW_CONFIDENCE_V11]]";
+const SMART_UNKNOWN_ALLOWED_STATUSES = new Set(["new", "reviewed", "promoted", "ignored"]);
+
+// LEARNING REVIEW & SAFE PROMOTION CONSOLE V12 — human-reviewed only.
+// It turns V11 queue items into tested candidate rule packages, but it never
+// edits the live phrase catalog, changes routing, deploys code, or sends WhatsApp.
+const SMART_LEARNING_REVIEW_VERSION = "learning-review-safe-promotion-v12";
+const SMART_LEARNING_REVIEW_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_LEARNING_REVIEW_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_LEARNING_REVIEW_MAX_NEGATIVE_EXAMPLES = Math.min(
+  12,
+  Math.max(1, Number(process.env.SMART_LEARNING_REVIEW_MAX_NEGATIVE_EXAMPLES || 6))
+);
+const SMART_LEARNING_REVIEW_MIN_PHRASE_LENGTH = Math.min(
+  30,
+  Math.max(3, Number(process.env.SMART_LEARNING_REVIEW_MIN_PHRASE_LENGTH || 4))
+);
+const SMART_LEARNING_ALLOWED_ACTIONS = new Set([
+  "add_phrase",
+  "add_scenario",
+  "map_to_existing_answer",
+  "needs_business_answer"
+]);
+const SMART_LEARNING_INTENT_CATALOG = Object.freeze([
+  { id: "price", label: "Price / السعر", group: "Core", acceptedPrimaries: ["price", "expensive"] },
+  { id: "expensive", label: "Price Objection / اعتراض السعر", group: "Sales", acceptedPrimaries: ["expensive", "price"] },
+  { id: "booking", label: "Booking / الحجز", group: "Core", acceptedPrimaries: ["booking", "consultation"] },
+  { id: "consultation", label: "Consultation / الاستشارة", group: "Core", acceptedPrimaries: ["consultation", "booking"] },
+  { id: "current_client_service", label: "Existing Client Service / سيرفس عميل حالي", group: "Core", acceptedPrimaries: ["current_client_service", "booking"] },
+  { id: "location", label: "Location / الموقع", group: "Core", acceptedPrimaries: ["location"] },
+  { id: "working_hours", label: "Working Hours / الدوام", group: "Core", acceptedPrimaries: ["working_hours"] },
+  { id: "call", label: "Call / الاتصال", group: "Core", acceptedPrimaries: ["call", "human"] },
+  { id: "services", label: "Services / الخدمات", group: "Knowledge", acceptedPrimaries: ["services"] },
+  { id: "natural", label: "Natural Look / المظهر الطبيعي", group: "Knowledge", acceptedPrimaries: ["natural"] },
+  { id: "density", label: "Density / الكثافة", group: "Knowledge", acceptedPrimaries: ["density"] },
+  { id: "hair_type", label: "Hair Type / نوع الشعر", group: "Knowledge", acceptedPrimaries: ["hair_type"] },
+  { id: "duration_maintenance", label: "Duration & Maintenance / المدة والصيانة", group: "Knowledge", acceptedPrimaries: ["duration_maintenance"] },
+  { id: "warranty", label: "Warranty / الضمان", group: "Knowledge", acceptedPrimaries: ["warranty"] },
+  { id: "full_bald", label: "Full Bald Suitability / الصلع الكامل", group: "Knowledge", acceptedPrimaries: ["full_bald"] },
+  { id: "women", label: "Women Suitability / النساء", group: "Knowledge", acceptedPrimaries: ["women"] },
+  { id: "privacy_concern", label: "Privacy Concern / الخصوصية", group: "Sales", acceptedPrimaries: ["natural", "services"] },
+  { id: "naturality_fear", label: "Naturality Fear / الخوف من الشكل الصناعي", group: "Sales", acceptedPrimaries: ["natural"] },
+  { id: "attachment_fear", label: "Attachment Fear / الخوف من الثبات", group: "Sales", acceptedPrimaries: ["services", "duration_maintenance"] },
+  { id: "previous_bad_experience", label: "Previous Bad Experience / تجربة سابقة سيئة", group: "Sales", acceptedPrimaries: ["services", "natural"] },
+  { id: "hesitation", label: "Hesitation / التردد", group: "Sales", acceptedPrimaries: [] },
+  { id: "complaint", label: "Complaint / شكوى", group: "Safety", acceptedPrimaries: ["complaint"] },
+  { id: "human", label: "Human Assistance / طلب موظف", group: "Safety", acceptedPrimaries: ["human"] }
+]);
+
+// CANDIDATE RULE INTEGRATION & REGRESSION GATE V13.
+// V12 creates reviewed candidate packages. V13 is the only layer allowed to
+// activate one of those packages at runtime, and only after a full safety gate.
+// No API key, external model, code generation, or automatic self-learning is used.
+const SMART_RULE_INTEGRATION_VERSION = "candidate-rule-integration-regression-gate-v13";
+const SMART_RULE_INTEGRATION_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_RULE_INTEGRATION_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_RULE_RUNTIME_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_RULE_RUNTIME_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_RULE_RUNTIME_SCORE = Math.min(
+  0.99,
+  Math.max(0.86, Number(process.env.SMART_RULE_RUNTIME_SCORE || 0.96))
+);
+const SMART_RULE_MAX_ACTIVE = Math.min(
+  500,
+  Math.max(10, Number(process.env.SMART_RULE_MAX_ACTIVE || 200))
+);
+const SMART_RULE_SIMILARITY_CONFLICT_THRESHOLD = Math.min(
+  0.98,
+  Math.max(0.6, Number(process.env.SMART_RULE_SIMILARITY_CONFLICT_THRESHOLD || 0.8))
+);
+const SMART_RULE_RUNTIME_ACTIONS = new Set([
+  "add_phrase",
+  "add_scenario",
+  "map_to_existing_answer"
+]);
+const SMART_RULE_UNDERSTANDING_INTENTS = new Set([
+  "complaint", "human", "current_client_service", "booking", "consultation",
+  "expensive", "price", "location", "working_hours", "call", "natural",
+  "full_bald", "women", "density", "hair_type", "duration_maintenance",
+  "warranty", "media", "services"
+]);
+const SMART_RULE_SALES_INTENT_MAP = Object.freeze({
+  privacy_concern: "privacy_concern",
+  naturality_fear: "naturality_fear",
+  attachment_fear: "attachment_fear",
+  previous_bad_experience: "previous_bad_experience",
+  hesitation: "hesitation",
+  expensive: "price_resistance"
+});
+
+// LEARNING ANALYTICS & RULE PERFORMANCE MONITORING V14.
+// Deterministic and privacy-safe: counts runtime use, the next-turn outcome,
+// manual reviewer feedback, and rollback risk without storing customer text.
+const SMART_RULE_ANALYTICS_VERSION = "learning-analytics-rule-performance-v14";
+const SMART_RULE_ANALYTICS_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.SMART_RULE_ANALYTICS_ENABLED || "true").toString().trim().toLowerCase()
+);
+const SMART_RULE_ANALYTICS_PENDING_TTL_MS = Math.min(
+  7 * 24 * 60 * 60 * 1000,
+  Math.max(5 * 60 * 1000, Number(process.env.SMART_RULE_ANALYTICS_PENDING_TTL_MS || 24 * 60 * 60 * 1000))
+);
+const SMART_RULE_ANALYTICS_MIN_SAMPLE = Math.min(
+  100,
+  Math.max(3, Number(process.env.SMART_RULE_ANALYTICS_MIN_SAMPLE || 5))
+);
+const SMART_RULE_ANALYTICS_REVIEW_UNRESOLVED_RATE = Math.min(
+  0.9,
+  Math.max(0.15, Number(process.env.SMART_RULE_ANALYTICS_REVIEW_UNRESOLVED_RATE || 0.4))
+);
+const SMART_RULE_ANALYTICS_ROLLBACK_INCORRECT_RATE = Math.min(
+  0.9,
+  Math.max(0.1, Number(process.env.SMART_RULE_ANALYTICS_ROLLBACK_INCORRECT_RATE || 0.3))
+);
+const SMART_RULE_ANALYTICS_PERSIST_DEBOUNCE_MS = Math.min(
+  60000,
+  Math.max(1000, Number(process.env.SMART_RULE_ANALYTICS_PERSIST_DEBOUNCE_MS || 10000))
+);
+const SMART_RULE_ANALYTICS_UNIQUE_LIMIT = Math.min(
+  1000,
+  Math.max(20, Number(process.env.SMART_RULE_ANALYTICS_UNIQUE_LIMIT || 200))
+);
+const SMART_RULE_ANALYTICS_ALLOWED_FEEDBACK = new Set(["helpful", "incorrect", "neutral"]);
+const smartIntegratedRuleRegistry = new Map();
+const smartRuleAnalyticsPersistTimers = new Map();
+const smartRulePendingOutcomeByConversation = new Map();
+const smartUnknownLearningQueue = new Map();
+const smartUnknownPersistTimers = new Map();
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -707,28 +1088,6 @@ function isInboxRequestAllowedForLine(req, phoneNumberId = "", branch = "") {
   return isInboxBranchAllowed(req?.inboxAccess || {}, branch, normalizePhoneNumberId(phoneNumberId || ""));
 }
 
-// 303 isolated service may intentionally share the same Google Sheet used by
-// Dubai and Abu Dhabi. Only expose rows that genuinely belong to the 303 line.
-// This prevents old 02/04 conversations from being returned by the 303 API and
-// then appearing under the "303 AI" filter in the unified Team Inbox.
-function isAi303InboxRecord(record = {}) {
-  const phoneNumberId = normalizePhoneNumberId(record?.phoneNumberId || "");
-  const branch = normalizeInboxBranchName(record?.branch || "");
-
-  return (
-    phoneNumberId === normalizePhoneNumberId(AI_303_PHONE_NUMBER_ID) ||
-    branch === AI_303_BRANCH_NAME
-  );
-}
-
-function filterAi303InboxPayload(messages = [], conversationStates = [], bookingRequests = []) {
-  return {
-    messages: (messages || []).filter(isAi303InboxRecord),
-    conversationStates: (conversationStates || []).filter(isAi303InboxRecord),
-    bookingRequests: (bookingRequests || []).filter(isAi303InboxRecord)
-  };
-}
-
 function filterInboxPayloadByBranchAccess(messages = [], conversationStates = [], bookingRequests = [], access = {}) {
   const scope = normalizeInboxBranchName(access?.branchScope || "");
 
@@ -978,6 +1337,9 @@ const conversationStatus = {};
 const conversationPhoneNumberId = {};
 const conversationLanguage = {};
 const conversationSmartContext = {};
+const smartMemoryPersistTimers = new Map();
+let smartMemoryHydratedAt = 0;
+let smartMemoryHydrationPromise = null;
 
 function getDefaultMessageType(sender, status) {
   if (sender === "customer") return "Customer Message";
@@ -1162,7 +1524,7 @@ async function loadMessagesFromGoogleSheet() {
       return { messages: [], conversationStates: [], bookingRequests: [] };
     }
 
-    const messages = data.messages.map((message) => ({
+    const allMessages = data.messages.map((message) => ({
       time: message.time || "",
       phone: message.phone || "",
       customerName: message.customerName || "",
@@ -1178,6 +1540,15 @@ async function loadMessagesFromGoogleSheet() {
       opt_out: message.opt_out || "",
       opt_out_date: message.opt_out_date || ""
     }));
+
+    // Restore hidden internal state, then remove those internal rows before
+    // returning data to Team Inbox.
+    restoreSmartConversationMemoryFromMessages(allMessages);
+    restoreSmartUnknownLearningQueueFromMessages(allMessages);
+    const messages = allMessages.filter((message) =>
+      !isSmartMemorySnapshotMessage(message) &&
+      !isSmartUnknownLearningMessage(message)
+    );
 
     const conversationStates = Array.isArray(data.conversationStates)
       ? data.conversationStates.map((state) => ({
@@ -1984,6 +2355,15 @@ function isWarrantyIntentText(text = "") {
 }
 
 function isCurrentClientServiceIntentText(text = "") {
+  // Explicit new-client phrases must never be swallowed by the broad
+  // "انا عميل" / "I am a client" match.
+  if (hasAnyIntentPhrase(text, [
+    "عميل جديد", "انا عميل جديد", "أنا عميل جديد", "اول مرة", "أول مرة",
+    "new client", "new customer", "first time"
+  ])) {
+    return false;
+  }
+
   return hasAnyIntentPhrase(text, [
     "existing client", "old client", "current client", "i am client", "i am your client", "service appointment", "maintenance appointment",
     "عميل قديم", "عميل حالي", "انا عميل", "أنا عميل", "صيانة", "سيرفس", "متابعة", "تعديل", "زيارة خدمة", "موعد خدمة"
@@ -2189,46 +2569,612 @@ function getClarifyingIntentButtons() {
 }
 
 
-// V31.5.8.60.3.9.29 - Smart context router helpers:
-// Keeps a small in-memory topic trail so the bot can answer follow-up replies
-// like "غالي", "طيب كم تقريباً؟", "yes", or "ما فهمت" without repeating itself.
-function rememberSmartIntentContext(phone, topic = "", text = "", language = "en") {
-  const cleanPhone = normalizePhoneDigits(phone);
-  const cleanTopic = (topic || "").toString().trim();
-
-  if (!cleanPhone || !cleanTopic) return null;
-
-  const previous = conversationSmartContext[cleanPhone] || {};
-  const cleanText = compactText(text || "");
-  const repeated = previous.topic === cleanTopic && previous.lastText === cleanText;
-
-  const nextContext = {
-    topic: cleanTopic,
-    lastText: cleanText,
-    language: language === "ar" ? "ar" : "en",
-    count: repeated ? Number(previous.count || 1) + 1 : 1,
-    updatedAt: Date.now()
-  };
-
-  conversationSmartContext[cleanPhone] = nextContext;
-  conversationSmartContext[phone] = nextContext;
-  return nextContext;
+// SMART CONVERSATION MEMORY V2:
+// Keeps backward compatibility with the old topic trail while adding richer,
+// persistent context for short follow-ups such as "دبي", "أنا عميل", and "تمام".
+function getSmartMemoryPhoneKey(phone = "") {
+  return normalizePhoneDigits(phone || "");
 }
 
-function getSmartIntentContext(phone) {
-  const cleanPhone = normalizePhoneDigits(phone);
-  const context = conversationSmartContext[cleanPhone] || conversationSmartContext[phone] || null;
+function buildEmptySmartConversationMemory(phone = "") {
+  const now = Date.now();
+  return {
+    version: SMART_MEMORY_VERSION,
+    phone: getSmartMemoryPhoneKey(phone),
+    topic: "",
+    lastBotTopic: "",
+    lastText: "",
+    language: "en",
+    count: 0,
+    turnCount: 0,
+    branch: "",
+    customerType: "",
+    coverage: "",
+    serviceInterest: "",
+    priceAsked: false,
+    resultsRequested: false,
+    resultsSeen: false,
+    bookingReadiness: "",
+    objection: "",
+    complaint: false,
+    lastIntent: "",
+    recentIntents: [],
+    pendingQuestion: "",
+    lastQuestion: "",
+    conversationState: "new",
+    activeGoal: "understand_need",
+    goalStatus: "active",
+    completedGoals: [],
+    missingSlots: [],
+    nextAction: "identify_need",
+    stateHistory: [],
+    stalledTurns: 0,
+    lastProgressSignature: "",
+    lastProgressAt: now,
+    stateEnteredAt: now,
+    goalUpdatedAt: now,
+    leadScore: 0,
+    leadGrade: "cold",
+    qualificationStatus: "unqualified",
+    qualificationReasons: [],
+    qualificationMissingSlots: [],
+    handoffMode: "continue_bot",
+    handoffReason: "",
+    leadSummary: {},
+    leadQualifiedAt: 0,
+    leadUpdatedAt: now,
+    leadHistory: [],
+    recentBotReplies: [],
+    recentIntroKeys: [],
+    lastBotReplyFingerprint: "",
+    lastBotReplyBody: "",
+    lastBotReplyTopic: "",
+    lastBotReplyAt: 0,
+    repeatedReplyCount: 0,
+    lastNameUsedTurn: -99,
+    lastNaturalAction: "",
+    naturalQualityUpdatedAt: now,
+    lastKnowledgeTopics: [],
+    knowledgeAnswerCount: 0,
+    knowledgePrecisionStatus: "",
+    knowledgeUpdatedAt: now,
+    scenarioFlags: [],
+    scenarioContradictions: [],
+    scenarioCorrectionCount: 0,
+    scenarioTopicSwitchCount: 0,
+    scenarioMixedLanguageCount: 0,
+    scenarioLongMessageCount: 0,
+    scenarioDuplicateInboundCount: 0,
+    scenarioLastMode: "",
+    scenarioLastFingerprint: "",
+    scenarioHistory: [],
+    scenarioUpdatedAt: now,
+    recoveryState: "idle",
+    recoveryPendingQuestion: "",
+    recoverySuspendedQuestion: "",
+    recoverySuspendedGoal: "",
+    recoveryLastMode: "",
+    recoveryLastPrompt: "",
+    recoveryLastInput: "",
+    recoveryAttempts: 0,
+    recoveryResolvedCount: 0,
+    recoveryClarificationCount: 0,
+    recoveryResumeCount: 0,
+    recoveryHistory: [],
+    recoveryUpdatedAt: now,
+    phoneNumberId: "",
+    lineBranch: "",
+    createdAt: now,
+    updatedAt: now
+  };
+}
 
-  if (!context || !context.updatedAt) return null;
+function isSmartMemoryExpired(memory = {}) {
+  const updatedAt = Number(memory?.updatedAt || 0);
+  return !updatedAt || (Date.now() - updatedAt) > SMART_MEMORY_TTL_MS;
+}
 
-  // Keep context only for a practical customer chat window.
-  if ((Date.now() - Number(context.updatedAt || 0)) > (6 * 60 * 60 * 1000)) {
+function normalizeSmartMemoryForStorage(memory = {}) {
+  const recentIntents = Array.isArray(memory.recentIntents)
+    ? [...new Set(memory.recentIntents.map((item) => (item || "").toString().trim()).filter(Boolean))].slice(-8)
+    : [];
+  const completedGoals = Array.isArray(memory.completedGoals)
+    ? [...new Set(memory.completedGoals.map((item) => (item || "").toString().trim()).filter(Boolean))].slice(-12)
+    : [];
+  const missingSlots = Array.isArray(memory.missingSlots)
+    ? [...new Set(memory.missingSlots.map((item) => (item || "").toString().trim()).filter(Boolean))].slice(0, 6)
+    : [];
+  const stateHistory = Array.isArray(memory.stateHistory)
+    ? memory.stateHistory
+        .filter((item) => item && typeof item === "object")
+        .map((item) => ({
+          state: (item.state || "").toString().slice(0, 40),
+          goal: (item.goal || "").toString().slice(0, 60),
+          at: Number(item.at || Date.now())
+        }))
+        .slice(-SMART_GOAL_HISTORY_LIMIT)
+    : [];
+  const qualificationReasons = Array.isArray(memory.qualificationReasons)
+    ? [...new Set(memory.qualificationReasons.map((item) => (item || "").toString().trim()).filter(Boolean))].slice(0, 16)
+    : [];
+  const qualificationMissingSlots = Array.isArray(memory.qualificationMissingSlots)
+    ? [...new Set(memory.qualificationMissingSlots.map((item) => (item || "").toString().trim()).filter(Boolean))].slice(0, 8)
+    : [];
+  const leadHistory = Array.isArray(memory.leadHistory)
+    ? memory.leadHistory
+        .filter((item) => item && typeof item === "object")
+        .map((item) => ({
+          score: Math.min(100, Math.max(0, Number(item.score || 0))),
+          grade: (item.grade || "cold").toString().slice(0, 24),
+          status: (item.status || "unqualified").toString().slice(0, 32),
+          handoffMode: (item.handoffMode || "continue_bot").toString().slice(0, 32),
+          at: Number(item.at || Date.now())
+        }))
+        .slice(-SMART_LEAD_HISTORY_LIMIT)
+    : [];
+  const recentBotReplies = Array.isArray(memory.recentBotReplies)
+    ? memory.recentBotReplies
+        .filter((item) => item && typeof item === "object")
+        .map((item) => ({
+          fingerprint: (item.fingerprint || "").toString().slice(0, 80),
+          topic: (item.topic || "").toString().slice(0, 100),
+          action: (item.action || "").toString().slice(0, 80),
+          pendingQuestion: (item.pendingQuestion || "").toString().slice(0, 80),
+          introKey: (item.introKey || "").toString().slice(0, 160),
+          body: (item.body || "").toString().slice(0, 1200),
+          at: Number(item.at || Date.now())
+        }))
+        .slice(-SMART_NATURAL_HISTORY_LIMIT)
+    : [];
+  const recentIntroKeys = Array.isArray(memory.recentIntroKeys)
+    ? [...new Set(memory.recentIntroKeys.map((item) => (item || "").toString().trim()).filter(Boolean))].slice(-6)
+    : [];
+  const lastKnowledgeTopics = Array.isArray(memory.lastKnowledgeTopics)
+    ? [...new Set(memory.lastKnowledgeTopics.map((item) => (item || "").toString().trim()).filter(Boolean))].slice(-SMART_KNOWLEDGE_HISTORY_LIMIT)
+    : [];
+  const scenarioFlags = Array.isArray(memory.scenarioFlags)
+    ? [...new Set(memory.scenarioFlags.map((item) => (item || "").toString().trim()).filter(Boolean))].slice(-12)
+    : [];
+  const scenarioContradictions = Array.isArray(memory.scenarioContradictions)
+    ? [...new Set(memory.scenarioContradictions.map((item) => (item || "").toString().trim()).filter(Boolean))].slice(-8)
+    : [];
+  const scenarioHistory = Array.isArray(memory.scenarioHistory)
+    ? memory.scenarioHistory
+        .filter((item) => item && typeof item === "object")
+        .map((item) => ({
+          flags: Array.isArray(item.flags) ? item.flags.map((flag) => (flag || "").toString().slice(0, 48)).slice(0, 8) : [],
+          primaryIntent: (item.primaryIntent || "").toString().slice(0, 60),
+          branch: normalizeInboxBranchName(item.branch || ""),
+          customerType: ["new", "existing"].includes(item.customerType) ? item.customerType : "",
+          coverage: ["light", "full"].includes(item.coverage) ? item.coverage : "",
+          at: Number(item.at || Date.now())
+        }))
+        .slice(-SMART_SCENARIO_HISTORY_LIMIT)
+    : [];
+  const recoveryHistory = Array.isArray(memory.recoveryHistory)
+    ? memory.recoveryHistory
+        .filter((item) => item && typeof item === "object")
+        .map((item) => ({
+          mode: (item.mode || "").toString().slice(0, 48),
+          pendingQuestion: (item.pendingQuestion || "").toString().slice(0, 80),
+          resolvedSlot: (item.resolvedSlot || "").toString().slice(0, 80),
+          resolvedValue: (item.resolvedValue || "").toString().slice(0, 80),
+          handled: Boolean(item.handled),
+          at: Number(item.at || Date.now())
+        }))
+        .slice(-SMART_RECOVERY_HISTORY_LIMIT)
+    : [];
+  const rawLeadSummary = memory.leadSummary && typeof memory.leadSummary === "object"
+    ? memory.leadSummary
+    : {};
+  const leadSummary = {
+    branch: normalizeInboxBranchName(rawLeadSummary.branch || ""),
+    customerType: ["new", "existing"].includes(rawLeadSummary.customerType) ? rawLeadSummary.customerType : "",
+    coverage: ["light", "full"].includes(rawLeadSummary.coverage) ? rawLeadSummary.coverage : "",
+    interest: (rawLeadSummary.interest || "").toString().slice(0, 80),
+    readiness: (rawLeadSummary.readiness || "").toString().slice(0, 40),
+    objection: (rawLeadSummary.objection || "").toString().slice(0, 80),
+    urgency: Boolean(rawLeadSummary.urgency),
+    callbackRequested: Boolean(rawLeadSummary.callbackRequested)
+  };
+
+  return {
+    version: SMART_MEMORY_VERSION,
+    phone: getSmartMemoryPhoneKey(memory.phone || ""),
+    topic: (memory.topic || "").toString().slice(0, 80),
+    lastBotTopic: (memory.lastBotTopic || memory.topic || "").toString().slice(0, 80),
+    lastText: (memory.lastText || "").toString().slice(0, 500),
+    language: memory.language === "ar" ? "ar" : "en",
+    count: Math.max(0, Number(memory.count || 0)),
+    turnCount: Math.max(0, Number(memory.turnCount || 0)),
+    branch: normalizeInboxBranchName(memory.branch || ""),
+    customerType: ["new", "existing"].includes(memory.customerType) ? memory.customerType : "",
+    coverage: ["light", "full"].includes(memory.coverage) ? memory.coverage : "",
+    serviceInterest: (memory.serviceInterest || "").toString().slice(0, 80),
+    priceAsked: Boolean(memory.priceAsked),
+    resultsRequested: Boolean(memory.resultsRequested),
+    resultsSeen: Boolean(memory.resultsSeen),
+    bookingReadiness: (memory.bookingReadiness || "").toString().slice(0, 40),
+    objection: (memory.objection || "").toString().slice(0, 80),
+    complaint: Boolean(memory.complaint),
+    lastIntent: (memory.lastIntent || "").toString().slice(0, 80),
+    recentIntents,
+    pendingQuestion: (memory.pendingQuestion || "").toString().slice(0, 80),
+    lastQuestion: (memory.lastQuestion || "").toString().slice(0, 500),
+    conversationState: (memory.conversationState || "new").toString().slice(0, 40),
+    activeGoal: (memory.activeGoal || "understand_need").toString().slice(0, 60),
+    goalStatus: (memory.goalStatus || "active").toString().slice(0, 24),
+    completedGoals,
+    missingSlots,
+    nextAction: (memory.nextAction || "identify_need").toString().slice(0, 60),
+    stateHistory,
+    stalledTurns: Math.max(0, Number(memory.stalledTurns || 0)),
+    lastProgressSignature: (memory.lastProgressSignature || "").toString().slice(0, 500),
+    lastProgressAt: Number(memory.lastProgressAt || memory.updatedAt || Date.now()),
+    stateEnteredAt: Number(memory.stateEnteredAt || memory.createdAt || Date.now()),
+    goalUpdatedAt: Number(memory.goalUpdatedAt || memory.updatedAt || Date.now()),
+    leadScore: Math.min(100, Math.max(0, Number(memory.leadScore || 0))),
+    leadGrade: ["cold", "warm", "hot", "priority"].includes(memory.leadGrade) ? memory.leadGrade : "cold",
+    qualificationStatus: ["unqualified", "partial", "qualified", "handoff"].includes(memory.qualificationStatus)
+      ? memory.qualificationStatus
+      : "unqualified",
+    qualificationReasons,
+    qualificationMissingSlots,
+    handoffMode: ["continue_bot", "priority_queue", "human_required", "protected_existing_route"].includes(memory.handoffMode)
+      ? memory.handoffMode
+      : "continue_bot",
+    handoffReason: (memory.handoffReason || "").toString().slice(0, 120),
+    leadSummary,
+    leadQualifiedAt: Math.max(0, Number(memory.leadQualifiedAt || 0)),
+    leadUpdatedAt: Number(memory.leadUpdatedAt || memory.updatedAt || Date.now()),
+    leadHistory,
+    recentBotReplies,
+    recentIntroKeys,
+    lastBotReplyFingerprint: (memory.lastBotReplyFingerprint || "").toString().slice(0, 80),
+    lastBotReplyBody: (memory.lastBotReplyBody || "").toString().slice(0, 1200),
+    lastBotReplyTopic: (memory.lastBotReplyTopic || "").toString().slice(0, 100),
+    lastBotReplyAt: Math.max(0, Number(memory.lastBotReplyAt || 0)),
+    repeatedReplyCount: Math.max(0, Number(memory.repeatedReplyCount || 0)),
+    lastNameUsedTurn: Number.isFinite(Number(memory.lastNameUsedTurn)) ? Number(memory.lastNameUsedTurn) : -99,
+    lastNaturalAction: (memory.lastNaturalAction || "").toString().slice(0, 80),
+    naturalQualityUpdatedAt: Number(memory.naturalQualityUpdatedAt || memory.updatedAt || Date.now()),
+    lastKnowledgeTopics,
+    knowledgeAnswerCount: Math.max(0, Number(memory.knowledgeAnswerCount || 0)),
+    knowledgePrecisionStatus: (memory.knowledgePrecisionStatus || "").toString().slice(0, 40),
+    knowledgeUpdatedAt: Number(memory.knowledgeUpdatedAt || memory.updatedAt || Date.now()),
+    scenarioFlags,
+    scenarioContradictions,
+    scenarioCorrectionCount: Math.max(0, Number(memory.scenarioCorrectionCount || 0)),
+    scenarioTopicSwitchCount: Math.max(0, Number(memory.scenarioTopicSwitchCount || 0)),
+    scenarioMixedLanguageCount: Math.max(0, Number(memory.scenarioMixedLanguageCount || 0)),
+    scenarioLongMessageCount: Math.max(0, Number(memory.scenarioLongMessageCount || 0)),
+    scenarioDuplicateInboundCount: Math.max(0, Number(memory.scenarioDuplicateInboundCount || 0)),
+    scenarioLastMode: (memory.scenarioLastMode || "").toString().slice(0, 60),
+    scenarioLastFingerprint: (memory.scenarioLastFingerprint || "").toString().slice(0, 80),
+    scenarioHistory,
+    scenarioUpdatedAt: Number(memory.scenarioUpdatedAt || memory.updatedAt || Date.now()),
+    recoveryState: ["idle", "clarifying", "resuming", "resolved"].includes(memory.recoveryState) ? memory.recoveryState : "idle",
+    recoveryPendingQuestion: (memory.recoveryPendingQuestion || "").toString().slice(0, 80),
+    recoverySuspendedQuestion: (memory.recoverySuspendedQuestion || "").toString().slice(0, 80),
+    recoverySuspendedGoal: (memory.recoverySuspendedGoal || "").toString().slice(0, 80),
+    recoveryLastMode: (memory.recoveryLastMode || "").toString().slice(0, 48),
+    recoveryLastPrompt: (memory.recoveryLastPrompt || "").toString().slice(0, 500),
+    recoveryLastInput: (memory.recoveryLastInput || "").toString().slice(0, 200),
+    recoveryAttempts: Math.max(0, Number(memory.recoveryAttempts || 0)),
+    recoveryResolvedCount: Math.max(0, Number(memory.recoveryResolvedCount || 0)),
+    recoveryClarificationCount: Math.max(0, Number(memory.recoveryClarificationCount || 0)),
+    recoveryResumeCount: Math.max(0, Number(memory.recoveryResumeCount || 0)),
+    recoveryHistory,
+    recoveryUpdatedAt: Number(memory.recoveryUpdatedAt || memory.updatedAt || Date.now()),
+    phoneNumberId: normalizePhoneNumberId(memory.phoneNumberId || DEFAULT_PHONE_NUMBER_ID),
+    lineBranch: normalizeInboxBranchName(memory.lineBranch || AI_303_BRANCH_NAME),
+    createdAt: Number(memory.createdAt || Date.now()),
+    updatedAt: Number(memory.updatedAt || Date.now())
+  };
+}
+
+function getSmartConversationMemory(phone, options = {}) {
+  if (!SMART_MEMORY_ENABLED) return null;
+
+  const cleanPhone = getSmartMemoryPhoneKey(phone);
+  const memory = conversationSmartContext[cleanPhone] || conversationSmartContext[phone] || null;
+
+  if (!memory) return null;
+
+  if (!options.allowExpired && isSmartMemoryExpired(memory)) {
     if (cleanPhone) delete conversationSmartContext[cleanPhone];
     if (phone) delete conversationSmartContext[phone];
     return null;
   }
 
-  return context;
+  return memory;
+}
+
+function rememberSmartMemoryObject(phone, memory = {}) {
+  const cleanPhone = getSmartMemoryPhoneKey(phone || memory.phone || "");
+  if (!cleanPhone) return null;
+
+  const normalized = normalizeSmartMemoryForStorage({
+    ...memory,
+    phone: cleanPhone
+  });
+
+  conversationSmartContext[cleanPhone] = normalized;
+  if (phone) conversationSmartContext[phone] = normalized;
+  return normalized;
+}
+
+function getSmartMemoryIntentIds(analysis = {}) {
+  return (analysis?.intents || [])
+    .map((item) => (item?.id || "").toString().trim())
+    .filter(Boolean);
+}
+
+function isExplicitReadyToBookText(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "بدي احجز", "اريد احجز", "أريد احجز", "احجزلي", "حجزلي", "جاهز احجز", "خلينا نحجز",
+    "book now", "book me", "ready to book", "make appointment", "need appointment"
+  ]);
+}
+
+function isLikelyCustomerQuestion(text = "") {
+  const value = (text || "").toString().trim();
+  if (!value) return false;
+  return /[?؟]/.test(value) || hasAnyIntentPhrase(value, [
+    "كم", "كيف", "ليش", "وين", "متى", "شو", "هل", "what", "how", "why", "where", "when", "can", "does"
+  ]);
+}
+
+function inferSmartCoverageFromText(text = "") {
+  const value = normalizeSmartUnderstandingText(text || "");
+
+  if (hasAnyIntentPhrase(value, [
+    "حل كامل", "تغطية كاملة", "تغطيه كامله", "كامل الراس", "كامل الرأس",
+    "full coverage", "whole head", "complete coverage"
+  ])) {
+    return "full";
+  }
+
+  if (hasAnyIntentPhrase(value, [
+    "تغطية خفيفة", "تغطيه خفيفه", "فراغات", "خفيف من قدام", "خفيف بالامام",
+    "light coverage", "front thinning", "hair gaps"
+  ])) {
+    return "light";
+  }
+
+  return "";
+}
+
+function inferSmartMemoryPatch({ analysis = {}, text = "", language = "en", phoneNumberId = "", branch = "" } = {}) {
+  const intentIds = getSmartMemoryIntentIds(analysis);
+  const entities = analysis?.entities || {};
+  const primaryIntent = (analysis?.primaryIntent || intentIds[0] || "").toString();
+  const patch = {
+    language: language === "ar" ? "ar" : "en",
+    phoneNumberId: normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID),
+    lineBranch: normalizeInboxBranchName(branch || getLineConfig(phoneNumberId || DEFAULT_PHONE_NUMBER_ID).branch),
+    lastIntent: primaryIntent,
+    recentIntents: intentIds,
+    lastQuestion: isLikelyCustomerQuestion(text) ? (text || "").toString().trim().slice(0, 500) : ""
+  };
+
+  if (entities.branch) patch.branch = normalizeInboxBranchName(entities.branch);
+  if (entities.customerType) patch.customerType = entities.customerType;
+  if (entities.coverage) {
+    patch.coverage = entities.coverage;
+  } else {
+    const inferredCoverage = inferSmartCoverageFromText(text);
+    if (inferredCoverage) patch.coverage = inferredCoverage;
+  }
+
+  if (intentIds.includes("current_client_service")) {
+    patch.customerType = "existing";
+    patch.serviceInterest = "service";
+  } else if (intentIds.some((id) => ["services", "natural", "density", "hair_type", "full_bald", "women", "consultation"].includes(id))) {
+    patch.serviceInterest = "hair_replacement";
+  }
+
+  if (intentIds.includes("price") || intentIds.includes("expensive")) patch.priceAsked = true;
+  if (intentIds.includes("media")) patch.resultsRequested = true;
+  if (intentIds.includes("expensive")) patch.objection = "price";
+  if (intentIds.includes("complaint")) patch.complaint = true;
+
+  if (isExplicitReadyToBookText(text) || intentIds.includes("booking")) {
+    patch.bookingReadiness = "ready";
+  } else if (intentIds.includes("consultation")) {
+    patch.bookingReadiness = "considering";
+  }
+
+  return patch;
+}
+
+function updateSmartConversationMemory({ phone, analysis = {}, text = "", language = "en", phoneNumberId = "", branch = "", persist = true } = {}) {
+  if (!SMART_MEMORY_ENABLED) return null;
+
+  const cleanPhone = getSmartMemoryPhoneKey(phone);
+  if (!cleanPhone) return null;
+
+  const previous = getSmartConversationMemory(cleanPhone) || buildEmptySmartConversationMemory(cleanPhone);
+  const patch = inferSmartMemoryPatch({ analysis, text, language, phoneNumberId, branch });
+  const normalizedText = normalizeSmartUnderstandingText(text || "");
+  const repeated = previous.lastText === normalizedText && Boolean(normalizedText);
+  const recentIntents = [
+    ...(Array.isArray(previous.recentIntents) ? previous.recentIntents : []),
+    ...(Array.isArray(patch.recentIntents) ? patch.recentIntents : [])
+  ].filter(Boolean);
+
+  const next = rememberSmartMemoryObject(cleanPhone, {
+    ...previous,
+    ...Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== "" && value !== undefined)),
+    phone: cleanPhone,
+    lastText: normalizedText || previous.lastText || "",
+    count: repeated ? Number(previous.count || 1) + 1 : 1,
+    turnCount: Number(previous.turnCount || 0) + 1,
+    recentIntents,
+    updatedAt: Date.now()
+  });
+
+  if (persist) scheduleSmartMemoryPersistence(cleanPhone);
+  return next;
+}
+
+function getSmartMemoryPendingQuestionForTopic(topic = "") {
+  const value = (topic || "").toString();
+  if (value === "price_qualification") return "coverage";
+  if (value === "booking_choice" || value === "booking_menu") return "customer_type";
+  if (value === "location") return "branch";
+  return "";
+}
+
+function rememberSmartIntentContext(phone, topic = "", text = "", language = "en") {
+  const cleanPhone = getSmartMemoryPhoneKey(phone);
+  const cleanTopic = (topic || "").toString().trim();
+
+  if (!cleanPhone || !cleanTopic) return null;
+
+  const previous = getSmartConversationMemory(cleanPhone) || buildEmptySmartConversationMemory(cleanPhone);
+  const cleanText = normalizeSmartUnderstandingText(text || "");
+  const repeated = previous.topic === cleanTopic && previous.lastText === cleanText;
+  const next = rememberSmartMemoryObject(cleanPhone, {
+    ...previous,
+    phone: cleanPhone,
+    topic: cleanTopic,
+    lastBotTopic: cleanTopic,
+    lastText: cleanText || previous.lastText || "",
+    language: language === "ar" ? "ar" : "en",
+    count: repeated ? Number(previous.count || 1) + 1 : 1,
+    pendingQuestion: getSmartMemoryPendingQuestionForTopic(cleanTopic) || previous.pendingQuestion || "",
+    phoneNumberId: previous.phoneNumberId || conversationPhoneNumberId[cleanPhone] || conversationPhoneNumberId[phone] || DEFAULT_PHONE_NUMBER_ID,
+    lineBranch: previous.lineBranch || getLineConfig(conversationPhoneNumberId[cleanPhone] || conversationPhoneNumberId[phone] || DEFAULT_PHONE_NUMBER_ID).branch,
+    updatedAt: Date.now()
+  });
+
+  scheduleSmartMemoryPersistence(cleanPhone);
+  return next;
+}
+
+function getSmartIntentContext(phone) {
+  return getSmartConversationMemory(phone);
+}
+
+function encodeSmartMemorySnapshot(memory = {}) {
+  const normalized = normalizeSmartMemoryForStorage(memory);
+  const payload = Buffer.from(JSON.stringify(normalized), "utf8").toString("base64");
+  return `${SMART_MEMORY_SNAPSHOT_MARKER}${payload}`;
+}
+
+function decodeSmartMemorySnapshot(body = "") {
+  const value = (body || "").toString();
+  if (!value.startsWith(SMART_MEMORY_SNAPSHOT_MARKER)) return null;
+
+  try {
+    const encoded = value.slice(SMART_MEMORY_SNAPSHOT_MARKER.length);
+    const decoded = Buffer.from(encoded, "base64").toString("utf8");
+    const memory = JSON.parse(decoded);
+    return normalizeSmartMemoryForStorage(memory);
+  } catch (error) {
+    console.log("[Smart Memory] snapshot decode failed", error?.message || error);
+    return null;
+  }
+}
+
+function isSmartMemorySnapshotMessage(message = {}) {
+  return (message?.messageType || "").toString() === "Smart Memory Snapshot" ||
+    (message?.body || "").toString().startsWith(SMART_MEMORY_SNAPSHOT_MARKER);
+}
+
+function restoreSmartConversationMemoryFromMessages(messages = []) {
+  if (!SMART_MEMORY_ENABLED) return 0;
+
+  const latestByPhone = new Map();
+
+  (messages || []).forEach((message) => {
+    if (!isSmartMemorySnapshotMessage(message)) return;
+    const memory = decodeSmartMemorySnapshot(message.body || "");
+    if (!memory?.phone || isSmartMemoryExpired(memory)) return;
+
+    const current = latestByPhone.get(memory.phone);
+    if (!current || Number(memory.updatedAt || 0) >= Number(current.updatedAt || 0)) {
+      latestByPhone.set(memory.phone, memory);
+    }
+  });
+
+  latestByPhone.forEach((memory, phone) => rememberSmartMemoryObject(phone, memory));
+  return latestByPhone.size;
+}
+
+async function persistSmartConversationMemory(phone = "") {
+  if (!SMART_MEMORY_ENABLED || !SMART_MEMORY_PERSIST_ENABLED) return { ok: false, skipped: true };
+
+  const cleanPhone = getSmartMemoryPhoneKey(phone);
+  const memory = getSmartConversationMemory(cleanPhone);
+  if (!cleanPhone || !memory) return { ok: false, skipped: true };
+
+  const phoneNumberId = normalizePhoneNumberId(memory.phoneNumberId || conversationPhoneNumberId[cleanPhone] || DEFAULT_PHONE_NUMBER_ID);
+  const lineConfig = getLineConfig(phoneNumberId);
+  const item = {
+    time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }),
+    phone: cleanPhone,
+    customerName: "",
+    branch: lineConfig.branch,
+    sender: "system",
+    body: encodeSmartMemorySnapshot({ ...memory, phoneNumberId, lineBranch: lineConfig.branch }),
+    status: "System",
+    messageType: "Smart Memory Snapshot",
+    phoneNumberId
+  };
+
+  try {
+    await saveMessageToGoogleSheet(item);
+    return { ok: true };
+  } catch (error) {
+    console.log("[Smart Memory] persistence failed", error?.message || error);
+    return { ok: false, error: error?.message || "persistence_failed" };
+  }
+}
+
+function scheduleSmartMemoryPersistence(phone = "") {
+  if (!SMART_MEMORY_ENABLED || !SMART_MEMORY_PERSIST_ENABLED) return;
+
+  const cleanPhone = getSmartMemoryPhoneKey(phone);
+  if (!cleanPhone) return;
+
+  const existing = smartMemoryPersistTimers.get(cleanPhone);
+  if (existing) clearTimeout(existing);
+
+  const timer = setTimeout(() => {
+    smartMemoryPersistTimers.delete(cleanPhone);
+    persistSmartConversationMemory(cleanPhone).catch((error) => {
+      console.log("[Smart Memory] scheduled persistence failed", error?.message || error);
+    });
+  }, SMART_MEMORY_SAVE_DEBOUNCE_MS);
+
+  smartMemoryPersistTimers.set(cleanPhone, timer);
+}
+
+async function ensureSmartConversationMemoryHydrated(force = false) {
+  if (!SMART_MEMORY_ENABLED || !SMART_MEMORY_PERSIST_ENABLED) return { ok: true, skipped: true };
+
+  if (!force && smartMemoryHydratedAt && (Date.now() - smartMemoryHydratedAt) < SMART_MEMORY_HYDRATE_TTL_MS) {
+    return { ok: true, source: "memory_cache" };
+  }
+
+  if (smartMemoryHydrationPromise) return smartMemoryHydrationPromise;
+
+  smartMemoryHydrationPromise = loadMessagesFromGoogleSheet()
+    .then(() => {
+      smartMemoryHydratedAt = Date.now();
+      return { ok: true, source: "google_sheet" };
+    })
+    .catch((error) => {
+      console.log("[Smart Memory] hydration failed", error?.message || error);
+      return { ok: false, error: error?.message || "hydration_failed" };
+    })
+    .finally(() => {
+      smartMemoryHydrationPromise = null;
+    });
+
+  return smartMemoryHydrationPromise;
 }
 
 function isSimpleAffirmationText(text = "") {
@@ -2280,6 +3226,15 @@ function isShortContextFollowUpText(text = "") {
 function isHumanAssistanceIntentText(text = "") {
   const value = compactText(text);
   if (!value) return false;
+
+  // V4 privacy guard: phrases such as "ما بدي حدا يعرف" contain "بدي حدا"
+  // but are privacy concerns, not requests for a human agent.
+  if (hasAnyIntentPhrase(value, [
+    "ما بدي حدا يعرف", "لا بدي حدا يعرف", "بدي الموضوع سري", "بدي سريه", "بدي سرية",
+    "do not want anyone to know", "keep it private", "private consultation"
+  ])) {
+    return false;
+  }
 
   return hasAnyIntentPhrase(value, [
     "someone call me", "can someone call me", "call me back", "need someone", "need a person", "real person", "agent", "specialist", "speak to someone", "i want someone to call",
@@ -2468,6 +3423,138 @@ function getSmartContextAwareReply({ phone, text = "", customerName = "", langua
   return null;
 }
 
+
+function isBranchOnlyFollowUpText(text = "", analysis = {}) {
+  const normalized = normalizeSmartUnderstandingText(text || "");
+  const branch = normalizeInboxBranchName(analysis?.entities?.branch || "");
+  if (!branch || !normalized) return false;
+
+  const words = normalized.split(/\s+/).filter(Boolean);
+  return words.length <= 4 && !getSmartMemoryIntentIds(analysis).some((id) => id !== "location");
+}
+
+function buildSmartRememberedBranchBody(memory = {}, customerName = "", language = "en") {
+  const branch = normalizeInboxBranchName(memory.branch || "");
+  const branchAr = branch === "Abu Dhabi" ? "أبوظبي" : "دبي";
+  const branchEn = branch === "Abu Dhabi" ? "Abu Dhabi" : "Dubai";
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    const intro = cleanName ? `تمام ${cleanName}، سجلت فرع ${branchAr} 👌` : `تمام، سجلت فرع ${branchAr} 👌`;
+
+    if (memory.priceAsked) {
+      return [
+        intro,
+        "",
+        "وبالنسبة للسعر، حتى نعطيك توجيه أقرب نحتاج نعرف: هل المطلوب تغطية خفيفة / فراغات، أم حل كامل؟"
+      ].join("\n");
+    }
+
+    if (memory.bookingReadiness || memory.lastIntent === "booking" || memory.lastIntent === "consultation") {
+      return [intro, "", "اختر نوع الحجز المناسب: استشارة لعميل جديد، أو سيرفس لعميل حالي."].join("\n");
+    }
+
+    return [intro, "", buildSmartBranchLocationSection({ entities: { branch } }, "ar")].join("\n");
+  }
+
+  const intro = cleanName ? `Sure ${cleanName}, I saved ${branchEn} branch 👌` : `Sure, I saved ${branchEn} branch 👌`;
+
+  if (memory.priceAsked) {
+    return [
+      intro,
+      "",
+      "For a closer price guide, we need one detail: do you need light coverage / gaps, or a full solution?"
+    ].join("\n");
+  }
+
+  if (memory.bookingReadiness || memory.lastIntent === "booking" || memory.lastIntent === "consultation") {
+    return [intro, "", "Choose the suitable booking type: consultation for a new client, or service for an existing client."].join("\n");
+  }
+
+  return [intro, "", buildSmartBranchLocationSection({ entities: { branch } }, "en")].join("\n");
+}
+
+function buildSmartNewClientConsultationBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+  if (language === "ar") {
+    return [
+      cleanName ? `تمام ${cleanName}، سجلتك كعميل جديد 👌` : "تمام، سجلتك كعميل جديد 👌",
+      "",
+      "الخطوة المناسبة هي استشارة قصيرة حتى يحدد الفريق الحل الأقرب لحالتك."
+    ].join("\n");
+  }
+
+  return [
+    cleanName ? `Sure ${cleanName}, I saved that you are a new client 👌` : "Sure, I saved that you are a new client 👌",
+    "",
+    "The suitable next step is a short consultation so the team can identify the best option for your case."
+  ].join("\n");
+}
+
+function getSmartMemoryAwareReply({ phone, text = "", customerName = "", language = "en", analysis = {}, phoneNumberId = "" } = {}) {
+  const memory = getSmartConversationMemory(phone);
+  if (!SMART_MEMORY_ENABLED || !memory) return null;
+
+  const value = normalizeSmartUnderstandingText(text || "");
+  if (!value || analysis?.isActionLike) return null;
+
+  const customerType = analysis?.entities?.customerType || "";
+  const bookingConversationActive = Boolean(
+    memory.bookingReadiness ||
+    ["booking_choice", "booking_menu", "booking", "consultation"].includes(memory.topic || memory.lastBotTopic || "") ||
+    (memory.recentIntents || []).some((id) => ["booking", "consultation"].includes(id))
+  );
+
+  // A branch-only answer is resolved against the previous subject instead of
+  // restarting the menu or treating the branch name as an unrelated message.
+  if (isBranchOnlyFollowUpText(value, analysis) && memory.branch) {
+    return {
+      topic: memory.priceAsked ? "price_qualification" : (memory.bookingReadiness ? "booking_choice" : "location"),
+      status: memory.priceAsked ? "Price Qualification" : (memory.bookingReadiness ? "Booking Menu" : "Location Requested"),
+      messageType: "Smart Memory V2 - Branch Follow-up",
+      body: buildSmartRememberedBranchBody(memory, customerName, language),
+      buttons: memory.priceAsked
+        ? getSmartConsultTeamButtons()
+        : (memory.bookingReadiness ? getDirectBookingChoiceButtons() : getSmartConsultTeamButtons())
+    };
+  }
+
+  // Short customer-type replies now continue the booking flow correctly.
+  if (customerType === "existing" && bookingConversationActive) {
+    return {
+      topic: "service",
+      status: "Service Appointment",
+      messageType: "Smart Memory V2 - Existing Client",
+      body: buildCurrentClientServiceBody(customerName, language),
+      buttons: getServiceSubMenuButtons()
+    };
+  }
+
+  if (customerType === "new" && bookingConversationActive) {
+    return {
+      topic: "consultation",
+      status: "Consultation Request",
+      messageType: "Smart Memory V2 - New Client",
+      body: buildSmartNewClientConsultationBody(customerName, language),
+      buttons: getConsultActionButtons()
+    };
+  }
+
+  // A short confirmation after a stored price/result/suitability conversation
+  // moves forward instead of repeating the previous answer.
+  if (isSimpleAffirmationText(value) && (memory.priceAsked || memory.resultsRequested || memory.serviceInterest)) {
+    return {
+      topic: "booking_choice",
+      status: "Booking Menu",
+      messageType: "Smart Memory V2 - Ready To Book",
+      body: buildSmartReadyToBookBody(customerName, language),
+      buttons: getDirectBookingChoiceButtons()
+    };
+  }
+
+  return null;
+}
+
 function buildWorkingHoursBody(phoneNumberId = DEFAULT_PHONE_NUMBER_ID, language = "en") {
   const lineConfig = getLineConfig(phoneNumberId);
   const branchNameAr = getArabicBranchName(lineConfig.branch);
@@ -2508,6 +3595,5501 @@ function getDubaiTimestamp() {
 
 function compactText(value) {
   return normalizeText(value).replace(/\s+/g, " ");
+}
+
+// SMART UNDERSTANDING V1 — deterministic, local, and API-free.
+// This layer improves spelling tolerance, Arabic chat normalization, Arabizi,
+// multi-intent detection, confidence scoring, and safe fallback behavior.
+// It never generates facts and it keeps the existing booking/Flow/handoff logic.
+const SMART_INTENT_EXTRA_PHRASES = Object.freeze({
+  complaint: [
+    "شكوى", "مشكله", "مشكلة", "زعلان", "منزعج", "ما حدا رد", "محدا رد",
+    "سيء", "سيئ", "خدمه سيئه", "خدمة سيئة", "not happy", "complaint",
+    "bad service", "no one replied", "nobody replied", "upset"
+  ],
+  human: [
+    "بدي حدا يحكيني", "بدي شخص", "موظف حقيقي", "احكي مع حدا",
+    "real agent", "real person", "speak with staff", "need human"
+  ],
+  price: [
+    "قديش حقه", "قديش حقو", "شو بيكلف", "شو بتكلف", "كم حقه", "كم حقو",
+    "kam se3r", "kam s3r", "bkam", "bekam", "price pls", "price plz",
+    "how much pls", "how much plz", "s3er", "se3er"
+  ],
+  booking: [
+    "بدي موعد", "اريد موعد", "أريد موعد", "ثبتلي موعد", "حجزلي",
+    "احجزلي", "book me", "need appointment", "appointment pls",
+    "hajz", "7ajz", "maw3ed"
+  ],
+  location: [
+    "وين محلكم", "وين الفرع", "وين مكانكم", "وينكم", "لوكيشنكم",
+    "where r u", "where are u", "send location", "send loc",
+    "wen", "wayn", "mawqe3", "location pls"
+  ],
+  working_hours: [
+    "لأي ساعه", "لاي ساعه", "متى بتسكروا", "متى بتفتحوا", "شو الدوام",
+    "what time open", "what time close", "opening time", "closing time"
+  ],
+  natural: [
+    "بيبين انه تركيب", "يبين تركيب", "شكله حقيقي", "مثل الحقيقي",
+    "natural 100", "looks real", "will people know", "undetectable"
+  ],
+  services: [
+    "شو بتعملوا", "شو بتقدمو", "شو خدمتكم", "شو الحل", "شو النظام",
+    "what do you do", "what u do", "what is the service"
+  ],
+  consultation: [
+    "شو بيناسبني", "شو بتنصحوني", "ساعدوني اختار", "شو الحل المناسب",
+    "what suits me", "what do you recommend", "recommend for me"
+  ],
+  current_client_service: [
+    "انا زبون عندكم", "أنا زبون عندكم", "عامل عندكم", "ركبت عندكم",
+    "need refit", "need maintenance", "existing customer"
+  ],
+  expensive: [
+    "كتير سعره", "سعره عالي", "غالي كتير", "في ارخص", "بدّي خصم",
+    "too much", "too costly", "any discount", "cheaper option"
+  ],
+  density: [
+    "خفيف من قدام", "فراغات قدام", "فراغات بالشعر", "كثافه خفيفه",
+    "thin front", "front thinning", "hair gaps"
+  ],
+  hair_type: [
+    "شعر بشري", "شعر انسان", "شو الخامة", "نوع النظام",
+    "human hair", "what material", "system material"
+  ],
+  duration_maintenance: [
+    "كل قديش سيرفس", "كل كم سيرفس", "كم مره صيانة", "قديش بيضل",
+    "how often service", "how often maintenance", "how long it stays"
+  ],
+  warranty: [
+    "في كفاله", "في ضمان", "مضمون ولا", "اذا ما ناسبني",
+    "is there guarantee", "is it guaranteed", "return policy"
+  ],
+  women: [
+    "للستات", "للبنات كمان", "نسائي", "for female", "for lady"
+  ],
+  full_bald: [
+    "اصلع بالكامل", "صلع كامل", "ما في شعر نهائيا", "كامل الراس",
+    "completely bald", "whole head", "no hair at all"
+  ],
+  media: [
+    "ورجيني", "فرجيني", "بدي اشوف", "بدي شوف", "show me pics",
+    "show pictures", "send photos", "send video"
+  ],
+  call: [
+    "عطيني رقمكم", "رقم التلفون", "رقم الاتصال", "بدي اتصل",
+    "phone no", "contact no", "call number"
+  ]
+});
+
+function normalizeSmartArabicLetters(value = "") {
+  return (value || "")
+    .toString()
+    .normalize("NFKC")
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, "")
+    .replace(/\u0640/g, "")
+    .replace(/[إأآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ؤ/g, "و")
+    .replace(/ئ/g, "ي");
+}
+
+function normalizeSmartArabicDigits(value = "") {
+  const digitMap = {
+    "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4",
+    "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9",
+    "۰": "0", "۱": "1", "۲": "2", "۳": "3", "۴": "4",
+    "۵": "5", "۶": "6", "۷": "7", "۸": "8", "۹": "9"
+  };
+
+  return (value || "").toString().replace(/[٠-٩۰-۹]/g, (digit) => digitMap[digit] || digit);
+}
+
+function normalizeSmartArabiziTokens(value = "") {
+  const replacements = {
+    "kam": "كم",
+    "bkam": "بكم",
+    "bekam": "بكم",
+    "s3r": "سعر",
+    "s3er": "سعر",
+    "se3r": "سعر",
+    "se3er": "سعر",
+    "wen": "وين",
+    "wayn": "وين",
+    "wien": "وين",
+    "hajz": "حجز",
+    "7ajz": "حجز",
+    "maw3ed": "موعد",
+    "mawqe3": "موقع",
+    "mawke3": "موقع",
+    "tabi3i": "طبيعي",
+    "tabe3i": "طبيعي"
+  };
+
+  return (value || "")
+    .toString()
+    .split(/\s+/)
+    .map((token) => replacements[token] || token)
+    .join(" ");
+}
+
+function normalizeSmartUnderstandingText(value = "") {
+  let textValue = normalizeSmartArabicDigits(value);
+  textValue = normalizeSmartArabicLetters(textValue).toLowerCase();
+  textValue = normalizeSmartArabiziTokens(textValue);
+
+  // Arabic chat often stretches letters for emphasis: غاااالي / سسسعر.
+  textValue = textValue.replace(/([\u0600-\u06FF])\1+/g, "$1");
+  textValue = textValue.replace(/([a-z])\1{2,}/g, "$1$1");
+
+  // Keep underscores because WhatsApp action IDs depend on them.
+  textValue = textValue
+    .replace(/[^\p{L}\p{N}_]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return textValue;
+}
+
+function smartPhraseMatches(normalizedText = "", phrase = "") {
+  const cleanText = normalizeSmartUnderstandingText(normalizedText);
+  const cleanPhrase = normalizeSmartUnderstandingText(phrase);
+
+  if (!cleanText || !cleanPhrase) return false;
+
+  if (/^[a-z0-9_ ]+$/.test(cleanPhrase)) {
+    const escaped = cleanPhrase
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\s+/g, "\\s+");
+
+    return new RegExp(`(^|[^a-z0-9_])${escaped}([^a-z0-9_]|$)`, "i").test(cleanText);
+  }
+
+  // Arabic single-word phrases must match a full token. This avoids false
+  // positives such as the normalized word "سيئ" matching the start of "سيرفس".
+  if (!cleanPhrase.includes(" ")) {
+    return cleanText.split(/\s+/).includes(cleanPhrase);
+  }
+
+  return cleanText.includes(cleanPhrase);
+}
+
+function getSmartIntentDetectorMap() {
+  return [
+    { id: "complaint", priority: 120, test: () => false },
+    { id: "human", priority: 115, test: isHumanAssistanceIntentText },
+    { id: "current_client_service", priority: 105, test: isCurrentClientServiceIntentText },
+    { id: "booking", priority: 100, test: isBookingIntentText },
+    { id: "consultation", priority: 95, test: isConsultationIntentText },
+    { id: "expensive", priority: 92, test: isExpensiveObjectionIntentText },
+    { id: "price", priority: 90, test: isPriceIntentText },
+    { id: "location", priority: 85, test: isLocationIntentText },
+    { id: "working_hours", priority: 82, test: isWorkingHoursIntentText },
+    { id: "call", priority: 80, test: isCallIntentText },
+    { id: "natural", priority: 78, test: isNaturalLookIntentText },
+    { id: "full_bald", priority: 76, test: isFullBaldSuitabilityIntentText },
+    { id: "women", priority: 74, test: isWomenSuitabilityIntentText },
+    { id: "density", priority: 72, test: isDensityIntentText },
+    { id: "hair_type", priority: 70, test: isHairTypeIntentText },
+    { id: "duration_maintenance", priority: 68, test: isDurationMaintenanceIntentText },
+    { id: "warranty", priority: 66, test: isWarrantyIntentText },
+    { id: "media", priority: 64, test: isAutoVideoRequestText },
+    { id: "services", priority: 60, test: isServicesIntentText }
+  ];
+}
+
+function getSmartIntentEntities(normalizedText = "") {
+  const value = normalizeSmartUnderstandingText(normalizedText);
+  let branch = "";
+
+  if (
+    value.includes("abu dhabi") ||
+    value.includes("abudhabi") ||
+    value.includes("ابوظبي")
+  ) {
+    branch = "Abu Dhabi";
+  } else if (
+    smartPhraseMatches(value, "dubai") ||
+    smartPhraseMatches(value, "دبي")
+  ) {
+    branch = "Dubai";
+  }
+
+  let customerType = "";
+  // Check the specific new-client phrases before the broad "انا عميل" phrase.
+  if (
+    smartPhraseMatches(value, "عميل جديد") ||
+    smartPhraseMatches(value, "انا عميل جديد") ||
+    smartPhraseMatches(value, "اول مره") ||
+    smartPhraseMatches(value, "first time") ||
+    smartPhraseMatches(value, "new client") ||
+    smartPhraseMatches(value, "new customer")
+  ) {
+    customerType = "new";
+  } else if (
+    smartPhraseMatches(value, "عميل حالي") ||
+    smartPhraseMatches(value, "عميل قديم") ||
+    smartPhraseMatches(value, "انا عميل") ||
+    smartPhraseMatches(value, "existing client") ||
+    smartPhraseMatches(value, "existing customer")
+  ) {
+    customerType = "existing";
+  }
+
+  let coverage = "";
+  if (
+    smartPhraseMatches(value, "حل كامل") ||
+    smartPhraseMatches(value, "تغطيه كامله") ||
+    smartPhraseMatches(value, "full coverage") ||
+    smartPhraseMatches(value, "whole head")
+  ) {
+    coverage = "full";
+  } else if (
+    smartPhraseMatches(value, "تغطيه خفيفه") ||
+    smartPhraseMatches(value, "فراغات") ||
+    smartPhraseMatches(value, "light coverage") ||
+    smartPhraseMatches(value, "front thinning")
+  ) {
+    coverage = "light";
+  }
+
+  return { branch, customerType, coverage };
+}
+
+function analyzeSmartUnderstanding(text = "") {
+  const rawText = (text || "").toString().trim();
+  const normalizedText = normalizeSmartUnderstandingText(rawText);
+  const detectorMap = getSmartIntentDetectorMap();
+  const candidates = [];
+
+  if (!rawText || !normalizedText) {
+    return {
+      version: SMART_UNDERSTANDING_VERSION,
+      rawText,
+      normalizedText,
+      intents: [],
+      primaryIntent: "",
+      confidence: "none",
+      score: 0,
+      entities: getSmartIntentEntities(normalizedText),
+      isActionLike: false
+    };
+  }
+
+  for (const definition of detectorMap) {
+    let rawMatch = false;
+    let normalizedMatch = false;
+
+    try {
+      rawMatch = Boolean(definition.test(rawText));
+      normalizedMatch = Boolean(definition.test(normalizedText));
+    } catch (error) {
+      console.log("[Smart Understanding] detector failed", definition.id, error?.message || error);
+    }
+
+    const extraPhrases = SMART_INTENT_EXTRA_PHRASES[definition.id] || [];
+    const extraMatches = extraPhrases.filter((phrase) => smartPhraseMatches(normalizedText, phrase));
+    let score = 0;
+
+    if (rawMatch) score += 0.72;
+    if (normalizedMatch) score += 0.18;
+    if (extraMatches.length) score += Math.min(0.62, 0.46 + ((extraMatches.length - 1) * 0.06));
+
+    if (score > 0) {
+      candidates.push({
+        id: definition.id,
+        score: Math.min(1, Number(score.toFixed(2))),
+        priority: definition.priority,
+        evidence: {
+          rawMatch,
+          normalizedMatch,
+          extraMatches: extraMatches.slice(0, 4)
+        }
+      });
+    }
+  }
+
+  // Complaint detection is intentionally phrase-only and high priority.
+  const complaintMatches = (SMART_INTENT_EXTRA_PHRASES.complaint || [])
+    .filter((phrase) => smartPhraseMatches(normalizedText, phrase));
+
+  if (complaintMatches.length) {
+    const existingComplaint = candidates.find((item) => item.id === "complaint");
+    if (existingComplaint) {
+      existingComplaint.score = Math.max(existingComplaint.score, 0.92);
+      existingComplaint.evidence.extraMatches = complaintMatches.slice(0, 4);
+    }
+  }
+
+  // Remove broad overlaps when a more specific intent already explains the text.
+  const ids = new Set(candidates.map((item) => item.id));
+  const suppressed = new Set();
+
+  if (ids.has("expensive")) suppressed.add("price");
+  if (ids.has("current_client_service")) {
+    suppressed.add("duration_maintenance");
+    suppressed.add("services");
+  }
+  if (ids.has("full_bald")) suppressed.add("density");
+  if (ids.has("complaint")) suppressed.add("services");
+
+  const intents = candidates
+    .filter((item) => !suppressed.has(item.id))
+    .sort((a, b) => (b.score - a.score) || (b.priority - a.priority));
+
+  const primary = intents[0] || null;
+  const score = primary?.score || 0;
+  const confidence = score >= 0.86 ? "high" : score >= 0.62 ? "medium" : score > 0 ? "low" : "none";
+  const isActionLike = /^[a-z0-9_]+$/i.test(rawText) && rawText.includes("_");
+
+  const baseAnalysis = {
+    version: SMART_UNDERSTANDING_VERSION,
+    rawText,
+    normalizedText,
+    intents,
+    primaryIntent: primary?.id || "",
+    confidence,
+    score,
+    entities: getSmartIntentEntities(normalizedText),
+    isActionLike
+  };
+
+  return applySmartIntegratedRulesToAnalysis(rawText, baseAnalysis);
+}
+
+
+// SCENARIO SIMULATION & EDGE-CASE HARDENING V9
+function getSmartScenarioFingerprint(text = "") {
+  const normalized = normalizeSmartUnderstandingText(text || "");
+  if (!normalized) return "";
+  return crypto.createHash("sha256").update(normalized, "utf8").digest("hex").slice(0, 24);
+}
+
+function hasSmartScenarioCorrectionCue(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "لا قصدي", "قصدي", "لا مو", "مو هيك", "تصحيح", "خليني صحح", "بالعكس",
+    "no i mean", "i mean", "actually", "sorry i meant", "correction", "not that", "rather"
+  ]);
+}
+
+function hasSmartScenarioTopicSwitchCue(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "بالمناسبه", "بالمناسبة", "موضوع ثاني", "سؤال ثاني", "طيب كمان", "بس كمان", "غير هيك",
+    "by the way", "another question", "different question", "also", "one more thing", "new topic"
+  ]);
+}
+
+function hasSmartScenarioNegatedHumanRequest(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "ما بدي موظف", "لا بدي موظف", "مو محتاج موظف", "ما بدي حدا يحكيني", "لا تحولني للموظف",
+    "do not need an agent", "dont need an agent", "don't need an agent", "no agent", "do not transfer me",
+    "dont call me", "don't call me"
+  ]);
+}
+
+function splitSmartScenarioSegments(text = "") {
+  const raw = (text || "").toString().trim();
+  if (!raw) return [];
+
+  const prepared = raw
+    .replace(/\r/g, "\n")
+    .replace(/([.!?؟؛;،,])+/g, "$1\n")
+    .replace(/\b(لا\s+قصدي|قصدي|بالمناسبة|بالمناسبه|موضوع\s+ثاني|سؤال\s+ثاني)\b/gi, "\n$1 ")
+    .replace(/\b(no\s+i\s+mean|i\s+mean|actually|by\s+the\s+way|another\s+question)\b/gi, "\n$1 ");
+
+  return prepared
+    .split(/\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, SMART_SCENARIO_MAX_SEGMENTS);
+}
+
+function getSmartScenarioExplicitEntities(text = "") {
+  const normalized = normalizeSmartUnderstandingText(text || "");
+  const entities = { branch: "", customerType: "", coverage: "" };
+  const branchChoiceQuestion = (
+    (smartPhraseMatches(normalized, "دبي") && smartPhraseMatches(normalized, "ابوظبي")) ||
+    (smartPhraseMatches(normalized, "dubai") && (smartPhraseMatches(normalized, "abu dhabi") || smartPhraseMatches(normalized, "abudhabi")))
+  ) && hasAnyIntentPhrase(normalized, ["او", "أو", "or", "which branch", "اي فرع", "أي فرع"]);
+
+  if (!branchChoiceQuestion) {
+    const detected = getSmartIntentEntities(normalized);
+    entities.branch = detected.branch || "";
+    entities.customerType = detected.customerType || "";
+    entities.coverage = detected.coverage || "";
+
+    if (!entities.branch && hasAnyIntentPhrase(normalized, ["بدبي", "في دبي", "فرع دبي", "dubai branch"])) {
+      entities.branch = "Dubai";
+    }
+    if (!entities.branch && hasAnyIntentPhrase(normalized, ["بابوظبي", "بأبوظبي", "في ابوظبي", "فرع ابوظبي", "abu dhabi branch", "abudhabi branch"])) {
+      entities.branch = "Abu Dhabi";
+    }
+    if (hasAnyIntentPhrase(normalized, ["اول مره", "اول مرة", "أول مرة", "اول مره عندكم", "اول مرة عندكم", "first time", "new client", "new customer"])) {
+      entities.customerType = "new";
+    } else if (hasAnyIntentPhrase(normalized, ["عميل حالي", "عميل قديم", "existing client", "existing customer"])) {
+      entities.customerType = "existing";
+    }
+  }
+
+  if (hasAnyIntentPhrase(normalized, [
+    "مو عميل حالي", "مش عميل حالي", "لست عميل حالي", "not an existing client", "not existing client"
+  ])) {
+    entities.customerType = "";
+  }
+
+  if (hasAnyIntentPhrase(normalized, [
+    "مو عميل جديد", "مش عميل جديد", "not a new client", "not new client"
+  ])) {
+    entities.customerType = "";
+  }
+
+  return { ...entities, branchChoiceQuestion };
+}
+
+function mergeSmartScenarioIntents(baseAnalysis = {}, segmentAnalyses = [], rawText = "") {
+  const byId = new Map();
+  const add = (intent = {}, segmentIndex = -1) => {
+    const id = (intent?.id || "").toString().trim();
+    const score = Number(intent?.score || 0);
+    if (!id || score < 0.62) return;
+    const current = byId.get(id);
+    const boostedScore = Math.min(1, score + (segmentIndex >= 0 ? Math.min(0.06, segmentIndex * 0.01) : 0));
+    if (!current || boostedScore > current.score) {
+      byId.set(id, {
+        ...intent,
+        score: Number(boostedScore.toFixed(2)),
+        scenarioSegmentIndex: segmentIndex
+      });
+    }
+  };
+
+  (baseAnalysis?.intents || []).forEach((intent) => add(intent, -1));
+  segmentAnalyses.forEach((analysis, index) => (analysis?.intents || []).forEach((intent) => add(intent, index)));
+
+  if (hasSmartScenarioNegatedHumanRequest(rawText)) {
+    byId.delete("human");
+    byId.delete("call");
+  }
+
+  const intents = Array.from(byId.values()).sort((a, b) => (b.score - a.score) || ((b.priority || 0) - (a.priority || 0)));
+  return intents;
+}
+
+function detectSmartScenarioContradictions(previousMemory = {}, entities = {}) {
+  const contradictions = [];
+  if (entities.branch && previousMemory.branch && entities.branch !== previousMemory.branch) contradictions.push("branch");
+  if (entities.customerType && previousMemory.customerType && entities.customerType !== previousMemory.customerType) contradictions.push("customer_type");
+  if (entities.coverage && previousMemory.coverage && entities.coverage !== previousMemory.coverage) contradictions.push("coverage");
+  return contradictions;
+}
+
+function hardenSmartUnderstandingForScenario({ text = "", baseAnalysis = {}, memory = {} } = {}) {
+  if (!SMART_SCENARIO_ENABLED) {
+    return { enabled: false, version: SMART_SCENARIO_VERSION, analysis: baseAnalysis, flags: [] };
+  }
+
+  const rawText = (text || "").toString().trim();
+  const segments = splitSmartScenarioSegments(rawText);
+  const segmentAnalyses = segments.map((segment) => analyzeSmartUnderstanding(segment));
+  const mixedLanguage = hasArabicText(rawText) && hasEnglishText(rawText);
+  const longMessage = rawText.length >= SMART_SCENARIO_LONG_MESSAGE_THRESHOLD || segments.length >= 4;
+  const correctionCue = hasSmartScenarioCorrectionCue(rawText);
+  const topicSwitchCue = hasSmartScenarioTopicSwitchCue(rawText);
+  const flags = [];
+
+  if (mixedLanguage) flags.push("mixed_language");
+  if (longMessage) flags.push("long_message");
+  if (correctionCue) flags.push("explicit_correction");
+  if (topicSwitchCue) flags.push("topic_switch_cue");
+  if (segments.length > 1) flags.push("multi_segment");
+  if (hasSmartScenarioNegatedHumanRequest(rawText)) flags.push("negated_human_request");
+
+  let resolvedEntities = {
+    ...(baseAnalysis?.entities || getSmartIntentEntities(baseAnalysis?.normalizedText || rawText))
+  };
+  const entityTimeline = [];
+
+  segments.forEach((segment, index) => {
+    const explicit = getSmartScenarioExplicitEntities(segment);
+    if (explicit.branch || explicit.customerType || explicit.coverage || explicit.branchChoiceQuestion) {
+      entityTimeline.push({ index, segment, ...explicit });
+    }
+  });
+
+  const lastExplicit = { branch: "", customerType: "", coverage: "" };
+  entityTimeline.forEach((item) => {
+    if (item.branch) lastExplicit.branch = item.branch;
+    if (item.customerType) lastExplicit.customerType = item.customerType;
+    if (item.coverage) lastExplicit.coverage = item.coverage;
+  });
+
+  if (correctionCue || entityTimeline.length > 1) {
+    resolvedEntities = { ...resolvedEntities, ...Object.fromEntries(Object.entries(lastExplicit).filter(([, value]) => Boolean(value))) };
+  } else {
+    resolvedEntities = { ...resolvedEntities, ...Object.fromEntries(Object.entries(lastExplicit).filter(([, value]) => Boolean(value))) };
+  }
+
+  const hasAmbiguousBranchChoice = entityTimeline.some((item) => item.branchChoiceQuestion);
+  const hasExplicitResolvedBranch = entityTimeline.some((item) => Boolean(item.branch));
+  if (hasAmbiguousBranchChoice && !hasExplicitResolvedBranch) {
+    resolvedEntities.branch = "";
+    flags.push("ambiguous_branch_choice");
+  }
+
+  const contradictions = detectSmartScenarioContradictions(memory || {}, resolvedEntities);
+  if (contradictions.length) flags.push("contradictory_context");
+
+  const intents = mergeSmartScenarioIntents(baseAnalysis, segmentAnalyses, rawText);
+  const protectedIds = new Set(["complaint", "human", "current_client_service", "booking"]);
+  let primary = intents[0] || null;
+  const basePrimary = (baseAnalysis?.primaryIntent || "").toString();
+  const protectedBase = intents.find((intent) => intent.id === basePrimary && protectedIds.has(intent.id));
+  if (protectedBase) primary = protectedBase;
+
+  const lastStrongAnalysis = [...segmentAnalyses].reverse().find((analysis) => Number(analysis?.score || 0) >= 0.72);
+  const topicSwitch = Boolean(
+    topicSwitchCue ||
+    (lastStrongAnalysis?.primaryIntent && memory?.lastIntent && lastStrongAnalysis.primaryIntent !== memory.lastIntent && segments.length > 1)
+  );
+  if (topicSwitch && !flags.includes("topic_switch")) flags.push("topic_switch");
+
+  const fingerprint = getSmartScenarioFingerprint(rawText);
+  const duplicateInbound = Boolean(fingerprint && memory?.scenarioLastFingerprint === fingerprint);
+  if (duplicateInbound) flags.push("duplicate_inbound");
+
+  const score = Number(primary?.score || baseAnalysis?.score || 0);
+  const confidence = score >= 0.86 ? "high" : score >= 0.62 ? "medium" : score > 0 ? "low" : "none";
+  const mode = correctionCue
+    ? "correction"
+    : topicSwitch
+      ? "topic_switch"
+      : longMessage
+        ? "long_message"
+        : mixedLanguage
+          ? "code_switch"
+          : segments.length > 1
+            ? "multi_segment"
+            : "standard";
+
+  const hardenedAnalysis = {
+    ...baseAnalysis,
+    intents,
+    primaryIntent: primary?.id || baseAnalysis?.primaryIntent || "",
+    score,
+    confidence,
+    entities: resolvedEntities,
+    scenarioVersion: SMART_SCENARIO_VERSION,
+    scenarioFlags: [...new Set(flags)]
+  };
+
+  return {
+    enabled: true,
+    version: SMART_SCENARIO_VERSION,
+    analysis: hardenedAnalysis,
+    flags: [...new Set(flags)],
+    mode,
+    segments,
+    segmentAnalyses: segmentAnalyses.map((analysis, index) => ({
+      index,
+      text: segments[index] || "",
+      primaryIntent: analysis?.primaryIntent || "",
+      score: Number(analysis?.score || 0),
+      entities: analysis?.entities || {}
+    })),
+    entityTimeline,
+    contradictions,
+    correctionCue,
+    topicSwitch,
+    mixedLanguage,
+    longMessage,
+    duplicateInbound,
+    fingerprint
+  };
+}
+
+function applySmartScenarioHardeningToMemory({ phone = "", memory = {}, scenario = {}, persist = true } = {}) {
+  if (!SMART_SCENARIO_ENABLED || !scenario?.enabled) return memory || null;
+  const cleanPhone = getSmartMemoryPhoneKey(phone || memory?.phone || "");
+  if (!cleanPhone) return memory || null;
+
+  const previous = normalizeSmartMemoryForStorage(memory || buildEmptySmartConversationMemory(cleanPhone));
+  const analysis = scenario.analysis || {};
+  const entities = analysis.entities || {};
+  const historyEntry = {
+    flags: scenario.flags || [],
+    primaryIntent: analysis.primaryIntent || "",
+    branch: entities.branch || previous.branch || "",
+    customerType: entities.customerType || previous.customerType || "",
+    coverage: entities.coverage || previous.coverage || "",
+    at: Date.now()
+  };
+
+  const next = rememberSmartMemoryObject(cleanPhone, {
+    ...previous,
+    branch: entities.branch || previous.branch || "",
+    customerType: entities.customerType || previous.customerType || "",
+    coverage: entities.coverage || previous.coverage || "",
+    pendingQuestion: scenario.topicSwitch && Number(analysis.score || 0) >= 0.72 ? "" : previous.pendingQuestion,
+    lastQuestion: scenario.topicSwitch && Number(analysis.score || 0) >= 0.72 ? "" : previous.lastQuestion,
+    stalledTurns: scenario.topicSwitch ? 0 : previous.stalledTurns,
+    scenarioFlags: scenario.flags || [],
+    scenarioContradictions: scenario.contradictions || [],
+    scenarioCorrectionCount: Number(previous.scenarioCorrectionCount || 0) + (scenario.correctionCue ? 1 : 0),
+    scenarioTopicSwitchCount: Number(previous.scenarioTopicSwitchCount || 0) + (scenario.topicSwitch ? 1 : 0),
+    scenarioMixedLanguageCount: Number(previous.scenarioMixedLanguageCount || 0) + (scenario.mixedLanguage ? 1 : 0),
+    scenarioLongMessageCount: Number(previous.scenarioLongMessageCount || 0) + (scenario.longMessage ? 1 : 0),
+    scenarioDuplicateInboundCount: Number(previous.scenarioDuplicateInboundCount || 0) + (scenario.duplicateInbound ? 1 : 0),
+    scenarioLastMode: scenario.mode || "standard",
+    scenarioLastFingerprint: scenario.fingerprint || previous.scenarioLastFingerprint || "",
+    scenarioHistory: [...(previous.scenarioHistory || []), historyEntry],
+    scenarioUpdatedAt: Date.now(),
+    updatedAt: Date.now()
+  });
+
+  if (persist) scheduleSmartMemoryPersistence(cleanPhone);
+  return next;
+}
+
+function runSmartScenarioTestCase(testCase = {}) {
+  const previousMemory = normalizeSmartMemoryForStorage({
+    ...buildEmptySmartConversationMemory(testCase.phone || "971500009009"),
+    ...(testCase.previousMemory || {})
+  });
+  const baseAnalysis = analyzeSmartUnderstanding(testCase.text || "");
+  const scenario = hardenSmartUnderstandingForScenario({
+    text: testCase.text || "",
+    baseAnalysis,
+    memory: previousMemory
+  });
+  const analysis = scenario.analysis || baseAnalysis;
+  const expected = testCase.expected || {};
+  const checks = [];
+
+  if (expected.primaryIntent) checks.push({ name: "primaryIntent", pass: analysis.primaryIntent === expected.primaryIntent, actual: analysis.primaryIntent, expected: expected.primaryIntent });
+  if (expected.intentIncludes) checks.push({ name: "intentIncludes", pass: expected.intentIncludes.every((id) => (analysis.intents || []).some((item) => item.id === id)), actual: (analysis.intents || []).map((item) => item.id), expected: expected.intentIncludes });
+  if (Object.prototype.hasOwnProperty.call(expected, "branch")) checks.push({ name: "branch", pass: (analysis.entities?.branch || "") === expected.branch, actual: analysis.entities?.branch || "", expected: expected.branch });
+  if (Object.prototype.hasOwnProperty.call(expected, "customerType")) checks.push({ name: "customerType", pass: (analysis.entities?.customerType || "") === expected.customerType, actual: analysis.entities?.customerType || "", expected: expected.customerType });
+  if (Object.prototype.hasOwnProperty.call(expected, "coverage")) checks.push({ name: "coverage", pass: (analysis.entities?.coverage || "") === expected.coverage, actual: analysis.entities?.coverage || "", expected: expected.coverage });
+  if (expected.flagIncludes) checks.push({ name: "flagIncludes", pass: expected.flagIncludes.every((flag) => (scenario.flags || []).includes(flag)), actual: scenario.flags || [], expected: expected.flagIncludes });
+  if (Object.prototype.hasOwnProperty.call(expected, "topicSwitch")) checks.push({ name: "topicSwitch", pass: Boolean(scenario.topicSwitch) === Boolean(expected.topicSwitch), actual: Boolean(scenario.topicSwitch), expected: Boolean(expected.topicSwitch) });
+  if (Object.prototype.hasOwnProperty.call(expected, "notHuman")) checks.push({ name: "notHuman", pass: expected.notHuman ? analysis.primaryIntent !== "human" && !(analysis.intents || []).some((item) => item.id === "human") : true, actual: analysis.primaryIntent, expected: "not human" });
+
+  return {
+    id: testCase.id || "scenario",
+    text: testCase.text || "",
+    passed: checks.every((check) => check.pass),
+    checks,
+    scenario: {
+      version: scenario.version,
+      mode: scenario.mode,
+      flags: scenario.flags,
+      segments: scenario.segments,
+      contradictions: scenario.contradictions,
+      topicSwitch: scenario.topicSwitch,
+      correctionCue: scenario.correctionCue,
+      mixedLanguage: scenario.mixedLanguage,
+      longMessage: scenario.longMessage
+    },
+    analysis: getSmartUnderstandingLogPayload(analysis)
+  };
+}
+
+function getSmartScenarioRegressionSuite() {
+  return [
+    {
+      id: "branch_correction_ar",
+      text: "بدي فرع دبي، لا قصدي أبوظبي",
+      previousMemory: { branch: "Dubai", lastIntent: "location" },
+      expected: { branch: "Abu Dhabi", flagIncludes: ["explicit_correction", "contradictory_context"] }
+    },
+    {
+      id: "customer_type_correction",
+      text: "أنا عميل حالي، لا قصدي أول مرة عندكم",
+      previousMemory: { customerType: "existing", lastIntent: "current_client_service" },
+      expected: { customerType: "new", flagIncludes: ["explicit_correction", "contradictory_context"] }
+    },
+    {
+      id: "mixed_language_multi_intent",
+      text: "كم السعر and where is the Dubai branch?",
+      expected: { intentIncludes: ["price", "location"], branch: "Dubai", flagIncludes: ["mixed_language"] }
+    },
+    {
+      id: "long_story_multi_intent",
+      text: "مرحبا، عندي فراغات خفيفة من قدام ومن زمان عم دور على حل طبيعي. بدي أعرف السعر وعندكم فرع بدبي؟ وإذا مناسب بدي أحجز استشارة.",
+      expected: { intentIncludes: ["price", "location", "booking"], branch: "Dubai", coverage: "light", flagIncludes: ["long_message", "multi_segment"] }
+    },
+    {
+      id: "topic_switch",
+      text: "بالمناسبة وين موقع فرع دبي؟",
+      previousMemory: { lastIntent: "price", pendingQuestion: "coverage" },
+      expected: { branch: "Dubai", topicSwitch: true, flagIncludes: ["topic_switch"] }
+    },
+    {
+      id: "branch_choice_not_false_entity",
+      text: "أي فرع أحسن إلي دبي أو أبوظبي؟",
+      expected: { branch: "" }
+    },
+    {
+      id: "negated_human_request",
+      text: "ما بدي موظف، بس بدي أعرف السعر",
+      expected: { intentIncludes: ["price"], notHuman: true, flagIncludes: ["negated_human_request"] }
+    },
+    {
+      id: "english_correction",
+      text: "I need Dubai, actually I meant Abu Dhabi",
+      previousMemory: { branch: "Dubai", lastIntent: "location" },
+      expected: { branch: "Abu Dhabi", flagIncludes: ["explicit_correction", "contradictory_context"] }
+    }
+  ];
+}
+
+
+// -----------------------------------------------------------------------------
+// CONVERSATION RECOVERY & CLARIFICATION STRATEGY V10
+// -----------------------------------------------------------------------------
+function normalizeSmartRecoveryText(text = "") {
+  return normalizeSmartUnderstandingText(text || "")
+    .replace(/[؟?!.،,;:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getSmartRecoveryPendingQuestion(memory = {}) {
+  const candidates = [
+    memory.recoveryPendingQuestion,
+    memory.pendingQuestion,
+    ...(Array.isArray(memory.missingSlots) ? memory.missingSlots : []),
+    ...(Array.isArray(memory.qualificationMissingSlots) ? memory.qualificationMissingSlots : [])
+  ];
+  return (candidates.find((item) => (item || "").toString().trim()) || "").toString().trim();
+}
+
+function getSmartRecoveryReferenceKind(text = "") {
+  const value = normalizeSmartRecoveryText(text);
+  if (!value || value.length > 80) return "";
+
+  const exact = (phrases) => phrases.some((phrase) => value === normalizeSmartRecoveryText(phrase));
+  if (exact(["الأول", "الاول", "اول واحد", "الخيار الأول", "الخيار الاول", "first", "first one", "option one", "1", "١"])) return "first";
+  if (exact(["الثاني", "التاني", "تاني واحد", "الخيار الثاني", "الخيار التاني", "second", "second one", "option two", "2", "٢"])) return "second";
+  if (exact(["الثالث", "التالت", "تالت واحد", "الخيار الثالث", "third", "third one", "option three", "3", "٣"])) return "third";
+  if (exact(["هو نفسه", "هي نفسها", "نفسه", "نفسها", "نفس الشي", "نفس الاختيار", "same", "same one", "the same"])) return "same";
+  if (exact(["ليش", "لماذا", "ليش هيك", "why", "why so", "how come"])) return "why";
+  if (exact(["قديش", "كم", "كم تقريبا", "how much", "how long"])) return "quantity";
+  if (exact(["وين", "وينه", "وين الفرع", "where", "where is it"])) return "where";
+  if (exact(["كيف", "شلون", "how", "how does it work"])) return "how";
+  if (exact(["كمل", "نكمل", "كمّل", "ارجع للموضوع", "خلينا نكمل", "continue", "go on", "resume", "back to it"])) return "resume";
+  if (exact(["هدا", "هذا", "هاي", "هي", "هو", "اللي قلتلي عنه", "the one", "that one", "it"])) return "ambiguous_reference";
+  return "";
+}
+
+function getSmartRecoveryOptionsForSlot(slot = "", language = "en") {
+  const ar = language === "ar";
+  const options = {
+    coverage: [
+      { value: "light", label: ar ? "تغطية فراغات خفيفة" : "Light gap coverage" },
+      { value: "full", label: ar ? "حل كامل" : "Full solution" }
+    ],
+    branch: [
+      { value: "Dubai", label: ar ? "دبي" : "Dubai" },
+      { value: "Abu Dhabi", label: ar ? "أبوظبي" : "Abu Dhabi" }
+    ],
+    customer_type: [
+      { value: "new", label: ar ? "عميل جديد" : "New client" },
+      { value: "existing", label: ar ? "عميل حالي" : "Existing client" }
+    ],
+    booking_type: [
+      { value: "consultation", label: ar ? "استشارة" : "Consultation" },
+      { value: "service", label: ar ? "سيرفس" : "Service" }
+    ],
+    service_type: [
+      { value: "follow_up", label: ar ? "متابعة" : "Follow-up" },
+      { value: "fitting", label: ar ? "تركيب" : "Fitting" },
+      { value: "adjustment", label: ar ? "تعديل" : "Adjustment" }
+    ]
+  };
+  return options[slot] || [];
+}
+
+function getSmartRecoveryOrdinalIndex(kind = "") {
+  if (kind === "first") return 0;
+  if (kind === "second") return 1;
+  if (kind === "third") return 2;
+  return -1;
+}
+
+function addSmartRecoveryIntent(analysis = {}, intentId = "", score = 0.96) {
+  if (!intentId) return analysis;
+  const intents = Array.isArray(analysis.intents) ? [...analysis.intents] : [];
+  if (!intents.some((item) => item?.id === intentId)) {
+    intents.push({ id: intentId, score, priority: 110, matches: ["context_recovery_v10"] });
+  }
+  intents.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+  return {
+    ...analysis,
+    intents,
+    primaryIntent: analysis.primaryIntent || intentId,
+    confidence: Number(analysis.score || 0) >= score ? analysis.confidence : "high",
+    score: Math.max(Number(analysis.score || 0), score),
+    recoveryVersion: SMART_RECOVERY_VERSION
+  };
+}
+
+function applySmartRecoveryResolvedValue(analysis = {}, slot = "", value = "") {
+  const next = {
+    ...analysis,
+    entities: { ...(analysis.entities || {}) },
+    recoveryVersion: SMART_RECOVERY_VERSION
+  };
+
+  if (slot === "branch") {
+    next.entities.branch = value;
+    return addSmartRecoveryIntent(next, "location", 0.96);
+  }
+  if (slot === "coverage") {
+    next.entities.coverage = value;
+    return addSmartRecoveryIntent(next, "price", 0.94);
+  }
+  if (slot === "customer_type") {
+    next.entities.customerType = value;
+    return addSmartRecoveryIntent(next, value === "existing" ? "current_client_service" : "consultation", 0.96);
+  }
+  if (slot === "booking_type") {
+    return addSmartRecoveryIntent(next, value === "service" ? "current_client_service" : "consultation", 0.96);
+  }
+  if (slot === "service_type") {
+    next.entities.serviceType = value;
+    return addSmartRecoveryIntent(next, "current_client_service", 0.96);
+  }
+  return next;
+}
+
+function getSmartRecoveryContextualIntent(kind = "", memory = {}) {
+  const lastIntent = (memory.lastIntent || "").toString();
+  const lastTopic = `${memory.topic || ""} ${memory.lastBotTopic || ""} ${memory.lastBotReplyTopic || ""}`.toLowerCase();
+  const knowledge = new Set(Array.isArray(memory.lastKnowledgeTopics) ? memory.lastKnowledgeTopics : []);
+
+  if (kind === "where") return "location";
+  if (kind === "how") return knowledge.has("how_it_works") ? "services" : (lastIntent || "services");
+  if (kind === "quantity") {
+    if (lastIntent === "price" || lastIntent === "expensive" || memory.priceAsked || lastTopic.includes("price")) return "price";
+    if (lastIntent === "duration_maintenance" || knowledge.has("duration_maintenance")) return "duration_maintenance";
+  }
+  return "";
+}
+
+function buildSmartRecoveryClarificationPrompt(slot = "", language = "en", attempts = 0) {
+  const ar = language === "ar";
+  const options = getSmartRecoveryOptionsForSlot(slot, language);
+  if (options.length) {
+    const labels = options.map((item, index) => `${index + 1}) ${item.label}`).join(ar ? "\n" : "\n");
+    const intro = attempts >= SMART_RECOVERY_MAX_ATTEMPTS
+      ? (ar ? "حتى ما أفهمك غلط، اختَر الرقم فقط:" : "To avoid misunderstanding, choose only the number:")
+      : (ar ? "بس للتأكيد، أي خيار تقصد؟" : "Just to confirm, which option do you mean?");
+    return `${intro}\n\n${labels}`;
+  }
+  return ar
+    ? "بس وضّحلي بكلمتين شو الشي اللي تقصده، حتى أكمل معك بدون تخمين."
+    : "Please clarify in a few words what you mean, so I can continue without guessing.";
+}
+
+function buildSmartRecoveryWhyReply(memory = {}, language = "en") {
+  const ar = language === "ar";
+  const context = `${memory.lastIntent || ""} ${memory.topic || ""} ${memory.lastBotTopic || ""}`.toLowerCase();
+  if (context.includes("price") || memory.priceAsked) {
+    return ar
+      ? "لأن السعر يتغيّر حسب مساحة التغطية، الكثافة، ونوع الحل المناسب؛ إعطاء رقم قبل معرفة الحالة ممكن يكون مضلّل."
+      : "Because price changes with the coverage area, density, and suitable solution; giving a number before understanding the case could be misleading.";
+  }
+  if (context.includes("consult") || context.includes("booking")) {
+    return ar
+      ? "لأن الاستشارة بتحدد الحل الأقرب لحالتك قبل الحجز، وبتمنع اختيار خدمة أو نظام غير مناسب."
+      : "Because the consultation identifies the closest suitable solution before booking and avoids choosing the wrong service or system.";
+  }
+  return ar
+    ? "حتى أعطيك السبب الصحيح، تقصد ليش السعر يختلف ولا ليش نحتاج استشارة؟"
+    : "To give the correct reason, do you mean why the price varies or why a consultation is needed?";
+}
+
+function recoverSmartUnderstandingFromContext({ text = "", analysis = {}, memory = {}, scenario = {}, language = "en" } = {}) {
+  const baseAnalysis = analysis || analyzeSmartUnderstanding(text || "");
+  if (!SMART_RECOVERY_ENABLED) {
+    return { enabled: false, version: SMART_RECOVERY_VERSION, analysis: baseAnalysis, handled: false, mode: "disabled" };
+  }
+
+  const kind = getSmartRecoveryReferenceKind(text);
+  const pendingQuestion = getSmartRecoveryPendingQuestion(memory);
+  const suspendedQuestion = (memory.recoverySuspendedQuestion || "").toString().trim();
+  const explicitIntentIds = (baseAnalysis.intents || [])
+    .filter((item) => Number(item?.score || 0) >= 0.72)
+    .map((item) => (item?.id || "").toString())
+    .filter(Boolean);
+  const explicitIntentCount = explicitIntentIds.length;
+  const result = {
+    enabled: true,
+    version: SMART_RECOVERY_VERSION,
+    handled: false,
+    mode: "none",
+    kind,
+    pendingQuestion,
+    suspendedQuestion,
+    resolvedSlot: "",
+    resolvedValue: "",
+    analysis: baseAnalysis,
+    needsReply: false,
+    replyType: "",
+    prompt: "",
+    topicSwitchCaptured: Boolean(scenario?.topicSwitch && memory.pendingQuestion),
+    reservedFuturePhase: "Unknown / Low Confidence"
+  };
+
+  if (kind === "resume" && suspendedQuestion) {
+    result.handled = true;
+    result.mode = "resume_suspended";
+    result.needsReply = true;
+    result.replyType = "resume";
+    result.pendingQuestion = suspendedQuestion;
+    return result;
+  }
+
+  const ordinalIndex = getSmartRecoveryOrdinalIndex(kind);
+  if (ordinalIndex >= 0 && pendingQuestion) {
+    const options = getSmartRecoveryOptionsForSlot(pendingQuestion, language);
+    const selected = options[ordinalIndex];
+    if (selected) {
+      result.handled = true;
+      result.mode = "resolve_ordinal";
+      result.resolvedSlot = pendingQuestion;
+      result.resolvedValue = selected.value;
+      result.analysis = applySmartRecoveryResolvedValue(baseAnalysis, pendingQuestion, selected.value);
+      return result;
+    }
+  }
+
+  if (kind === "same" && pendingQuestion) {
+    const currentValues = {
+      branch: memory.branch,
+      coverage: memory.coverage,
+      customer_type: memory.customerType,
+      booking_type: memory.customerType === "existing" ? "service" : (memory.customerType === "new" ? "consultation" : "")
+    };
+    const currentValue = (currentValues[pendingQuestion] || "").toString();
+    if (currentValue) {
+      result.handled = true;
+      result.mode = "preserve_same";
+      result.resolvedSlot = pendingQuestion;
+      result.resolvedValue = currentValue;
+      result.analysis = applySmartRecoveryResolvedValue(baseAnalysis, pendingQuestion, currentValue);
+      result.needsReply = true;
+      result.replyType = "confirm_same";
+      return result;
+    }
+  }
+
+  const contextualIntent = getSmartRecoveryContextualIntent(kind, memory);
+  if (
+    contextualIntent &&
+    (explicitIntentCount === 0 || explicitIntentIds.every((intentId) => intentId === contextualIntent))
+  ) {
+    result.handled = true;
+    result.mode = "resolve_contextual_question";
+    result.analysis = addSmartRecoveryIntent(baseAnalysis, contextualIntent, 0.93);
+    return result;
+  }
+
+  if (kind === "why" && explicitIntentCount === 0) {
+    result.handled = true;
+    result.mode = "answer_why_from_context";
+    result.needsReply = true;
+    result.replyType = "why";
+    return result;
+  }
+
+  if (["ambiguous_reference", "first", "second", "third", "same"].includes(kind) && explicitIntentCount === 0) {
+    result.handled = true;
+    result.mode = "clarify_reference";
+    result.needsReply = true;
+    result.replyType = "clarification";
+    result.prompt = buildSmartRecoveryClarificationPrompt(pendingQuestion, language, Number(memory.recoveryAttempts || 0));
+    return result;
+  }
+
+  return result;
+}
+
+function applySmartConversationRecoveryToMemory({ phone = "", previousMemory = {}, memory = {}, recovery = {}, scenario = {}, text = "", persist = true } = {}) {
+  if (!SMART_RECOVERY_ENABLED || !recovery?.enabled) return memory || null;
+  const cleanPhone = getSmartMemoryPhoneKey(phone);
+  if (!cleanPhone) return memory || null;
+
+  const previous = normalizeSmartMemoryForStorage(memory || previousMemory || buildEmptySmartConversationMemory(cleanPhone));
+  const previousBeforeTurn = normalizeSmartMemoryForStorage(previousMemory || previous);
+  const now = Date.now();
+  const capturedSuspendedQuestion = recovery.topicSwitchCaptured
+    ? (previousBeforeTurn.pendingQuestion || previousBeforeTurn.recoveryPendingQuestion || "")
+    : previous.recoverySuspendedQuestion;
+  const capturedSuspendedGoal = recovery.topicSwitchCaptured
+    ? (previousBeforeTurn.activeGoal || "")
+    : previous.recoverySuspendedGoal;
+  const clarification = recovery.mode === "clarify_reference";
+  const resolved = ["resolve_ordinal", "resolve_contextual_question", "preserve_same"].includes(recovery.mode);
+  const resumed = recovery.mode === "resume_suspended";
+  const historyEntry = {
+    mode: recovery.mode || "none",
+    pendingQuestion: recovery.pendingQuestion || "",
+    resolvedSlot: recovery.resolvedSlot || "",
+    resolvedValue: recovery.resolvedValue || "",
+    handled: Boolean(recovery.handled),
+    at: now
+  };
+
+  const next = rememberSmartMemoryObject(cleanPhone, {
+    ...previous,
+    recoveryState: clarification ? "clarifying" : (resumed ? "resuming" : (resolved ? "resolved" : "idle")),
+    recoveryPendingQuestion: recovery.pendingQuestion || previous.pendingQuestion || previous.recoveryPendingQuestion || "",
+    recoverySuspendedQuestion: resumed ? "" : capturedSuspendedQuestion,
+    recoverySuspendedGoal: resumed ? "" : capturedSuspendedGoal,
+    recoveryLastMode: recovery.mode || "none",
+    recoveryLastPrompt: (recovery.prompt || "").toString(),
+    recoveryLastInput: normalizeSmartRecoveryText(text || ""),
+    recoveryAttempts: clarification ? Number(previous.recoveryAttempts || 0) + 1 : (resolved || resumed ? 0 : Number(previous.recoveryAttempts || 0)),
+    recoveryResolvedCount: Number(previous.recoveryResolvedCount || 0) + (resolved ? 1 : 0),
+    recoveryClarificationCount: Number(previous.recoveryClarificationCount || 0) + (clarification ? 1 : 0),
+    recoveryResumeCount: Number(previous.recoveryResumeCount || 0) + (resumed ? 1 : 0),
+    recoveryHistory: [...(previous.recoveryHistory || []), historyEntry],
+    recoveryUpdatedAt: now,
+    updatedAt: now
+  });
+
+  if (persist) scheduleSmartMemoryPersistence(cleanPhone);
+  return next;
+}
+
+function buildSmartConversationRecoveryReply({ recovery = {}, memory = {}, language = "en" } = {}) {
+  if (!SMART_RECOVERY_ENABLED || !recovery?.handled || !recovery?.needsReply) return null;
+  const ar = language === "ar";
+  let body = "";
+  let pendingQuestion = recovery.pendingQuestion || getSmartRecoveryPendingQuestion(memory);
+
+  if (recovery.replyType === "why") {
+    body = buildSmartRecoveryWhyReply(memory, language);
+  } else if (recovery.replyType === "resume") {
+    const resumedMemory = { ...memory, pendingQuestion };
+    body = `${ar ? "أكيد، منرجع لآخر نقطة 👌" : "Sure, let us return to the last point 👌"}\n\n${buildNaturalProgressPrompt(resumedMemory, language)}`;
+  } else if (recovery.replyType === "confirm_same") {
+    const options = getSmartRecoveryOptionsForSlot(recovery.resolvedSlot, language);
+    const selected = options.find((item) => item.value === recovery.resolvedValue);
+    const label = selected?.label || recovery.resolvedValue;
+    body = ar
+      ? `تمام، رح أعتمد نفس الاختيار: ${label}.\n\n${buildNaturalProgressPrompt({ ...memory, pendingQuestion: "" }, language)}`
+      : `Got it, I will keep the same choice: ${label}.\n\n${buildNaturalProgressPrompt({ ...memory, pendingQuestion: "" }, language)}`;
+    pendingQuestion = "";
+  } else {
+    body = recovery.prompt || buildSmartRecoveryClarificationPrompt(pendingQuestion, language, Number(memory.recoveryAttempts || 0));
+  }
+
+  return {
+    version: SMART_RECOVERY_VERSION,
+    body,
+    buttons: [],
+    status: "Conversation Recovery V10",
+    topic: "conversation_recovery",
+    decision: recovery.mode || "clarify_reference",
+    pendingQuestion,
+    recoveryMode: recovery.mode,
+    reservedFuturePhase: "Unknown / Low Confidence"
+  };
+}
+
+function rememberSmartConversationRecoveryReply(phone = "", reply = {}, text = "", language = "en") {
+  if (!reply?.body) return null;
+  const cleanPhone = getSmartMemoryPhoneKey(phone);
+  if (!cleanPhone) return null;
+  const previous = normalizeSmartMemoryForStorage(getSmartConversationMemory(cleanPhone) || buildEmptySmartConversationMemory(cleanPhone));
+  const next = rememberSmartMemoryObject(cleanPhone, {
+    ...previous,
+    topic: "conversation_recovery",
+    lastBotTopic: "conversation_recovery",
+    lastText: normalizeSmartRecoveryText(text || "") || previous.lastText,
+    language: language === "ar" ? "ar" : "en",
+    pendingQuestion: reply.pendingQuestion || previous.pendingQuestion || "",
+    recoveryPendingQuestion: reply.pendingQuestion || previous.recoveryPendingQuestion || "",
+    recoveryLastPrompt: (reply.body || "").toString().slice(0, 500),
+    recoveryLastMode: reply.recoveryMode || previous.recoveryLastMode || "",
+    recoveryUpdatedAt: Date.now(),
+    updatedAt: Date.now()
+  });
+  scheduleSmartMemoryPersistence(cleanPhone);
+  return next;
+}
+
+function runSmartRecoveryTestCase(testCase = {}) {
+  const memory = normalizeSmartMemoryForStorage({
+    ...buildEmptySmartConversationMemory(testCase.phone || "971500010010"),
+    ...(testCase.previousMemory || {})
+  });
+  const baseAnalysis = analyzeSmartUnderstanding(testCase.text || "");
+  const scenario = hardenSmartUnderstandingForScenario({ text: testCase.text || "", baseAnalysis, memory });
+  const recovery = recoverSmartUnderstandingFromContext({
+    text: testCase.text || "",
+    analysis: scenario.analysis || baseAnalysis,
+    memory,
+    scenario,
+    language: testCase.language || detectIncomingLanguage(testCase.text || "", "ar")
+  });
+  const expected = testCase.expected || {};
+  const checks = [];
+  if (expected.mode) checks.push({ name: "mode", pass: recovery.mode === expected.mode, actual: recovery.mode, expected: expected.mode });
+  if (expected.resolvedSlot) checks.push({ name: "resolvedSlot", pass: recovery.resolvedSlot === expected.resolvedSlot, actual: recovery.resolvedSlot, expected: expected.resolvedSlot });
+  if (expected.resolvedValue) checks.push({ name: "resolvedValue", pass: recovery.resolvedValue === expected.resolvedValue, actual: recovery.resolvedValue, expected: expected.resolvedValue });
+  if (expected.intent) checks.push({ name: "intent", pass: (recovery.analysis.intents || []).some((item) => item.id === expected.intent), actual: (recovery.analysis.intents || []).map((item) => item.id), expected: expected.intent });
+  if (Object.prototype.hasOwnProperty.call(expected, "needsReply")) checks.push({ name: "needsReply", pass: Boolean(recovery.needsReply) === Boolean(expected.needsReply), actual: Boolean(recovery.needsReply), expected: Boolean(expected.needsReply) });
+  return { id: testCase.id || "recovery", text: testCase.text || "", passed: checks.every((check) => check.pass), checks, recovery };
+}
+
+function getSmartRecoveryRegressionSuite() {
+  return [
+    { id: "ordinal_coverage_second", text: "التاني", previousMemory: { pendingQuestion: "coverage" }, expected: { mode: "resolve_ordinal", resolvedSlot: "coverage", resolvedValue: "full", intent: "price" } },
+    { id: "ordinal_branch_first", text: "الأول", previousMemory: { pendingQuestion: "branch" }, expected: { mode: "resolve_ordinal", resolvedSlot: "branch", resolvedValue: "Dubai", intent: "location" } },
+    { id: "ordinal_customer_existing", text: "الثاني", previousMemory: { pendingQuestion: "customer_type" }, expected: { mode: "resolve_ordinal", resolvedValue: "existing", intent: "current_client_service" } },
+    { id: "contextual_where", text: "وين؟", previousMemory: { lastIntent: "location" }, expected: { mode: "resolve_contextual_question", intent: "location" } },
+    { id: "contextual_quantity_price", text: "قديش؟", previousMemory: { lastIntent: "price", priceAsked: true }, expected: { mode: "resolve_contextual_question", intent: "price" } },
+    { id: "why_price", text: "ليش؟", previousMemory: { lastIntent: "price", priceAsked: true }, expected: { mode: "answer_why_from_context", needsReply: true } },
+    { id: "resume_interrupted", text: "كمل", previousMemory: { recoverySuspendedQuestion: "coverage", recoverySuspendedGoal: "qualify_price" }, expected: { mode: "resume_suspended", needsReply: true } },
+    { id: "ambiguous_without_context", text: "هدا", previousMemory: {}, expected: { mode: "clarify_reference", needsReply: true } },
+    { id: "same_branch", text: "هو نفسه", previousMemory: { pendingQuestion: "branch", branch: "Dubai" }, expected: { mode: "preserve_same", resolvedSlot: "branch", resolvedValue: "Dubai", needsReply: true } }
+  ];
+}
+
+function buildSmartBranchLocationSection(analysis = {}, language = "en") {
+  const branch = analysis?.entities?.branch || "";
+
+  if (language === "ar") {
+    if (branch === "Dubai") {
+      return ["📍 فرع دبي:", DUBAI_LOCATION_URL, "☎️ 04 396 3333"].join("\n");
+    }
+
+    if (branch === "Abu Dhabi") {
+      return ["📍 فرع أبوظبي:", ABU_DHABI_LOCATION_URL, "☎️ 02 562 2778"].join("\n");
+    }
+
+    return [
+      "📍 عندنا فرعين:",
+      `دبي: ${DUBAI_LOCATION_URL}`,
+      `أبوظبي: ${ABU_DHABI_LOCATION_URL}`
+    ].join("\n");
+  }
+
+  if (branch === "Dubai") {
+    return ["📍 Dubai branch:", DUBAI_LOCATION_URL, "☎️ 04 396 3333"].join("\n");
+  }
+
+  if (branch === "Abu Dhabi") {
+    return ["📍 Abu Dhabi branch:", ABU_DHABI_LOCATION_URL, "☎️ 02 562 2778"].join("\n");
+  }
+
+  return [
+    "📍 We have two branches:",
+    `Dubai: ${DUBAI_LOCATION_URL}`,
+    `Abu Dhabi: ${ABU_DHABI_LOCATION_URL}`
+  ].join("\n");
+}
+
+function getSmartIntentSection(intentId = "", analysis = {}, language = "en") {
+  const isArabic = language === "ar";
+
+  const sections = {
+    price: isArabic
+      ? "💰 السعر يعتمد على مساحة التغطية، الكثافة، ونوع الحل المناسب. الاستشارة القصيرة تعطينا توجيه أدق بدل رقم عشوائي."
+      : "💰 Price depends on the coverage area, density, and suitable solution. A short consultation gives a more accurate direction than a random quote.",
+    expensive: isArabic
+      ? "💰 أفهم أن السعر مهم. التكلفة تختلف حسب الحالة ونوع النظام والتركيب، والفريق يوضح الخيار الأنسب بدون إعطاء وعد أو رقم عشوائي."
+      : "💰 I understand that price matters. Cost varies by case, system type, and fitting, so the team explains the suitable option without a random promise.",
+    location: buildSmartBranchLocationSection(analysis, language),
+    working_hours: isArabic
+      ? "🕐 الدوام يومياً من 10:00 صباحاً إلى 7:00 مساءً."
+      : "🕐 Working hours are 10:00 AM to 7:00 PM.",
+    natural: isArabic
+      ? "✨ النتيجة الطبيعية تعتمد على اللون، الكثافة، وخط الشعر المناسب لشكل الوجه، والهدف أن يكون الشكل غير واضح."
+      : "✨ A natural result depends on color, density, and a hairline suited to the face, with the goal of an undetectable look.",
+    services: isArabic
+      ? "🔹 نقدم Hair Replacement بمظهر طبيعي وبدون جراحة، مع اختيار النظام حسب الحالة والاستخدام."
+      : "🔹 We provide non-surgical Hair Replacement with a natural look, choosing the system according to the case and daily use.",
+    consultation: isArabic
+      ? "👤 الاستشارة تساعد الفريق يحدد الحل الأقرب لحالتك بخصوصية."
+      : "👤 A consultation helps the team identify the most suitable solution for your case privately.",
+    booking: isArabic
+      ? "📅 فينا نبدأ طلب حجز استشارة أو موعد سيرفس حسب إذا كنت عميل جديد أو حالي."
+      : "📅 We can start a consultation or service booking depending on whether you are a new or existing client.",
+    current_client_service: isArabic
+      ? "🛠️ للعملاء الحاليين، فينا نرتب سيرفس، متابعة، تركيب، أو تعديل."
+      : "🛠️ For existing clients, we can arrange service, follow-up, fitting, or adjustment.",
+    density: isArabic
+      ? "📐 الكثافة تنحدد حسب مساحة التغطية والشعر الموجود حتى تكون النتيجة متوازنة وطبيعية."
+      : "📐 Density is selected according to the coverage area and existing hair so the result stays balanced and natural.",
+    hair_type: isArabic
+      ? "🧩 نوع الشعر والنظام يتحدد حسب اللون، التسريحة، الكثافة، والاستخدام اليومي."
+      : "🧩 Hair and system type depend on color, hairstyle, density, and daily use.",
+    duration_maintenance: isArabic
+      ? "🔧 مدة الاستخدام وجدول السيرفس يختلفان حسب التعرق، العناية، ونمط الحياة."
+      : "🔧 Duration and service schedule vary according to sweating, care, and lifestyle.",
+    warranty: isArabic
+      ? "✅ تفاصيل الضمان والعناية والمتابعة يشرحها الفريق حسب النظام المختار والحالة، بدون وعد عام قبل التقييم."
+      : "✅ Warranty, care, and follow-up details are explained according to the selected system and case, without a general promise before assessment.",
+    women: isArabic
+      ? "👩 توجد حلول للنساء أيضاً، ويحدد الفريق الأنسب حسب الحالة والخصوصية المطلوبة."
+      : "👩 Solutions are also available for women, with the suitable option selected according to the case and privacy needs.",
+    full_bald: isArabic
+      ? "🔹 حالات الصلع الكامل تحتاج تقييم مساحة الرأس واللوك المطلوب حتى يحدد الفريق نوع التغطية المناسب."
+      : "🔹 Full-baldness cases need an assessment of the head area and desired look so the team can choose suitable coverage.",
+    call: isArabic
+      ? "☎️ للتواصل: دبي 04 396 3333 — أبوظبي 02 562 2778."
+      : "☎️ Contact: Dubai 04 396 3333 — Abu Dhabi 02 562 2778."
+  };
+
+  return sections[intentId] || "";
+}
+
+function getSmartReplyButtonsForIntents(intentIds = []) {
+  const ids = new Set(intentIds || []);
+
+  if (ids.has("current_client_service")) {
+    return getServiceSubMenuButtons();
+  }
+
+  if (ids.has("booking")) {
+    return getDirectBookingChoiceButtons();
+  }
+
+  if (ids.has("price") || ids.has("expensive") || ids.has("consultation")) {
+    return getSmartConsultTeamButtons();
+  }
+
+  return getMainMenuButtons();
+}
+
+function getSmartMultiIntentReply({ analysis, customerName = "", language = "en" } = {}) {
+  if (!SMART_MULTI_INTENT_ENABLED || !analysis || analysis.isActionLike) return null;
+
+  const excluded = new Set(["complaint", "human", "media"]);
+  const supportedIntents = (analysis.intents || [])
+    .map((item) => item.id)
+    .filter((id) => !excluded.has(id))
+    .filter((id) => (analysis.intents || []).find((item) => item.id === id)?.score >= 0.42)
+    .slice(0, 3);
+
+  if (supportedIntents.length < 2) return null;
+
+  const cleanName = namePhrase(customerName);
+  const intro = language === "ar"
+    ? (cleanName ? `أكيد ${cleanName}، فهمت إن عندك أكثر من سؤال 👌` : "أكيد، فهمت إن عندك أكثر من سؤال 👌")
+    : (cleanName ? `Sure ${cleanName}, I understood that you have more than one question 👌` : "Sure, I understood that you have more than one question 👌");
+
+  const sections = supportedIntents
+    .map((intentId) => getSmartIntentSection(intentId, analysis, language))
+    .filter(Boolean);
+
+  if (sections.length < 2) return null;
+
+  return {
+    topic: `multi:${supportedIntents.join("+")}`,
+    status: "Smart Multi-Intent",
+    intents: supportedIntents,
+    body: [intro, "", ...sections.flatMap((section) => [section, ""]), language === "ar"
+      ? "اختر الخطوة المناسبة تحت، أو اكتب سؤالك بتفصيل أكثر."
+      : "Choose the suitable next step below, or send more details."].join("\n").replace(/\n{3,}/g, "\n\n").trim(),
+    buttons: getSmartReplyButtonsForIntents(supportedIntents)
+  };
+}
+
+
+// SMART DECISION & REPLY COMPOSER V3
+// This layer is deliberately conservative: specialized booking Flows, media,
+// location CTA, human handoff, and complaint handling keep their existing routes.
+const SMART_DECISION_INTENT_ORDER = Object.freeze([
+  "current_client_service",
+  "booking",
+  "expensive",
+  "price",
+  "consultation",
+  "location",
+  "working_hours",
+  "natural",
+  "density",
+  "hair_type",
+  "duration_maintenance",
+  "warranty",
+  "women",
+  "full_bald",
+  "services"
+]);
+
+function getSmartDecisionVariantIndex(seed = "", length = 1) {
+  if (length <= 1) return 0;
+  const digest = crypto.createHash("sha256").update((seed || "iconic").toString()).digest();
+  return digest[0] % length;
+}
+
+function pickSmartDecisionVariant(variants = [], seed = "") {
+  const cleanVariants = (variants || []).filter(Boolean);
+  if (!cleanVariants.length) return "";
+  return cleanVariants[getSmartDecisionVariantIndex(seed, cleanVariants.length)] || cleanVariants[0];
+}
+
+function getSmartDecisionQualifiedIntentIds(analysis = {}, memory = {}) {
+  const excluded = new Set(["complaint", "human", "media", "call"]);
+  const ids = (analysis?.intents || [])
+    .filter((item) => Number(item?.score || 0) >= SMART_DECISION_MIN_SCORE)
+    .map((item) => (item?.id || "").toString().trim())
+    .filter((id) => id && !excluded.has(id));
+
+  const intentSet = new Set(ids);
+
+  // Pull only strongly related memory into a short follow-up. For example,
+  // "دبي" after asking about price becomes price + Dubai, not a fresh menu.
+  if (memory?.priceAsked && intentSet.has("location")) intentSet.add("price");
+  if (memory?.objection === "price") {
+    intentSet.delete("price");
+    intentSet.add("expensive");
+  }
+  if (memory?.customerType === "existing" && intentSet.has("booking")) {
+    intentSet.delete("booking");
+    intentSet.add("current_client_service");
+  }
+
+  // Prefer the specific objection over the broad price intent.
+  if (intentSet.has("expensive")) intentSet.delete("price");
+  if (intentSet.has("current_client_service")) {
+    intentSet.delete("services");
+    intentSet.delete("duration_maintenance");
+  }
+  if (intentSet.has("full_bald")) intentSet.delete("density");
+
+  return SMART_DECISION_INTENT_ORDER.filter((id) => intentSet.has(id));
+}
+
+function getSmartDecisionResolvedContext(analysis = {}, memory = {}, phoneNumberId = DEFAULT_PHONE_NUMBER_ID) {
+  const entities = analysis?.entities || {};
+  const lineConfig = getLineConfig(phoneNumberId || memory?.phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
+
+  return {
+    branch: normalizeInboxBranchName(entities.branch || memory?.branch || ""),
+    customerType: entities.customerType || memory?.customerType || "",
+    coverage: entities.coverage || memory?.coverage || "",
+    lineBranch: normalizeInboxBranchName(memory?.lineBranch || lineConfig.branch || AI_303_BRANCH_NAME),
+    priceAsked: Boolean(memory?.priceAsked),
+    resultsRequested: Boolean(memory?.resultsRequested),
+    bookingReadiness: (memory?.bookingReadiness || "").toString(),
+    objection: (memory?.objection || "").toString()
+  };
+}
+
+function shouldUseSmartDecisionReply({ analysis = {}, memory = {}, intentIds = [] } = {}) {
+  if (!SMART_DECISION_ENABLED || !analysis || analysis.isActionLike) return false;
+  if (["complaint", "human", "media"].includes(analysis.primaryIntent)) return false;
+  if (!intentIds.length) return false;
+
+  // V3 always improves true multi-question messages.
+  if (intentIds.length >= 2) return true;
+
+  const onlyIntent = intentIds[0];
+
+  // Price objections need a decision-oriented response even as a single intent.
+  if (onlyIntent === "expensive") return true;
+
+  // Contextual follow-ups are where memory adds real value.
+  if (onlyIntent === "location" && memory?.priceAsked) return true;
+  if (onlyIntent === "current_client_service" && memory?.bookingReadiness) return true;
+  if (onlyIntent === "price" && (memory?.branch || memory?.coverage || memory?.customerType)) return true;
+  if (onlyIntent === "consultation" && (memory?.branch || memory?.coverage || memory?.customerType)) return true;
+
+  return false;
+}
+
+function getSmartDecisionContextLine(context = {}, intentIds = [], language = "en") {
+  const lines = [];
+  const ids = new Set(intentIds || []);
+
+  if (context.customerType === "existing" && !ids.has("current_client_service")) {
+    lines.push(language === "ar"
+      ? "سجلت أنك عميل حالي، لذلك أي حجز لازم يمشي بمسار السيرفس والمتابعة."
+      : "I noted that you are an existing client, so booking should follow the service and follow-up route.");
+  }
+
+  if (context.branch && !ids.has("location")) {
+    const branchLabel = language === "ar" ? getArabicBranchName(context.branch) : context.branch;
+    lines.push(language === "ar"
+      ? `الفرع المناسب حسب كلامك: ${branchLabel}.`
+      : `Your preferred branch is ${branchLabel}.`);
+  }
+
+  if (context.coverage === "light" && (ids.has("price") || ids.has("consultation"))) {
+    lines.push(language === "ar"
+      ? "ذكرت تغطية خفيفة أو فراغات، وهذا يساعد الفريق يركز على الجزء المطلوب بدل حل عام."
+      : "You mentioned light coverage or gaps, which helps the team focus on the required area instead of a general solution.");
+  } else if (context.coverage === "full" && (ids.has("price") || ids.has("consultation"))) {
+    lines.push(language === "ar"
+      ? "ذكرت حلاً كاملاً، لذلك التقييم لازم يشمل مساحة التغطية واللوك المطلوب."
+      : "You mentioned a full solution, so the assessment needs to cover the area and desired look.");
+  }
+
+  return lines.slice(0, 1)[0] || "";
+}
+
+function getSmartDecisionNextStep({ intentIds = [], context = {}, language = "en" } = {}) {
+  const ids = new Set(intentIds || []);
+
+  if (context.customerType === "existing" || ids.has("current_client_service")) {
+    return {
+      action: "service_booking",
+      pendingQuestion: "service_type",
+      text: language === "ar"
+        ? "الخطوة الأنسب: اختر سيرفس حتى نرتب متابعة، تركيب، أو تعديل بالطريقة الصحيحة."
+        : "Best next step: choose Service so we can arrange follow-up, fitting, or adjustment correctly.",
+      buttons: getServiceSubMenuButtons()
+    };
+  }
+
+  if (ids.has("booking") || context.bookingReadiness === "ready") {
+    return {
+      action: "booking_choice",
+      pendingQuestion: "customer_type",
+      text: language === "ar"
+        ? "حتى أفتح لك المسار الصحيح: اختر استشارة إذا كنت عميل جديد، أو سيرفس إذا كنت عميل حالي."
+        : "To open the correct route: choose Consultation if you are new, or Service if you are an existing client.",
+      buttons: getDirectBookingChoiceButtons()
+    };
+  }
+
+  if (ids.has("price") || ids.has("expensive")) {
+    if (!context.coverage) {
+      return {
+        action: "price_qualification",
+        pendingQuestion: "coverage",
+        text: language === "ar"
+          ? "حتى يكون التوجيه أدق: هل المطلوب تغطية فراغات خفيفة أم حل كامل؟"
+          : "For a more accurate direction: do you need light gap coverage or a full solution?",
+        buttons: getSmartConsultTeamButtons()
+      };
+    }
+
+    if (!context.branch) {
+      return {
+        action: "branch_qualification",
+        pendingQuestion: "branch",
+        text: language === "ar"
+          ? "وأي فرع أنسب لك: دبي أم أبوظبي؟"
+          : "Which branch suits you better: Dubai or Abu Dhabi?",
+        buttons: getSmartConsultTeamButtons()
+      };
+    }
+
+    return {
+      action: "consultation",
+      pendingQuestion: "",
+      text: language === "ar"
+        ? "الخطوة الأنسب الآن استشارة قصيرة حتى يعطيك الفريق توجيهاً دقيقاً حسب الحالة."
+        : "The best next step is a short consultation so the team can guide you accurately for your case.",
+      buttons: getSmartConsultTeamButtons()
+    };
+  }
+
+  if (ids.has("location") && context.branch) {
+    return {
+      action: "continue",
+      pendingQuestion: "",
+      text: language === "ar"
+        ? "صار الفرع محدد. تقدر الآن تشوف النتائج أو تبدأ استشارة."
+        : "The branch is now clear. You can view results or start a consultation.",
+      buttons: getSmartConsultTeamButtons()
+    };
+  }
+
+  return {
+    action: "consult_or_results",
+    pendingQuestion: "",
+    text: language === "ar"
+      ? "الخطوة التالية: شوف النتائج أو ابدأ استشارة حتى نوجّهك حسب حالتك."
+      : "Next step: view results or start a consultation so we can guide you for your case.",
+    buttons: getSmartConsultTeamButtons()
+  };
+}
+
+function buildSmartDecisionReply({ phone = "", analysis = {}, memory = {}, customerName = "", language = "en", phoneNumberId = DEFAULT_PHONE_NUMBER_ID } = {}) {
+  const intentIds = getSmartDecisionQualifiedIntentIds(analysis, memory);
+  if (!shouldUseSmartDecisionReply({ analysis, memory, intentIds })) return null;
+
+  const context = getSmartDecisionResolvedContext(analysis, memory, phoneNumberId);
+  const analysisWithContext = {
+    ...analysis,
+    entities: {
+      ...(analysis?.entities || {}),
+      branch: context.branch || analysis?.entities?.branch || "",
+      customerType: context.customerType || analysis?.entities?.customerType || "",
+      coverage: context.coverage || analysis?.entities?.coverage || ""
+    }
+  };
+
+  const sectionIds = intentIds.slice(0, SMART_DECISION_MAX_SECTIONS);
+  const sections = [];
+  const seenSections = new Set();
+
+  sectionIds.forEach((intentId) => {
+    const section = getSmartIntentSection(intentId, analysisWithContext, language).trim();
+    const key = normalizeSmartUnderstandingText(section);
+    if (!section || !key || seenSections.has(key)) return;
+    seenSections.add(key);
+    sections.push(section);
+  });
+
+  const contextLine = getSmartDecisionContextLine(context, sectionIds, language);
+  if (contextLine) sections.push(contextLine);
+  if (!sections.length) return null;
+
+  const cleanName = namePhrase(customerName);
+  const seed = [phone, memory?.turnCount || 0, sectionIds.join("+"), language].join("|");
+  const intro = language === "ar"
+    ? pickSmartDecisionVariant([
+        cleanName ? `أكيد ${cleanName}، خليني أرتبلك الجواب بشكل واضح 👌` : "أكيد، خليني أرتبلك الجواب بشكل واضح 👌",
+        cleanName ? `فهمت عليك ${cleanName}، هذا المختصر المناسب لسؤالك 👌` : "فهمت عليك، هذا المختصر المناسب لسؤالك 👌",
+        cleanName ? `تمام ${cleanName}، بناءً على كلامك:` : "تمام، بناءً على كلامك:"
+      ], seed)
+    : pickSmartDecisionVariant([
+        cleanName ? `Sure ${cleanName}, let me organize the answer clearly 👌` : "Sure, let me organize the answer clearly 👌",
+        cleanName ? `I understand ${cleanName}. Here is the relevant summary 👌` : "I understand. Here is the relevant summary 👌",
+        cleanName ? `Alright ${cleanName}, based on what you shared:` : "Alright, based on what you shared:"
+      ], seed);
+
+  const nextStep = getSmartDecisionNextStep({ intentIds: sectionIds, context, language });
+  const body = [intro, "", ...sections.flatMap((section) => [section, ""]), nextStep.text]
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return {
+    version: SMART_DECISION_VERSION,
+    topic: `decision:${sectionIds.join("+")}`,
+    status: "Smart Decision V3",
+    messageType: "Smart Decision & Reply V3",
+    intents: sectionIds,
+    decision: nextStep.action,
+    pendingQuestion: nextStep.pendingQuestion,
+    context,
+    body,
+    buttons: nextStep.buttons || getSmartConsultTeamButtons()
+  };
+}
+
+function rememberSmartDecisionReply(phone = "", reply = {}, text = "", language = "en") {
+  if (!reply) return null;
+  const cleanPhone = getSmartMemoryPhoneKey(phone);
+  if (!cleanPhone) return null;
+
+  const previous = getSmartConversationMemory(cleanPhone) || buildEmptySmartConversationMemory(cleanPhone);
+  const next = rememberSmartMemoryObject(cleanPhone, {
+    ...previous,
+    phone: cleanPhone,
+    topic: reply.topic || previous.topic || "smart_decision",
+    lastBotTopic: reply.topic || previous.lastBotTopic || "smart_decision",
+    lastText: normalizeSmartUnderstandingText(text || previous.lastText || ""),
+    language: language === "ar" ? "ar" : "en",
+    pendingQuestion: reply.pendingQuestion || "",
+    bookingReadiness: reply.decision === "booking_choice" || reply.decision === "service_booking"
+      ? "ready"
+      : previous.bookingReadiness,
+    updatedAt: Date.now()
+  });
+
+  scheduleSmartMemoryPersistence(cleanPhone);
+  return next;
+}
+
+function buildSmartComplaintHandoffBody(customerName = "", language = "en") {
+  const cleanName = namePhrase(customerName);
+
+  if (language === "ar") {
+    return [
+      cleanName ? `أفهم عليك ${cleanName}، وشكراً إنك وضحت لنا.` : "أفهم عليك، وشكراً إنك وضحت لنا.",
+      "",
+      "حوّلت المحادثة مباشرة للفريق حتى يراجع الموضوع معك بشكل مناسب.",
+      "تم إيقاف الرد الآلي مؤقتاً حتى لا يعطيك جواب عام."
+    ].join("\n");
+  }
+
+  return [
+    cleanName ? `I understand ${cleanName}, and thank you for explaining the issue.` : "I understand, and thank you for explaining the issue.",
+    "",
+    "I have forwarded the conversation directly to the team so they can review it properly.",
+    "Automatic replies are paused temporarily to avoid giving you a generic answer."
+  ].join("\n");
+}
+
+function shouldUseSmartLowConfidenceClarification(analysis = {}, messageType = "") {
+  if (!analysis || analysis.isActionLike) return false;
+  if (!["text", "image"].includes((messageType || "").toString())) return false;
+  if (analysis.intents?.length) return false;
+
+  const words = (analysis.normalizedText || "").split(/\s+/).filter(Boolean);
+  return words.length >= 3 && analysis.normalizedText.length >= 12;
+}
+
+
+
+// UNKNOWN / LOW CONFIDENCE CAPTURE & LEARNING QUEUE V11
+function normalizeSmartUnknownText(text = "") {
+  return normalizeSmartUnderstandingText(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function redactSmartUnknownText(text = "") {
+  return (text || "")
+    .toString()
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[email]")
+    .replace(/https?:\/\/\S+|www\.\S+/gi, "[link]")
+    .replace(/(?:\+?\d[\d\s().-]{6,}\d)/g, "[phone]")
+    .replace(/\b\d{6,}\b/g, "[number]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 500);
+}
+
+function getSmartUnknownFingerprint(text = "", language = "") {
+  const normalized = normalizeSmartUnknownText(text);
+  if (!normalized) return "";
+  return crypto.createHash("sha256")
+    .update(`${language === "ar" ? "ar" : "en"}|${normalized}`, "utf8")
+    .digest("hex")
+    .slice(0, 24);
+}
+
+function getSmartUnknownPhoneHash(phone = "") {
+  const digits = normalizePhoneDigits(phone || "");
+  if (!digits) return "";
+  return crypto.createHash("sha256")
+    .update(`iconic-303-v11|${digits}`, "utf8")
+    .digest("hex")
+    .slice(0, 16);
+}
+
+function isSmartUnknownLearningMessage(message = {}) {
+  const messageType = (message?.messageType || "").toString();
+  return messageType === "Unknown Learning Queue V11" ||
+    messageType === "Unknown Learning Queue V12" ||
+    messageType === "Unknown Learning Queue V13" ||
+    messageType === "Unknown Learning Queue V14" ||
+    (message?.body || "").toString().startsWith(SMART_UNKNOWN_SNAPSHOT_MARKER);
+}
+
+function encodeSmartUnknownLearningEvent(event = {}) {
+  const payload = Buffer.from(JSON.stringify(event), "utf8").toString("base64");
+  return `${SMART_UNKNOWN_SNAPSHOT_MARKER}${payload}`;
+}
+
+function decodeSmartUnknownLearningEvent(body = "") {
+  const value = (body || "").toString();
+  if (!value.startsWith(SMART_UNKNOWN_SNAPSHOT_MARKER)) return null;
+  try {
+    const decoded = Buffer.from(value.slice(SMART_UNKNOWN_SNAPSHOT_MARKER.length), "base64").toString("utf8");
+    const event = JSON.parse(decoded);
+    if (!event?.id || !event?.fingerprint) return null;
+    return event;
+  } catch (error) {
+    console.log("[Unknown Learning V11] snapshot decode failed", error?.message || error);
+    return null;
+  }
+}
+
+function restoreSmartUnknownLearningQueueFromMessages(messages = []) {
+  if (!SMART_UNKNOWN_ENABLED) return 0;
+  const latest = new Map();
+  (messages || []).forEach((message) => {
+    if (!isSmartUnknownLearningMessage(message)) return;
+    const event = decodeSmartUnknownLearningEvent(message.body || "");
+    if (!event) return;
+    const current = latest.get(event.id);
+    if (!current || Number(event.lastSeenAt || 0) >= Number(current.lastSeenAt || 0)) {
+      latest.set(event.id, event);
+    }
+  });
+  latest.forEach((event, id) => smartUnknownLearningQueue.set(id, event));
+  trimSmartUnknownLearningQueue();
+  rebuildSmartIntegratedRuleRegistry();
+  return latest.size;
+}
+
+function trimSmartUnknownLearningQueue(targetQueue = smartUnknownLearningQueue) {
+  if (targetQueue.size <= SMART_UNKNOWN_QUEUE_LIMIT) return;
+  const ordered = [...targetQueue.values()].sort((a, b) =>
+    Number(b.lastSeenAt || 0) - Number(a.lastSeenAt || 0)
+  );
+  targetQueue.clear();
+  ordered.slice(0, SMART_UNKNOWN_QUEUE_LIMIT).forEach((item) => targetQueue.set(item.id, item));
+}
+
+function getSmartUnknownCandidateIntents(analysis = {}) {
+  return (analysis?.intents || [])
+    .slice(0, 3)
+    .map((item) => ({
+      id: (item?.id || "").toString(),
+      score: Number(item?.score || 0),
+      evidence: item?.evidence || {}
+    }))
+    .filter((item) => item.id);
+}
+
+function isSmartUnknownTrivialText(text = "") {
+  const value = compactText(text || "");
+  if (!value) return true;
+  const trivial = new Set([
+    "hi", "hello", "hey", "مرحبا", "مرحباً", "هلا", "السلام عليكم", "اهلا", "أهلا",
+    "ok", "okay", "تمام", "اوكي", "أوكي", "شكرا", "شكراً", "thanks", "thank you",
+    "yes", "no", "نعم", "لا", "👍", "🙏", "👌", "❤️", "❤"
+  ]);
+  return trivial.has(value);
+}
+
+function isSmartUnknownProtectedText(text = "", analysis = {}, messageType = "") {
+  const type = (messageType || "").toString().toLowerCase();
+  if (!["text", "image"].includes(type)) return true;
+  if (analysis?.isActionLike) return true;
+  if (isSmartUnknownTrivialText(text)) return true;
+  if (isOptInText(text) || isOptOutText(text)) return true;
+  if (isHumanAssistanceIntentText(text) || isTalkToTeamText(text)) return true;
+  if (analysis?.primaryIntent === "complaint") return true;
+  if (isResumeBotText(text)) return true;
+  return false;
+}
+
+function evaluateSmartUnknownCapture({
+  text = "",
+  analysis = {},
+  messageType = "text",
+  recovery = {},
+  memory = {},
+  knownReplies = []
+} = {}) {
+  const normalizedText = normalizeSmartUnknownText(text);
+  const result = {
+    version: SMART_UNKNOWN_VERSION,
+    enabled: SMART_UNKNOWN_ENABLED,
+    capture: false,
+    reason: "",
+    normalizedText,
+    score: Number(analysis?.score || 0),
+    confidence: analysis?.confidence || "none",
+    ambiguityGap: null,
+    candidates: getSmartUnknownCandidateIntents(analysis),
+    protected: false
+  };
+
+  if (!SMART_UNKNOWN_ENABLED || !normalizedText) return result;
+  if (isSmartUnknownProtectedText(text, analysis, messageType)) {
+    result.protected = true;
+    return result;
+  }
+
+  const words = normalizedText.split(/\s+/).filter(Boolean);
+  if (normalizedText.length < 4 || words.length < 1) return result;
+
+  const candidates = result.candidates;
+  const first = Number(candidates[0]?.score || 0);
+  const second = Number(candidates[1]?.score || 0);
+  const gap = candidates.length >= 2 ? Number((first - second).toFixed(2)) : null;
+  result.ambiguityGap = gap;
+
+  const hasStrongKnownReply = (knownReplies || []).some(Boolean) && first >= SMART_UNKNOWN_SCORE_THRESHOLD;
+  const unresolvedRecovery = Boolean(
+    recovery?.handled &&
+    recovery?.needsReply &&
+    !recovery?.resolvedSlot &&
+    !recovery?.resolvedIntent
+  );
+  const clarificationLoop = Number(memory?.recoveryAttempts || 0) >= SMART_RECOVERY_MAX_ATTEMPTS ||
+    Number(memory?.stalledTurns || 0) > SMART_GOAL_STALL_LIMIT;
+
+  if (!candidates.length) {
+    result.capture = true;
+    result.reason = unresolvedRecovery ? "unresolved_recovery" : "no_intent";
+    return result;
+  }
+
+  if (first > 0 && first < SMART_UNKNOWN_SCORE_THRESHOLD) {
+    result.capture = true;
+    result.reason = "low_score";
+    return result;
+  }
+
+  if (
+    candidates.length >= 2 &&
+    first < 0.86 &&
+    gap !== null &&
+    gap <= SMART_UNKNOWN_AMBIGUITY_GAP
+  ) {
+    result.capture = true;
+    result.reason = "ambiguous_intent";
+    return result;
+  }
+
+  if (clarificationLoop && !hasStrongKnownReply) {
+    result.capture = true;
+    result.reason = "clarification_loop";
+    return result;
+  }
+
+  return result;
+}
+
+function buildSmartUnknownContext(memory = {}, analysis = {}) {
+  return {
+    state: memory?.conversationState || memory?.state || "",
+    goal: memory?.currentGoal || memory?.goal || "",
+    pendingQuestion: memory?.pendingQuestion || "",
+    lastIntent: memory?.lastIntent || "",
+    recentIntents: (memory?.recentIntents || []).slice(-SMART_UNKNOWN_HISTORY_LIMIT),
+    customerType: memory?.customerType || analysis?.entities?.customerType || "",
+    branch: memory?.branch || memory?.lineBranch || analysis?.entities?.branch || "",
+    coverage: memory?.coverage || analysis?.entities?.coverage || ""
+  };
+}
+
+function captureSmartUnknownEvent({
+  phone = "",
+  text = "",
+  language = "en",
+  phoneNumberId = DEFAULT_PHONE_NUMBER_ID,
+  branch = AI_303_BRANCH_NAME,
+  messageType = "text",
+  evaluation = {},
+  analysis = {},
+  memory = {},
+  persist = true,
+  targetQueue = smartUnknownLearningQueue
+} = {}) {
+  if (!evaluation?.capture) return null;
+  const fingerprint = getSmartUnknownFingerprint(text, language);
+  if (!fingerprint) return null;
+  const id = `uq_${fingerprint}`;
+  const now = Date.now();
+  const previous = targetQueue.get(id) || {};
+  const sampleText = redactSmartUnknownText(text);
+  const occurrence = {
+    at: now,
+    reason: evaluation.reason || "unknown",
+    score: Number(analysis?.score || 0),
+    branch: normalizeInboxBranchName(branch || "") || AI_303_BRANCH_NAME
+  };
+  const event = {
+    version: SMART_UNKNOWN_VERSION,
+    id,
+    fingerprint,
+    sampleText: sampleText || previous.sampleText || "",
+    normalizedText: redactSmartUnknownText(normalizeSmartUnknownText(text)),
+    language: language === "ar" ? "ar" : "en",
+    reason: evaluation.reason || previous.reason || "unknown",
+    confidence: analysis?.confidence || "none",
+    score: Number(analysis?.score || 0),
+    candidates: getSmartUnknownCandidateIntents(analysis),
+    context: buildSmartUnknownContext(memory, analysis),
+    phoneHash: getSmartUnknownPhoneHash(phone),
+    messageType: (messageType || "text").toString(),
+    branch: normalizeInboxBranchName(branch || "") || AI_303_BRANCH_NAME,
+    phoneNumberId: normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID),
+    count: Number(previous.count || 0) + 1,
+    firstSeenAt: Number(previous.firstSeenAt || now),
+    lastSeenAt: now,
+    status: SMART_UNKNOWN_ALLOWED_STATUSES.has(previous.status) ? previous.status : "new",
+    reviewNote: previous.reviewNote || "",
+    promotedIntent: previous.promotedIntent || "",
+    reviewedAt: Number(previous.reviewedAt || 0),
+    occurrences: [...(previous.occurrences || []), occurrence].slice(-SMART_UNKNOWN_HISTORY_LIMIT)
+  };
+  targetQueue.set(id, event);
+  trimSmartUnknownLearningQueue(targetQueue);
+  if (persist && targetQueue === smartUnknownLearningQueue) {
+    scheduleSmartUnknownEventPersistence(id);
+  }
+  return event;
+}
+
+async function persistSmartUnknownLearningEvent(id = "") {
+  if (!SMART_UNKNOWN_ENABLED || !SMART_UNKNOWN_PERSIST_ENABLED) return { ok: false, skipped: true };
+  const event = smartUnknownLearningQueue.get(id);
+  if (!event) return { ok: false, skipped: true };
+  const item = {
+    time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }),
+    phone: "unknown-learning-queue",
+    customerName: "",
+    branch: event.branch || AI_303_BRANCH_NAME,
+    sender: "system",
+    body: encodeSmartUnknownLearningEvent(event),
+    status: "System",
+    messageType: "Unknown Learning Queue V14",
+    phoneNumberId: event.phoneNumberId || DEFAULT_PHONE_NUMBER_ID
+  };
+  try {
+    await saveMessageToGoogleSheet(item);
+    return { ok: true };
+  } catch (error) {
+    console.log("[Unknown Learning V11] persistence failed", error?.message || error);
+    return { ok: false, error: error?.message || "persistence_failed" };
+  }
+}
+
+function scheduleSmartUnknownEventPersistence(id = "") {
+  if (!SMART_UNKNOWN_ENABLED || !SMART_UNKNOWN_PERSIST_ENABLED || !id) return;
+  const existing = smartUnknownPersistTimers.get(id);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(() => {
+    smartUnknownPersistTimers.delete(id);
+    persistSmartUnknownLearningEvent(id).catch((error) => {
+      console.log("[Unknown Learning V11] scheduled persistence failed", error?.message || error);
+    });
+  }, SMART_UNKNOWN_SAVE_DEBOUNCE_MS);
+  smartUnknownPersistTimers.set(id, timer);
+}
+
+function applySmartUnknownCaptureToMemory({ phone = "", memory = {}, event = null, persist = true } = {}) {
+  if (!event) return memory;
+  const cleanPhone = getSmartMemoryPhoneKey(phone);
+  if (!cleanPhone) return memory;
+  const next = rememberSmartMemoryObject(cleanPhone, {
+    ...memory,
+    phone: cleanPhone,
+    unknownCaptureCount: Number(memory?.unknownCaptureCount || 0) + 1,
+    lastUnknownReason: event.reason || "",
+    lastUnknownFingerprint: event.fingerprint || "",
+    lastUnknownAt: event.lastSeenAt || Date.now(),
+    updatedAt: Date.now()
+  });
+  if (persist) scheduleSmartMemoryPersistence(cleanPhone);
+  return next;
+}
+
+function buildSmartUnknownClarificationReply({ evaluation = {}, event = null, customerName = "", language = "en" } = {}) {
+  if (!evaluation?.capture) return null;
+  const cleanName = namePhrase(customerName);
+  const ambiguous = evaluation.reason === "ambiguous_intent";
+  const loop = ["clarification_loop", "unresolved_recovery"].includes(evaluation.reason);
+  let body;
+  if (language === "ar") {
+    body = [
+      cleanName ? `تمام ${cleanName}، ما بدي أخمّن عليك.` : "تمام، ما بدي أخمّن عليك.",
+      "",
+      ambiguous
+        ? "رسالتك ممكن تنفهم بأكثر من معنى. اختر الخيار الأقرب حتى أعطيك جواب دقيق."
+        : loop
+          ? "لسه المعنى مو واضح بالكامل. اكتب طلبك بجملة قصيرة، أو اختر الخيار الأقرب."
+          : "ما قدرت أحدد طلبك بدقة. هل تقصد السعر، الحجز، أو التحدث مع الفريق؟"
+    ].join("\n");
+  } else {
+    body = [
+      cleanName ? `Thanks ${cleanName} — I do not want to guess.` : "Thanks — I do not want to guess.",
+      "",
+      ambiguous
+        ? "Your message could mean more than one thing. Choose the closest option so I can answer accurately."
+        : loop
+          ? "The meaning is still not fully clear. Please write your request in one short sentence, or choose the closest option."
+          : "I could not identify your request accurately. Do you mean price, booking, or talking to the team?"
+    ].join("\n");
+  }
+  return {
+    version: SMART_UNKNOWN_VERSION,
+    status: "Unknown / Low Confidence V11",
+    messageType: "Unknown Clarification V11",
+    topic: "unknown_low_confidence",
+    decision: "clarify_without_guessing",
+    pendingQuestion: "unknown_intent",
+    body,
+    buttons: getClarifyingIntentButtons(),
+    queueId: event?.id || "",
+    reason: evaluation.reason || "unknown"
+  };
+}
+
+function getSmartUnknownQueueSnapshot({ status = "", limit = 50 } = {}) {
+  const cleanStatus = (status || "").toString().trim().toLowerCase();
+  const max = Math.min(200, Math.max(1, Number(limit || 50)));
+  return [...smartUnknownLearningQueue.values()]
+    .filter((item) => !cleanStatus || item.status === cleanStatus)
+    .sort((a, b) => (Number(b.count || 0) - Number(a.count || 0)) || (Number(b.lastSeenAt || 0) - Number(a.lastSeenAt || 0)))
+    .slice(0, max);
+}
+
+function getSmartUnknownQueueSummary() {
+  const items = [...smartUnknownLearningQueue.values()];
+  const byStatus = {};
+  const byReason = {};
+  items.forEach((item) => {
+    byStatus[item.status || "new"] = Number(byStatus[item.status || "new"] || 0) + 1;
+    byReason[item.reason || "unknown"] = Number(byReason[item.reason || "unknown"] || 0) + 1;
+  });
+  return {
+    total: items.length,
+    totalOccurrences: items.reduce((sum, item) => sum + Number(item.count || 0), 0),
+    byStatus,
+    byReason,
+    top: getSmartUnknownQueueSnapshot({ limit: 10 }).map((item) => ({
+      id: item.id,
+      sampleText: item.sampleText,
+      count: item.count,
+      reason: item.reason,
+      status: item.status,
+      lastSeenAt: item.lastSeenAt
+    }))
+  };
+}
+
+function runSmartUnknownTestCase(testCase = {}) {
+  const text = (testCase.text || "").toString();
+  const language = testCase.language || detectIncomingLanguage(text, "en");
+  const analysis = testCase.analysis || analyzeSmartUnderstanding(text);
+  const memory = testCase.memory || {};
+  const evaluation = evaluateSmartUnknownCapture({
+    text,
+    analysis,
+    messageType: testCase.messageType || "text",
+    recovery: testCase.recovery || {},
+    memory,
+    knownReplies: testCase.knownReplies || []
+  });
+  const localQueue = new Map();
+  const event = evaluation.capture ? captureSmartUnknownEvent({
+    phone: "971500000011",
+    text,
+    language,
+    evaluation,
+    analysis,
+    memory,
+    persist: false,
+    targetQueue: localQueue
+  }) : null;
+  const reply = buildSmartUnknownClarificationReply({ evaluation, event, language, customerName: "Test Customer" });
+  const expectedCapture = Boolean(testCase.expectedCapture);
+  const passed = evaluation.capture === expectedCapture &&
+    (!testCase.expectedReason || evaluation.reason === testCase.expectedReason) &&
+    (!testCase.expectRedaction || !event?.sampleText?.includes(testCase.expectRedaction));
+  return {
+    id: testCase.id,
+    text,
+    passed,
+    expectedCapture,
+    evaluation,
+    event,
+    preview: reply ? { body: reply.body, buttons: localizeReplyButtons(reply.buttons || [], language) } : null
+  };
+}
+
+function getSmartUnknownRegressionSuite() {
+  return [
+    { id: "unknown_arabic", text: "عندي موضوع غريب متعلق بشي ما بعرف كيف اشرحه", expectedCapture: true, expectedReason: "no_intent" },
+    { id: "unknown_english", text: "I need help with something completely different and unclear", expectedCapture: true, expectedReason: "no_intent" },
+    { id: "known_price", text: "كم السعر", expectedCapture: false },
+    { id: "protected_complaint", text: "خدمتكم سيئة وما حدا رد", expectedCapture: false },
+    { id: "protected_human", text: "بدي احكي مع موظف", expectedCapture: false },
+    { id: "trivial_greeting", text: "مرحبا", expectedCapture: false },
+    {
+      id: "synthetic_low_score",
+      text: "ممكن توضحلي هالموضوع",
+      analysis: { normalizedText: "ممكن توضحلي هالموضوع", intents: [{ id: "services", score: 0.45 }], primaryIntent: "services", score: 0.45, confidence: "low", entities: {}, isActionLike: false },
+      expectedCapture: true,
+      expectedReason: "low_score"
+    },
+    {
+      id: "synthetic_ambiguity",
+      text: "ممكن هالخيار",
+      analysis: { normalizedText: "ممكن هالخيار", intents: [{ id: "price", score: 0.70 }, { id: "booking", score: 0.66 }], primaryIntent: "price", score: 0.70, confidence: "medium", entities: {}, isActionLike: false },
+      expectedCapture: true,
+      expectedReason: "ambiguous_intent"
+    },
+    {
+      id: "privacy_redaction",
+      text: "رقمي 0501234567 وبريدي test@example.com وعندي موضوع غير معروف",
+      analysis: { normalizedText: "رقمي 0501234567 وبريدي test example com وعندي موضوع غير معروف", intents: [], primaryIntent: "", score: 0, confidence: "none", entities: {}, isActionLike: false },
+      expectedCapture: true,
+      expectedReason: "no_intent",
+      expectRedaction: "0501234567"
+    }
+  ];
+}
+
+
+// LEARNING REVIEW & SAFE PROMOTION CONSOLE V12
+function getSmartLearningIntentCatalog() {
+  return SMART_LEARNING_INTENT_CATALOG.map((item) => ({ ...item }));
+}
+
+function getSmartLearningIntentDefinition(intentId = "") {
+  const clean = (intentId || "").toString().trim().toLowerCase();
+  return SMART_LEARNING_INTENT_CATALOG.find((item) => item.id === clean) || null;
+}
+
+function normalizeSmartLearningNegativeExamples(value = []) {
+  const raw = Array.isArray(value)
+    ? value
+    : (value || "").toString().split(/\r?\n|\|/);
+  const seen = new Set();
+  return raw
+    .map((item) => redactSmartUnknownText(item || ""))
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item) => {
+      const key = normalizeSmartUnknownText(item);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, SMART_LEARNING_REVIEW_MAX_NEGATIVE_EXAMPLES);
+}
+
+function getSmartLearningTokenSet(text = "") {
+  return new Set(
+    normalizeSmartUnknownText(text)
+      .split(/\s+/)
+      .map((word) => word.trim())
+      .filter((word) => word.length > 1)
+  );
+}
+
+function getSmartLearningTextSimilarity(left = "", right = "") {
+  const a = getSmartLearningTokenSet(left);
+  const b = getSmartLearningTokenSet(right);
+  if (!a.size || !b.size) return 0;
+  let intersection = 0;
+  a.forEach((token) => {
+    if (b.has(token)) intersection += 1;
+  });
+  const union = new Set([...a, ...b]).size || 1;
+  return Number((intersection / union).toFixed(2));
+}
+
+function getSmartLearningCandidateId(queueId = "", phrase = "", intent = "") {
+  const digest = crypto.createHash("sha256")
+    .update(`${queueId}|${normalizeSmartUnknownText(phrase)}|${intent}`, "utf8")
+    .digest("hex")
+    .slice(0, 18);
+  return `lr_${digest}`;
+}
+
+function getSmartLearningPromotedRules() {
+  return [...smartUnknownLearningQueue.values()]
+    .filter((item) => item.status === "promoted" && item.candidateRule?.id)
+    .map((item) => ({ ...item.candidateRule }))
+    .sort((a, b) => Number(b.promotedAt || 0) - Number(a.promotedAt || 0));
+}
+
+function runSmartLearningConflictTests({ item = {}, payload = {}, targetQueue = smartUnknownLearningQueue } = {}) {
+  const approvedPhrase = redactSmartUnknownText(payload.approvedPhrase || item.sampleText || "");
+  const targetIntent = (payload.targetIntent || "").toString().trim().toLowerCase();
+  const action = (payload.action || "add_phrase").toString().trim().toLowerCase();
+  const negativeExamples = normalizeSmartLearningNegativeExamples(payload.negativeExamples || []);
+  const intentDefinition = getSmartLearningIntentDefinition(targetIntent);
+  const analysis = analyzeSmartUnderstanding(approvedPhrase);
+  const tests = [];
+  const addTest = (id, pass, message, severity = "blocking", details = {}) => {
+    tests.push({ id, pass: Boolean(pass), severity, message, details });
+  };
+
+  addTest(
+    "review_feature_enabled",
+    SMART_LEARNING_REVIEW_ENABLED,
+    SMART_LEARNING_REVIEW_ENABLED ? "V12 review is enabled." : "V12 review is disabled.",
+    "blocking"
+  );
+  addTest(
+    "phrase_length",
+    approvedPhrase.length >= SMART_LEARNING_REVIEW_MIN_PHRASE_LENGTH,
+    approvedPhrase.length >= SMART_LEARNING_REVIEW_MIN_PHRASE_LENGTH
+      ? "Approved phrase is long enough."
+      : "Approved phrase is too short for safe promotion.",
+    "blocking",
+    { length: approvedPhrase.length, minimum: SMART_LEARNING_REVIEW_MIN_PHRASE_LENGTH }
+  );
+  addTest(
+    "intent_allowed",
+    Boolean(intentDefinition),
+    intentDefinition ? "Target intent exists in the approved catalog." : "Target intent is not approved.",
+    "blocking",
+    { targetIntent }
+  );
+  addTest(
+    "action_allowed",
+    SMART_LEARNING_ALLOWED_ACTIONS.has(action),
+    SMART_LEARNING_ALLOWED_ACTIONS.has(action) ? "Promotion action is approved." : "Promotion action is not approved.",
+    "blocking",
+    { action }
+  );
+
+  const containsRedaction = /\[(?:phone|email|link|number)\]/i.test(approvedPhrase);
+  addTest(
+    "no_redacted_identity_tokens",
+    !containsRedaction,
+    containsRedaction
+      ? "The phrase contains redacted identity data and cannot become a rule."
+      : "No redacted identity tokens are present.",
+    "blocking"
+  );
+
+  const complaintText = analysis?.primaryIntent === "complaint" || /ما حدا رد|خدمتكم سيئ|شكوى|complain|no one replied|bad service/i.test(approvedPhrase);
+  addTest(
+    "complaint_safety",
+    !complaintText || targetIntent === "complaint",
+    complaintText && targetIntent !== "complaint"
+      ? "This phrase behaves like a complaint and cannot be promoted to another intent."
+      : "Complaint routing remains protected.",
+    "blocking",
+    { detectedPrimary: analysis?.primaryIntent || "" }
+  );
+
+  const humanText = isHumanAssistanceIntentText(approvedPhrase) || isTalkToTeamText(approvedPhrase);
+  addTest(
+    "human_handoff_safety",
+    !humanText || targetIntent === "human",
+    humanText && targetIntent !== "human"
+      ? "This phrase asks for a person and must remain on the human route."
+      : "Human handoff routing remains protected.",
+    "blocking"
+  );
+
+  const optControl = isOptInText(approvedPhrase) || isOptOutText(approvedPhrase) || isResumeBotText(approvedPhrase);
+  addTest(
+    "automation_control_safety",
+    !optControl,
+    optControl
+      ? "Opt-in, opt-out, and bot-control phrases cannot be learned through this console."
+      : "No automation-control command was detected.",
+    "blocking"
+  );
+
+  const acceptedPrimaries = intentDefinition?.acceptedPrimaries || [];
+  const existingPrimary = (analysis?.primaryIntent || "").toString();
+  const existingScore = Number(analysis?.score || 0);
+  const existingConflict = Boolean(
+    existingPrimary &&
+    existingScore >= 0.75 &&
+    acceptedPrimaries.length &&
+    !acceptedPrimaries.includes(existingPrimary)
+  );
+  addTest(
+    "existing_intent_conflict",
+    !existingConflict,
+    existingConflict
+      ? `Current engine strongly recognizes this as ${existingPrimary}, not ${targetIntent}.`
+      : "No strong conflict with the current understanding engine.",
+    "blocking",
+    { existingPrimary, existingScore, acceptedPrimaries }
+  );
+
+  const duplicateConflicts = [...targetQueue.values()]
+    .filter((other) => other.id !== item.id && other.status === "promoted" && other.candidateRule?.approvedPhrase)
+    .map((other) => ({
+      id: other.id,
+      intent: other.candidateRule.targetIntent || "",
+      similarity: getSmartLearningTextSimilarity(approvedPhrase, other.candidateRule.approvedPhrase || "")
+    }))
+    .filter((other) => other.similarity >= 0.8 && other.intent !== targetIntent);
+  addTest(
+    "promoted_rule_conflict",
+    duplicateConflicts.length === 0,
+    duplicateConflicts.length
+      ? "A similar promoted phrase already points to a different intent."
+      : "No conflicting promoted rule was found.",
+    "blocking",
+    { conflicts: duplicateConflicts }
+  );
+
+  const negativeConflicts = negativeExamples
+    .map((example) => ({ example, similarity: getSmartLearningTextSimilarity(approvedPhrase, example) }))
+    .filter((entry) => entry.similarity >= 0.75);
+  addTest(
+    "negative_examples_separated",
+    negativeConflicts.length === 0,
+    negativeConflicts.length
+      ? "One or more negative examples are too similar to the approved phrase."
+      : "Negative examples are sufficiently separated.",
+    "blocking",
+    { conflicts: negativeConflicts }
+  );
+
+  addTest(
+    "human_review_required",
+    Boolean(payload.reviewConfirmed),
+    payload.reviewConfirmed
+      ? "Human reviewer explicitly confirmed this promotion."
+      : "Human confirmation is required before promotion.",
+    "blocking"
+  );
+
+  const blockingFailures = tests.filter((test) => test.severity === "blocking" && !test.pass);
+  return {
+    version: SMART_LEARNING_REVIEW_VERSION,
+    safeToPromote: blockingFailures.length === 0,
+    approvedPhrase,
+    targetIntent,
+    action,
+    negativeExamples,
+    analysis: {
+      primaryIntent: analysis?.primaryIntent || "",
+      score: Number(analysis?.score || 0),
+      confidence: analysis?.confidence || "none",
+      candidates: getSmartUnknownCandidateIntents(analysis)
+    },
+    tests,
+    blockingFailures
+  };
+}
+
+function buildSmartLearningCandidateRule({ item = {}, payload = {}, reviewer = "Team Inbox", validation = {} } = {}) {
+  const approvedPhrase = validation.approvedPhrase || redactSmartUnknownText(payload.approvedPhrase || item.sampleText || "");
+  const targetIntent = validation.targetIntent || (payload.targetIntent || "").toString().trim().toLowerCase();
+  const action = validation.action || (payload.action || "add_phrase").toString().trim().toLowerCase();
+  const now = Date.now();
+  return {
+    schemaVersion: 1,
+    version: SMART_LEARNING_REVIEW_VERSION,
+    id: getSmartLearningCandidateId(item.id || "", approvedPhrase, targetIntent),
+    sourceQueueId: item.id || "",
+    sourceFingerprint: item.fingerprint || "",
+    approvedPhrase,
+    normalizedPhrase: normalizeSmartUnknownText(approvedPhrase),
+    language: item.language || detectIncomingLanguage(approvedPhrase, "en"),
+    targetIntent,
+    action,
+    answerKey: (payload.answerKey || "").toString().trim().slice(0, 100),
+    priority: Math.min(120, Math.max(1, Number(payload.priority || 70))),
+    negativeExamples: validation.negativeExamples || normalizeSmartLearningNegativeExamples(payload.negativeExamples || []),
+    reviewerNote: redactSmartUnknownText(payload.reviewNote || "").slice(0, 500),
+    reviewedBy: reviewer || "Team Inbox",
+    reviewedAt: now,
+    promotedAt: validation.safeToPromote ? now : 0,
+    safeToPromote: Boolean(validation.safeToPromote),
+    tests: (validation.tests || []).map((test) => ({
+      id: test.id,
+      pass: Boolean(test.pass),
+      severity: test.severity,
+      message: test.message
+    })),
+    runtimeApplied: false,
+    deploymentRequired: true,
+    integrationStatus: "candidate",
+    integrationVersion: "",
+    integrationGateHash: "",
+    integratedAt: 0,
+    integratedBy: "",
+    rolledBackAt: 0,
+    rolledBackBy: ""
+  };
+}
+
+async function saveSmartLearningReview({ id = "", payload = {}, reviewer = "Team Inbox", promote = false } = {}) {
+  const item = smartUnknownLearningQueue.get(id);
+  if (!item) return { ok: false, status: 404, error: "queue_item_not_found" };
+  const targetIntent = (payload.targetIntent || item.reviewTargetIntent || "").toString().trim().toLowerCase();
+  const action = (payload.action || item.reviewAction || "add_phrase").toString().trim().toLowerCase();
+  const approvedPhrase = redactSmartUnknownText(payload.approvedPhrase || item.approvedPhrase || item.sampleText || "");
+  const mergedPayload = {
+    ...payload,
+    targetIntent,
+    action,
+    approvedPhrase,
+    negativeExamples: normalizeSmartLearningNegativeExamples(payload.negativeExamples || item.negativeExamples || [])
+  };
+  const validation = runSmartLearningConflictTests({ item, payload: mergedPayload });
+  const candidateRule = buildSmartLearningCandidateRule({ item, payload: mergedPayload, reviewer, validation });
+
+  if (promote && !validation.safeToPromote) {
+    return {
+      ok: false,
+      status: 422,
+      error: "safe_promotion_tests_failed",
+      validation,
+      candidateRule
+    };
+  }
+
+  const next = {
+    ...item,
+    status: promote ? "promoted" : "reviewed",
+    reviewTargetIntent: targetIntent,
+    reviewAction: action,
+    approvedPhrase,
+    answerKey: (payload.answerKey || item.answerKey || "").toString().trim().slice(0, 100),
+    priority: Math.min(120, Math.max(1, Number(payload.priority || item.priority || 70))),
+    negativeExamples: mergedPayload.negativeExamples,
+    reviewNote: redactSmartUnknownText(payload.reviewNote || item.reviewNote || "").slice(0, 500),
+    reviewedAt: Date.now(),
+    reviewedBy: reviewer || "Team Inbox",
+    promotedIntent: promote ? targetIntent : (item.promotedIntent || ""),
+    promotionValidation: validation,
+    candidateRule: promote ? candidateRule : { ...candidateRule, promotedAt: 0, safeToPromote: false }
+  };
+  smartUnknownLearningQueue.set(id, next);
+  const persisted = await persistSmartUnknownLearningEvent(id);
+  return { ok: true, status: 200, item: next, validation, candidateRule, persisted };
+}
+
+async function ignoreSmartLearningItem({ id = "", reviewNote = "", reviewer = "Team Inbox" } = {}) {
+  const item = smartUnknownLearningQueue.get(id);
+  if (!item) return { ok: false, status: 404, error: "queue_item_not_found" };
+  const next = {
+    ...item,
+    status: "ignored",
+    reviewNote: redactSmartUnknownText(reviewNote || item.reviewNote || "").slice(0, 500),
+    reviewedAt: Date.now(),
+    reviewedBy: reviewer || "Team Inbox",
+    candidateRule: null,
+    promotionValidation: null
+  };
+  smartUnknownLearningQueue.set(id, next);
+  const persisted = await persistSmartUnknownLearningEvent(id);
+  return { ok: true, status: 200, item: next, persisted };
+}
+
+function runSmartLearningReviewTestCase(testCase = {}) {
+  const item = {
+    id: `test_${testCase.id}`,
+    fingerprint: `fp_${testCase.id}`,
+    sampleText: testCase.phrase,
+    language: detectIncomingLanguage(testCase.phrase, "en"),
+    status: "new"
+  };
+  const payload = {
+    approvedPhrase: testCase.phrase,
+    targetIntent: testCase.targetIntent,
+    action: testCase.action || "add_phrase",
+    negativeExamples: testCase.negativeExamples || [],
+    reviewConfirmed: testCase.reviewConfirmed !== false
+  };
+  const validation = runSmartLearningConflictTests({ item, payload, targetQueue: new Map() });
+  const passed = validation.safeToPromote === Boolean(testCase.expectedSafe);
+  return { id: testCase.id, passed, expectedSafe: Boolean(testCase.expectedSafe), validation };
+}
+
+function getSmartLearningReviewRegressionSuite() {
+  return [
+    { id: "valid_privacy_phrase", phrase: "بدي شي ما يفضحني قدام العالم", targetIntent: "privacy_concern", expectedSafe: true },
+    { id: "complaint_mislabeled_privacy", phrase: "خدمتكم سيئة وما حدا رد علي", targetIntent: "privacy_concern", expectedSafe: false },
+    { id: "human_mislabeled_price", phrase: "بدي احكي مع موظف", targetIntent: "price", expectedSafe: false },
+    { id: "redacted_phone_rule", phrase: "اتصلوا على [phone] بخصوص السعر", targetIntent: "price", expectedSafe: false },
+    { id: "invalid_intent", phrase: "عندي سؤال مختلف", targetIntent: "made_up_intent", expectedSafe: false },
+    { id: "missing_human_confirmation", phrase: "السعر فوق ميزانيتي", targetIntent: "expensive", reviewConfirmed: false, expectedSafe: false },
+    { id: "negative_example_collision", phrase: "ما بدي حدا يعرف", targetIntent: "privacy_concern", negativeExamples: ["ما بدي حدا يعرف ابدا"], expectedSafe: false }
+  ];
+}
+
+
+// CANDIDATE RULE INTEGRATION & REGRESSION GATE V13
+function normalizeSmartIntegratedRule(rule = {}) {
+  const targetIntent = (rule.targetIntent || "").toString().trim().toLowerCase();
+  const action = (rule.action || "add_phrase").toString().trim().toLowerCase();
+  const approvedPhrase = redactSmartUnknownText(rule.approvedPhrase || "");
+  return {
+    ...rule,
+    id: (rule.id || "").toString().trim(),
+    approvedPhrase,
+    normalizedPhrase: normalizeSmartUnknownText(approvedPhrase),
+    targetIntent,
+    action,
+    priority: Math.min(120, Math.max(1, Number(rule.priority || 70))),
+    negativeExamples: normalizeSmartLearningNegativeExamples(rule.negativeExamples || []),
+    runtimeApplied: Boolean(rule.runtimeApplied),
+    integrationStatus: (rule.integrationStatus || "candidate").toString().trim().toLowerCase()
+  };
+}
+
+function isSmartIntegratedRuleRuntimeEligible(rule = {}, { requireActive = true } = {}) {
+  const normalized = normalizeSmartIntegratedRule(rule);
+  if (!SMART_RULE_INTEGRATION_ENABLED || !SMART_RULE_RUNTIME_ENABLED) return false;
+  if (!normalized.id || !normalized.approvedPhrase || !normalized.targetIntent) return false;
+  if (!normalized.safeToPromote) return false;
+  if (!SMART_RULE_RUNTIME_ACTIONS.has(normalized.action)) return false;
+  if (!getSmartLearningIntentDefinition(normalized.targetIntent)) return false;
+  if (requireActive && (!normalized.runtimeApplied || normalized.integrationStatus !== "active")) return false;
+  return true;
+}
+
+function rebuildSmartIntegratedRuleRegistry() {
+  smartIntegratedRuleRegistry.clear();
+  if (!SMART_RULE_INTEGRATION_ENABLED || !SMART_RULE_RUNTIME_ENABLED) return 0;
+
+  const active = [...smartUnknownLearningQueue.values()]
+    .map((item) => item?.candidateRule || null)
+    .filter(Boolean)
+    .map(normalizeSmartIntegratedRule)
+    .filter((rule) => isSmartIntegratedRuleRuntimeEligible(rule))
+    .sort((a, b) => (b.priority - a.priority) || (Number(b.integratedAt || 0) - Number(a.integratedAt || 0)))
+    .slice(0, SMART_RULE_MAX_ACTIVE);
+
+  active.forEach((rule) => smartIntegratedRuleRegistry.set(rule.id, rule));
+  return smartIntegratedRuleRegistry.size;
+}
+
+function getSmartIntegratedRulesSnapshot() {
+  return [...smartIntegratedRuleRegistry.values()]
+    .map((rule) => ({ ...rule }))
+    .sort((a, b) => (b.priority - a.priority) || (Number(b.integratedAt || 0) - Number(a.integratedAt || 0)));
+}
+
+function getSmartRuleIntegrationSummary() {
+  const promoted = getSmartLearningPromotedRules();
+  const active = promoted.filter((rule) => rule.runtimeApplied && rule.integrationStatus === "active");
+  const rolledBack = promoted.filter((rule) => rule.integrationStatus === "rolled_back");
+  const pending = promoted.filter((rule) => !rule.runtimeApplied && !["active", "rolled_back"].includes(rule.integrationStatus || ""));
+  return {
+    promoted: promoted.length,
+    active: active.length,
+    pending: pending.length,
+    rolledBack: rolledBack.length,
+    registrySize: smartIntegratedRuleRegistry.size
+  };
+}
+
+function getSmartRuleInputRules(rules = null) {
+  if (Array.isArray(rules)) {
+    return rules.map(normalizeSmartIntegratedRule).filter((rule) =>
+      isSmartIntegratedRuleRuntimeEligible({
+        ...rule,
+        runtimeApplied: true,
+        integrationStatus: "active"
+      })
+    );
+  }
+  return getSmartIntegratedRulesSnapshot();
+}
+
+function doesSmartIntegratedRuleMatch(text = "", rule = {}) {
+  const normalizedText = normalizeSmartUnderstandingText(text || "");
+  const normalizedRule = normalizeSmartIntegratedRule(rule);
+  if (!normalizedText || !normalizedRule.approvedPhrase) return false;
+
+  const negativeMatch = (normalizedRule.negativeExamples || []).some((example) =>
+    smartPhraseMatches(normalizedText, example) ||
+    getSmartLearningTextSimilarity(normalizedText, example) >= 0.9
+  );
+  if (negativeMatch) return false;
+
+  if (smartPhraseMatches(normalizedText, normalizedRule.approvedPhrase)) return true;
+
+  // Scenario candidates may include a longer reviewed phrase. Permit a very
+  // close token match, but never fuzzy-match ordinary phrase rules.
+  if (normalizedRule.action === "add_scenario") {
+    return getSmartLearningTextSimilarity(normalizedText, normalizedRule.approvedPhrase) >= 0.9;
+  }
+
+  return false;
+}
+
+function findSmartIntegratedRuleMatches(text = "", { rules = null, targetIntents = null } = {}) {
+  const allowedTargets = targetIntents instanceof Set ? targetIntents : null;
+  return getSmartRuleInputRules(rules)
+    .filter((rule) => !allowedTargets || allowedTargets.has(rule.targetIntent))
+    .filter((rule) => doesSmartIntegratedRuleMatch(text, rule))
+    .sort((a, b) => (b.priority - a.priority) || (b.approvedPhrase.length - a.approvedPhrase.length));
+}
+
+function applySmartIntegratedRulesToAnalysis(text = "", baseAnalysis = {}, { rules = null } = {}) {
+  const safeBase = {
+    ...(baseAnalysis || {}),
+    intents: Array.isArray(baseAnalysis?.intents)
+      ? baseAnalysis.intents.map((item) => ({ ...item, evidence: { ...(item.evidence || {}) } }))
+      : []
+  };
+
+  if (!SMART_RULE_INTEGRATION_ENABLED || !SMART_RULE_RUNTIME_ENABLED) return safeBase;
+  if (!text || safeBase.isActionLike) return safeBase;
+  if (isOptInText(text) || isOptOutText(text) || isResumeBotText(text)) return safeBase;
+
+  const matches = findSmartIntegratedRuleMatches(text, {
+    rules,
+    targetIntents: SMART_RULE_UNDERSTANDING_INTENTS
+  });
+  if (!matches.length) return safeBase;
+
+  const protectedPrimary = ["complaint", "human"].includes(safeBase.primaryIntent)
+    ? safeBase.primaryIntent
+    : "";
+  const acceptedMatches = matches.filter((rule) => !protectedPrimary || rule.targetIntent === protectedPrimary);
+  if (!acceptedMatches.length) return safeBase;
+
+  const intents = [...safeBase.intents];
+  acceptedMatches.forEach((rule, index) => {
+    const score = Math.min(0.99, Number((SMART_RULE_RUNTIME_SCORE + Math.min(0.02, rule.priority / 10000)).toFixed(2)));
+    const existing = intents.find((intent) => intent.id === rule.targetIntent);
+    const evidence = {
+      integratedRuleIds: [rule.id],
+      approvedPhrase: rule.approvedPhrase,
+      action: rule.action,
+      integrationVersion: SMART_RULE_INTEGRATION_VERSION
+    };
+    if (existing) {
+      existing.score = Math.max(Number(existing.score || 0), score);
+      existing.priority = Math.max(Number(existing.priority || 0), Number(rule.priority || 0) + 130);
+      existing.evidence = {
+        ...(existing.evidence || {}),
+        ...evidence,
+        integratedRuleIds: [...new Set([...(existing.evidence?.integratedRuleIds || []), rule.id])]
+      };
+    } else {
+      intents.push({
+        id: rule.targetIntent,
+        score,
+        priority: Number(rule.priority || 0) + 130 - index,
+        evidence
+      });
+    }
+  });
+
+  intents.sort((a, b) => (Number(b.score || 0) - Number(a.score || 0)) || (Number(b.priority || 0) - Number(a.priority || 0)));
+  const primary = intents[0] || null;
+  const score = Number(primary?.score || 0);
+  return {
+    ...safeBase,
+    version: SMART_RULE_INTEGRATION_VERSION,
+    intents,
+    primaryIntent: primary?.id || "",
+    score,
+    confidence: score >= 0.86 ? "high" : score >= 0.62 ? "medium" : score > 0 ? "low" : "none",
+    integratedRules: acceptedMatches.map((rule) => ({
+      id: rule.id,
+      targetIntent: rule.targetIntent,
+      action: rule.action,
+      priority: rule.priority
+    }))
+  };
+}
+
+function getSmartSalesIntentForRuleTarget(targetIntent = "") {
+  return SMART_RULE_SALES_INTENT_MAP[(targetIntent || "").toString().trim().toLowerCase()] || "";
+}
+
+function getSmartIntegratedSalesCandidates(text = "", { rules = null } = {}) {
+  const targetIntents = new Set(Object.keys(SMART_RULE_SALES_INTENT_MAP));
+  return findSmartIntegratedRuleMatches(text, { rules, targetIntents })
+    .map((rule) => ({
+      id: getSmartSalesIntentForRuleTarget(rule.targetIntent),
+      targetIntent: rule.targetIntent,
+      priority: Number(rule.priority || 0) + 130,
+      score: Math.min(0.99, SMART_RULE_RUNTIME_SCORE),
+      evidence: [rule.approvedPhrase],
+      integratedRuleId: rule.id
+    }))
+    .filter((item) => item.id);
+}
+
+function buildSmartRuleGateHash(candidateRule = {}, tests = []) {
+  const material = JSON.stringify({
+    id: candidateRule.id || "",
+    phrase: normalizeSmartUnknownText(candidateRule.approvedPhrase || ""),
+    targetIntent: candidateRule.targetIntent || "",
+    action: candidateRule.action || "",
+    tests: (tests || []).map((test) => [test.id, Boolean(test.pass)])
+  });
+  return crypto.createHash("sha256").update(material, "utf8").digest("hex").slice(0, 24);
+}
+
+function getSmartRuleRouteRegressionCorpus() {
+  return [
+    { id: "complaint", text: "خدمتكم سيئة وما حدا رد علي", expected: "complaint" },
+    { id: "human", text: "بدي موظف حقيقي", expected: "human" },
+    { id: "price", text: "كم السعر", expected: "price" },
+    { id: "booking", text: "بدي احجز موعد", expected: "booking" },
+    { id: "location", text: "وين فرع دبي", expected: "location" },
+    { id: "existing_service", text: "انا عميل حالي وبدي سيرفس", expected: "current_client_service" },
+    { id: "natural", text: "هل شكله طبيعي", expected: "natural" }
+  ];
+}
+
+function runSmartRuleBaselineSuites() {
+  const suites = [
+    { id: "v9_scenarios", results: getSmartScenarioRegressionSuite().map(runSmartScenarioTestCase) },
+    { id: "v10_recovery", results: getSmartRecoveryRegressionSuite().map(runSmartRecoveryTestCase) },
+    { id: "v11_unknown", results: getSmartUnknownRegressionSuite().map(runSmartUnknownTestCase) },
+    { id: "v12_review", results: getSmartLearningReviewRegressionSuite().map(runSmartLearningReviewTestCase) }
+  ];
+  return suites.map((suite) => {
+    const passed = suite.results.filter((result) => result.passed).length;
+    return {
+      id: suite.id,
+      pass: passed === suite.results.length,
+      total: suite.results.length,
+      passed,
+      failed: suite.results.length - passed
+    };
+  });
+}
+
+function runSmartRuleIntegrationGate({
+  item = {},
+  candidateRule = null,
+  integrationConfirmed = false,
+  requireConfirmation = false,
+  activeRules = null
+} = {}) {
+  const candidate = normalizeSmartIntegratedRule(candidateRule || item.candidateRule || {});
+  const tests = [];
+  const addTest = (id, pass, message, severity = "blocking", details = {}) => {
+    tests.push({ id, pass: Boolean(pass), severity, message, details });
+  };
+
+  addTest(
+    "integration_feature_enabled",
+    SMART_RULE_INTEGRATION_ENABLED && SMART_RULE_RUNTIME_ENABLED,
+    SMART_RULE_INTEGRATION_ENABLED && SMART_RULE_RUNTIME_ENABLED
+      ? "V13 integration and runtime matching are enabled."
+      : "V13 integration or runtime matching is disabled.",
+    "blocking"
+  );
+  addTest(
+    "candidate_promoted",
+    item.status === "promoted" || Boolean(candidate.promotedAt),
+    item.status === "promoted" || Boolean(candidate.promotedAt)
+      ? "Candidate was promoted through V12."
+      : "Candidate must be promoted through V12 first.",
+    "blocking"
+  );
+  addTest(
+    "candidate_safe",
+    Boolean(candidate.safeToPromote),
+    candidate.safeToPromote ? "V12 safety status is valid." : "Candidate is not marked safe to promote.",
+    "blocking"
+  );
+  addTest(
+    "runtime_action_supported",
+    SMART_RULE_RUNTIME_ACTIONS.has(candidate.action),
+    SMART_RULE_RUNTIME_ACTIONS.has(candidate.action)
+      ? "Candidate action is supported by the V13 runtime."
+      : "This action needs business content or code work and cannot be activated automatically.",
+    "blocking",
+    { action: candidate.action, supported: [...SMART_RULE_RUNTIME_ACTIONS] }
+  );
+  addTest(
+    "target_intent_supported",
+    Boolean(getSmartLearningIntentDefinition(candidate.targetIntent)),
+    getSmartLearningIntentDefinition(candidate.targetIntent)
+      ? "Target intent exists in the approved catalog."
+      : "Target intent is not approved.",
+    "blocking",
+    { targetIntent: candidate.targetIntent }
+  );
+  addTest(
+    "active_rule_capacity",
+    smartIntegratedRuleRegistry.size < SMART_RULE_MAX_ACTIVE || smartIntegratedRuleRegistry.has(candidate.id),
+    smartIntegratedRuleRegistry.size < SMART_RULE_MAX_ACTIVE || smartIntegratedRuleRegistry.has(candidate.id)
+      ? "Runtime rule capacity is available."
+      : "Runtime rule capacity is full.",
+    "blocking",
+    { active: smartIntegratedRuleRegistry.size, maximum: SMART_RULE_MAX_ACTIVE }
+  );
+
+  const revalidationPayload = {
+    approvedPhrase: candidate.approvedPhrase,
+    targetIntent: candidate.targetIntent,
+    action: candidate.action,
+    answerKey: candidate.answerKey || "",
+    priority: candidate.priority,
+    negativeExamples: candidate.negativeExamples || [],
+    reviewNote: candidate.reviewerNote || "",
+    reviewConfirmed: true
+  };
+  const revalidation = runSmartLearningConflictTests({ item, payload: revalidationPayload });
+  addTest(
+    "v12_conflict_revalidation",
+    Boolean(revalidation.safeToPromote),
+    revalidation.safeToPromote
+      ? "V12 conflict tests still pass against the current rule set."
+      : "Candidate no longer passes V12 conflict tests.",
+    "blocking",
+    { failures: (revalidation.blockingFailures || []).map((failure) => failure.id) }
+  );
+
+  const selectedActiveRules = Array.isArray(activeRules)
+    ? activeRules
+    : getSmartIntegratedRulesSnapshot();
+  const activeConflicts = selectedActiveRules
+    .filter((rule) => rule.id !== candidate.id && rule.targetIntent !== candidate.targetIntent)
+    .map((rule) => ({
+      id: rule.id,
+      targetIntent: rule.targetIntent,
+      similarity: getSmartLearningTextSimilarity(candidate.approvedPhrase, rule.approvedPhrase || "")
+    }))
+    .filter((entry) => entry.similarity >= SMART_RULE_SIMILARITY_CONFLICT_THRESHOLD);
+  addTest(
+    "active_rule_conflict",
+    activeConflicts.length === 0,
+    activeConflicts.length
+      ? "A similar active rule points to another intent."
+      : "No conflicting active runtime rule was found.",
+    "blocking",
+    { conflicts: activeConflicts }
+  );
+
+  const temporaryRule = {
+    ...candidate,
+    runtimeApplied: true,
+    integrationStatus: "active"
+  };
+  const baseSelf = analyzeSmartUnderstanding(candidate.approvedPhrase || "");
+  const selfUnderstanding = applySmartIntegratedRulesToAnalysis(
+    candidate.approvedPhrase || "",
+    baseSelf,
+    { rules: [temporaryRule] }
+  );
+  const salesTarget = getSmartSalesIntentForRuleTarget(candidate.targetIntent);
+  const selfSales = salesTarget
+    ? analyzeSmartSalesObjection({
+        text: candidate.approvedPhrase || "",
+        analysis: selfUnderstanding,
+        memory: {},
+        integratedRules: [temporaryRule]
+      })
+    : null;
+  const selfPass = Boolean(candidate.targetIntent) && (salesTarget
+    ? selfSales?.objection === salesTarget
+    : selfUnderstanding?.primaryIntent === candidate.targetIntent);
+  addTest(
+    "candidate_self_match",
+    selfPass,
+    selfPass
+      ? "The reviewed phrase resolves to its approved target."
+      : "The reviewed phrase does not resolve to its approved target.",
+    "blocking",
+    {
+      targetIntent: candidate.targetIntent,
+      understandingPrimary: selfUnderstanding?.primaryIntent || "",
+      salesObjection: selfSales?.objection || ""
+    }
+  );
+
+  const negativeFailures = (candidate.negativeExamples || []).map((example) => {
+    const base = analyzeSmartUnderstanding(example);
+    const integrated = applySmartIntegratedRulesToAnalysis(example, base, { rules: [temporaryRule] });
+    const sales = salesTarget
+      ? analyzeSmartSalesObjection({ text: example, analysis: integrated, memory: {}, integratedRules: [temporaryRule] })
+      : null;
+    return {
+      example,
+      matched: salesTarget ? sales?.objection === salesTarget : integrated?.primaryIntent === candidate.targetIntent
+    };
+  }).filter((entry) => entry.matched);
+  addTest(
+    "negative_examples_runtime",
+    negativeFailures.length === 0,
+    negativeFailures.length
+      ? "One or more negative examples still trigger the candidate."
+      : "Negative examples remain excluded at runtime.",
+    "blocking",
+    { failures: negativeFailures }
+  );
+
+  const routeResults = getSmartRuleRouteRegressionCorpus().map((testCase) => {
+    const base = analyzeSmartUnderstanding(testCase.text);
+    const integrated = applySmartIntegratedRulesToAnalysis(testCase.text, base, { rules: [temporaryRule] });
+    const protectedExpected = ["complaint", "human"].includes(testCase.expected);
+    const pass = protectedExpected
+      ? integrated.primaryIntent === testCase.expected
+      : (!doesSmartIntegratedRuleMatch(testCase.text, temporaryRule) || integrated.primaryIntent === testCase.expected || candidate.targetIntent === testCase.expected);
+    return {
+      id: testCase.id,
+      pass,
+      expected: testCase.expected,
+      actual: integrated.primaryIntent || ""
+    };
+  });
+  addTest(
+    "protected_route_regression",
+    routeResults.every((result) => result.pass),
+    routeResults.every((result) => result.pass)
+      ? "Complaint, human, and known core routes remain stable."
+      : "The candidate changes one or more protected or known routes.",
+    "blocking",
+    { results: routeResults }
+  );
+
+  const baselineSuites = runSmartRuleBaselineSuites();
+  addTest(
+    "historical_regression_suites",
+    baselineSuites.every((suite) => suite.pass),
+    baselineSuites.every((suite) => suite.pass)
+      ? "V9, V10, V11, and V12 regression suites all pass."
+      : "At least one historical regression suite failed.",
+    "blocking",
+    { suites: baselineSuites }
+  );
+
+  if (requireConfirmation) {
+    addTest(
+      "human_integration_confirmation",
+      Boolean(integrationConfirmed),
+      integrationConfirmed
+        ? "A human reviewer explicitly approved runtime activation."
+        : "Runtime activation requires explicit human confirmation.",
+      "blocking"
+    );
+  }
+
+  const blockingFailures = tests.filter((test) => test.severity === "blocking" && !test.pass);
+  const gateHash = buildSmartRuleGateHash(candidate, tests);
+  return {
+    version: SMART_RULE_INTEGRATION_VERSION,
+    safeToIntegrate: blockingFailures.length === 0,
+    candidateId: candidate.id || "",
+    queueId: item.id || candidate.sourceQueueId || "",
+    targetIntent: candidate.targetIntent || "",
+    action: candidate.action || "",
+    gateHash,
+    tests,
+    blockingFailures,
+    baselineSuites,
+    evaluatedAt: Date.now()
+  };
+}
+
+async function activateSmartLearningCandidateRule({
+  id = "",
+  reviewer = "Team Inbox",
+  integrationConfirmed = false
+} = {}) {
+  const item = smartUnknownLearningQueue.get(id);
+  if (!item) return { ok: false, status: 404, error: "queue_item_not_found" };
+  const candidate = normalizeSmartIntegratedRule(item.candidateRule || {});
+  const gate = runSmartRuleIntegrationGate({
+    item,
+    candidateRule: candidate,
+    integrationConfirmed,
+    requireConfirmation: true
+  });
+  if (!gate.safeToIntegrate) {
+    return { ok: false, status: 422, error: "integration_gate_failed", gate };
+  }
+
+  const now = Date.now();
+  const activeRule = {
+    ...candidate,
+    runtimeApplied: true,
+    deploymentRequired: false,
+    integrationStatus: "active",
+    integrationVersion: SMART_RULE_INTEGRATION_VERSION,
+    integrationGateHash: gate.gateHash,
+    integrationGateSummary: {
+      passed: gate.tests.filter((test) => test.pass).length,
+      total: gate.tests.length,
+      baselineSuites: gate.baselineSuites
+    },
+    integratedAt: now,
+    integratedBy: reviewer || "Team Inbox",
+    rolledBackAt: 0,
+    rolledBackBy: "",
+    analytics: normalizeSmartRuleAnalytics(candidate.analytics || {}, candidate)
+  };
+  const next = {
+    ...item,
+    status: "promoted",
+    candidateRule: activeRule,
+    integrationStatus: "active",
+    integrationGate: gate,
+    integratedAt: now,
+    integratedBy: reviewer || "Team Inbox"
+  };
+  smartUnknownLearningQueue.set(id, next);
+  rebuildSmartIntegratedRuleRegistry();
+  const persisted = await persistSmartUnknownLearningEvent(id);
+  return {
+    ok: true,
+    status: 200,
+    item: next,
+    rule: activeRule,
+    gate,
+    persisted,
+    registrySize: smartIntegratedRuleRegistry.size
+  };
+}
+
+async function rollbackSmartLearningCandidateRule({ id = "", reviewer = "Team Inbox", reason = "" } = {}) {
+  const item = smartUnknownLearningQueue.get(id);
+  if (!item) return { ok: false, status: 404, error: "queue_item_not_found" };
+  if (!item.candidateRule?.id) return { ok: false, status: 400, error: "candidate_rule_missing" };
+  const now = Date.now();
+  const rolledBackRule = {
+    ...item.candidateRule,
+    runtimeApplied: false,
+    deploymentRequired: false,
+    integrationStatus: "rolled_back",
+    rolledBackAt: now,
+    rolledBackBy: reviewer || "Team Inbox",
+    rollbackReason: redactSmartUnknownText(reason || "Manual rollback").slice(0, 300)
+  };
+  const next = {
+    ...item,
+    candidateRule: rolledBackRule,
+    integrationStatus: "rolled_back",
+    rolledBackAt: now,
+    rolledBackBy: reviewer || "Team Inbox"
+  };
+  smartUnknownLearningQueue.set(id, next);
+  rebuildSmartIntegratedRuleRegistry();
+  const persisted = await persistSmartUnknownLearningEvent(id);
+  return {
+    ok: true,
+    status: 200,
+    item: next,
+    rule: rolledBackRule,
+    persisted,
+    registrySize: smartIntegratedRuleRegistry.size
+  };
+}
+
+function getSmartRuleIntegrationRegressionSuite() {
+  return [
+    {
+      id: "price_phrase_integrates",
+      phrase: "سعره ضمن اي ميزانية",
+      targetIntent: "price",
+      action: "add_phrase",
+      expectedSafe: true
+    },
+    {
+      id: "privacy_phrase_integrates",
+      phrase: "بدي حل ما يفضحني قدام الناس",
+      targetIntent: "privacy_concern",
+      action: "add_phrase",
+      expectedSafe: true
+    },
+    {
+      id: "negative_example_excluded",
+      phrase: "السعر مولع",
+      targetIntent: "expensive",
+      action: "add_phrase",
+      negativeExamples: ["السعر مولع بس مناسب"],
+      expectedSafe: true
+    },
+    {
+      id: "business_answer_not_runtime",
+      phrase: "شو العرض الخاص الجديد",
+      targetIntent: "price",
+      action: "needs_business_answer",
+      expectedSafe: false
+    },
+    {
+      id: "complaint_cannot_override",
+      phrase: "خدمتكم سيئة وما حدا رد علي",
+      targetIntent: "privacy_concern",
+      action: "add_phrase",
+      expectedSafe: false
+    },
+    {
+      id: "human_cannot_override",
+      phrase: "بدي احكي مع موظف حقيقي",
+      targetIntent: "price",
+      action: "add_phrase",
+      expectedSafe: false
+    },
+    {
+      id: "unconfirmed_activation_blocked",
+      phrase: "قديش بيطلع علي",
+      targetIntent: "price",
+      action: "add_phrase",
+      integrationConfirmed: false,
+      requireConfirmation: true,
+      expectedSafe: false
+    }
+  ];
+}
+
+function runSmartRuleIntegrationTestCase(testCase = {}) {
+  const candidate = {
+    schemaVersion: 1,
+    version: SMART_LEARNING_REVIEW_VERSION,
+    id: `v13_test_${testCase.id}`,
+    sourceQueueId: `v13_queue_${testCase.id}`,
+    sourceFingerprint: `v13_fp_${testCase.id}`,
+    approvedPhrase: testCase.phrase,
+    normalizedPhrase: normalizeSmartUnknownText(testCase.phrase),
+    language: detectIncomingLanguage(testCase.phrase, "en"),
+    targetIntent: testCase.targetIntent,
+    action: testCase.action || "add_phrase",
+    answerKey: "",
+    priority: 70,
+    negativeExamples: testCase.negativeExamples || [],
+    reviewerNote: "V13 synthetic regression",
+    reviewedBy: "V13 Suite",
+    reviewedAt: Date.now(),
+    promotedAt: Date.now(),
+    safeToPromote: true,
+    tests: [],
+    runtimeApplied: false,
+    deploymentRequired: true,
+    integrationStatus: "candidate"
+  };
+  const item = {
+    id: candidate.sourceQueueId,
+    status: "promoted",
+    sampleText: testCase.phrase,
+    candidateRule: candidate
+  };
+  const gate = runSmartRuleIntegrationGate({
+    item,
+    candidateRule: candidate,
+    integrationConfirmed: Boolean(testCase.integrationConfirmed),
+    requireConfirmation: Boolean(testCase.requireConfirmation),
+    activeRules: []
+  });
+  const passed = gate.safeToIntegrate === Boolean(testCase.expectedSafe);
+  return {
+    id: testCase.id,
+    passed,
+    expectedSafe: Boolean(testCase.expectedSafe),
+    safeToIntegrate: gate.safeToIntegrate,
+    failures: gate.blockingFailures.map((failure) => failure.id),
+    gate
+  };
+}
+
+
+// LEARNING ANALYTICS & RULE PERFORMANCE MONITORING V14
+function getSmartRuleAnalyticsConversationHash(phone = "", phoneNumberId = "") {
+  const material = `${normalizePhoneDigits(phone || "")}|${normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID)}`;
+  if (!material.replace(/\|/g, "")) return "";
+  return crypto.createHash("sha256").update(material, "utf8").digest("hex").slice(0, 16);
+}
+
+function getSmartRuleAnalyticsTextFingerprint(text = "") {
+  const normalized = normalizeSmartUnknownText(text || "");
+  if (!normalized) return "";
+  return crypto.createHash("sha256").update(normalized, "utf8").digest("hex").slice(0, 16);
+}
+
+function normalizeSmartRuleAnalytics(analytics = {}, rule = {}) {
+  const uniqueConversationHashes = Array.isArray(analytics.uniqueConversationHashes)
+    ? [...new Set(analytics.uniqueConversationHashes.map((value) => (value || "").toString()).filter(Boolean))].slice(-SMART_RULE_ANALYTICS_UNIQUE_LIMIT)
+    : [];
+  const recentOutcomes = Array.isArray(analytics.recentOutcomes)
+    ? analytics.recentOutcomes.slice(-20).map((item) => ({
+        outcome: (item?.outcome || "neutral").toString(),
+        at: Number(item?.at || 0),
+        intent: (item?.intent || "").toString(),
+        source: (item?.source || "automatic").toString()
+      }))
+    : [];
+  const normalized = {
+    version: SMART_RULE_ANALYTICS_VERSION,
+    ruleId: (rule.id || analytics.ruleId || "").toString(),
+    targetIntent: (rule.targetIntent || analytics.targetIntent || "").toString(),
+    matchCount: Math.max(0, Number(analytics.matchCount || 0)),
+    appliedCount: Math.max(0, Number(analytics.appliedCount || 0)),
+    positiveOutcomeCount: Math.max(0, Number(analytics.positiveOutcomeCount || 0)),
+    neutralOutcomeCount: Math.max(0, Number(analytics.neutralOutcomeCount || 0)),
+    unknownAfterMatchCount: Math.max(0, Number(analytics.unknownAfterMatchCount || 0)),
+    clarificationAfterMatchCount: Math.max(0, Number(analytics.clarificationAfterMatchCount || 0)),
+    repeatAfterMatchCount: Math.max(0, Number(analytics.repeatAfterMatchCount || 0)),
+    protectedEscalationCount: Math.max(0, Number(analytics.protectedEscalationCount || 0)),
+    humanRequestAfterMatchCount: Math.max(0, Number(analytics.humanRequestAfterMatchCount || 0)),
+    expiredOutcomeCount: Math.max(0, Number(analytics.expiredOutcomeCount || 0)),
+    manualHelpfulCount: Math.max(0, Number(analytics.manualHelpfulCount || 0)),
+    manualIncorrectCount: Math.max(0, Number(analytics.manualIncorrectCount || 0)),
+    manualNeutralCount: Math.max(0, Number(analytics.manualNeutralCount || 0)),
+    uniqueConversationHashes,
+    uniqueConversationCount: uniqueConversationHashes.length,
+    lastMatchedAt: Number(analytics.lastMatchedAt || 0),
+    lastOutcomeAt: Number(analytics.lastOutcomeAt || 0),
+    lastOutcome: (analytics.lastOutcome || "").toString(),
+    lastTextFingerprint: (analytics.lastTextFingerprint || "").toString(),
+    recentOutcomes,
+    updatedAt: Number(analytics.updatedAt || 0)
+  };
+  return {
+    ...normalized,
+    ...getSmartRuleAnalyticsHealth(normalized)
+  };
+}
+
+function getSmartRuleAnalyticsHealth(analytics = {}) {
+  const applied = Math.max(0, Number(analytics.appliedCount || 0));
+  const positive = Math.max(0, Number(analytics.positiveOutcomeCount || 0)) + Math.max(0, Number(analytics.manualHelpfulCount || 0));
+  const unresolved = Math.max(0, Number(analytics.unknownAfterMatchCount || 0)) +
+    Math.max(0, Number(analytics.clarificationAfterMatchCount || 0)) +
+    Math.max(0, Number(analytics.repeatAfterMatchCount || 0));
+  const incorrect = Math.max(0, Number(analytics.manualIncorrectCount || 0));
+  const escalations = Math.max(0, Number(analytics.protectedEscalationCount || 0));
+  const evaluated = positive + unresolved + incorrect + escalations + Math.max(0, Number(analytics.neutralOutcomeCount || 0));
+  const successRate = evaluated ? Number((positive / evaluated).toFixed(3)) : 0;
+  const unresolvedRate = evaluated ? Number((unresolved / evaluated).toFixed(3)) : 0;
+  const incorrectRate = evaluated ? Number((incorrect / evaluated).toFixed(3)) : 0;
+  const protectedEscalationRate = evaluated ? Number((escalations / evaluated).toFixed(3)) : 0;
+  let healthStatus = "insufficient_data";
+  let recommendation = "collect_more_data";
+  if (applied >= SMART_RULE_ANALYTICS_MIN_SAMPLE) {
+    if (incorrect >= 2 && incorrectRate >= SMART_RULE_ANALYTICS_ROLLBACK_INCORRECT_RATE) {
+      healthStatus = "rollback_recommended";
+      recommendation = "review_and_rollback";
+    } else if (unresolvedRate >= SMART_RULE_ANALYTICS_REVIEW_UNRESOLVED_RATE || protectedEscalationRate >= 0.2) {
+      healthStatus = "review";
+      recommendation = "inspect_examples_and_negative_rules";
+    } else if (successRate >= 0.55 && unresolvedRate < 0.25 && incorrectRate < 0.15) {
+      healthStatus = "healthy";
+      recommendation = "keep_active";
+    } else {
+      healthStatus = "watch";
+      recommendation = "continue_monitoring";
+    }
+  }
+  return {
+    evaluatedOutcomeCount: evaluated,
+    successRate,
+    unresolvedRate,
+    incorrectRate,
+    protectedEscalationRate,
+    healthStatus,
+    recommendation
+  };
+}
+
+function findSmartRuleQueueEntry(ruleId = "") {
+  const cleanId = (ruleId || "").toString().trim();
+  if (!cleanId) return null;
+  for (const [queueId, item] of smartUnknownLearningQueue.entries()) {
+    if ((item?.candidateRule?.id || "").toString().trim() === cleanId) {
+      return { queueId, item };
+    }
+  }
+  return null;
+}
+
+function scheduleSmartRuleAnalyticsPersistence(queueId = "") {
+  if (!SMART_RULE_ANALYTICS_ENABLED || !queueId) return;
+  const previous = smartRuleAnalyticsPersistTimers.get(queueId);
+  if (previous) clearTimeout(previous);
+  const timer = setTimeout(() => {
+    smartRuleAnalyticsPersistTimers.delete(queueId);
+    persistSmartUnknownLearningEvent(queueId).catch((error) => {
+      console.log("[Learning Analytics V14] persistence failed", error?.message || error);
+    });
+  }, SMART_RULE_ANALYTICS_PERSIST_DEBOUNCE_MS);
+  smartRuleAnalyticsPersistTimers.set(queueId, timer);
+}
+
+function updateSmartRuleAnalytics(ruleId = "", updater = null, { persist = true } = {}) {
+  if (!SMART_RULE_ANALYTICS_ENABLED || typeof updater !== "function") return null;
+  const entry = findSmartRuleQueueEntry(ruleId);
+  if (!entry) return null;
+  const currentRule = normalizeSmartIntegratedRule(entry.item.candidateRule || {});
+  const current = normalizeSmartRuleAnalytics(currentRule.analytics || {}, currentRule);
+  const proposed = updater({ ...current }) || current;
+  const nextAnalytics = normalizeSmartRuleAnalytics({
+    ...current,
+    ...proposed,
+    updatedAt: Date.now()
+  }, currentRule);
+  const nextRule = { ...currentRule, analytics: nextAnalytics };
+  const nextItem = { ...entry.item, candidateRule: nextRule, analyticsUpdatedAt: nextAnalytics.updatedAt };
+  smartUnknownLearningQueue.set(entry.queueId, nextItem);
+  if (smartIntegratedRuleRegistry.has(currentRule.id)) {
+    smartIntegratedRuleRegistry.set(currentRule.id, nextRule);
+  }
+  if (persist) scheduleSmartRuleAnalyticsPersistence(entry.queueId);
+  return { queueId: entry.queueId, item: nextItem, rule: nextRule, analytics: nextAnalytics };
+}
+
+function recordSmartRuleMatch({ ruleId = "", phone = "", phoneNumberId = "", text = "", intent = "" } = {}) {
+  const conversationHash = getSmartRuleAnalyticsConversationHash(phone, phoneNumberId);
+  const textFingerprint = getSmartRuleAnalyticsTextFingerprint(text);
+  return updateSmartRuleAnalytics(ruleId, (analytics) => {
+    const uniqueConversationHashes = conversationHash
+      ? [...new Set([...(analytics.uniqueConversationHashes || []), conversationHash])].slice(-SMART_RULE_ANALYTICS_UNIQUE_LIMIT)
+      : (analytics.uniqueConversationHashes || []);
+    return {
+      ...analytics,
+      matchCount: Number(analytics.matchCount || 0) + 1,
+      appliedCount: Number(analytics.appliedCount || 0) + 1,
+      uniqueConversationHashes,
+      uniqueConversationCount: uniqueConversationHashes.length,
+      lastMatchedAt: Date.now(),
+      lastTextFingerprint: textFingerprint,
+      targetIntent: intent || analytics.targetIntent || ""
+    };
+  });
+}
+
+function recordSmartRuleOutcome(ruleId = "", outcome = "neutral", { intent = "", source = "automatic" } = {}) {
+  const cleanOutcome = (outcome || "neutral").toString().trim().toLowerCase();
+  const counterMap = {
+    positive: "positiveOutcomeCount",
+    neutral: "neutralOutcomeCount",
+    unknown_after_match: "unknownAfterMatchCount",
+    clarification_after_match: "clarificationAfterMatchCount",
+    repeated_after_match: "repeatAfterMatchCount",
+    protected_escalation: "protectedEscalationCount",
+    human_request: "humanRequestAfterMatchCount",
+    expired: "expiredOutcomeCount",
+    manual_helpful: "manualHelpfulCount",
+    manual_incorrect: "manualIncorrectCount",
+    manual_neutral: "manualNeutralCount"
+  };
+  const counter = counterMap[cleanOutcome] || "neutralOutcomeCount";
+  return updateSmartRuleAnalytics(ruleId, (analytics) => ({
+    ...analytics,
+    [counter]: Number(analytics[counter] || 0) + 1,
+    lastOutcomeAt: Date.now(),
+    lastOutcome: cleanOutcome,
+    recentOutcomes: [
+      ...(analytics.recentOutcomes || []),
+      { outcome: cleanOutcome, at: Date.now(), intent: intent || "", source }
+    ].slice(-20)
+  }));
+}
+
+function getSmartRuleGoalRank(value = "") {
+  const normalized = (value || "").toString().trim().toLowerCase();
+  const ranks = {
+    new: 0,
+    discovery: 1,
+    qualification: 2,
+    consideration: 3,
+    objection: 3,
+    booking: 4,
+    service: 4,
+    handoff: 5,
+    completed: 6
+  };
+  return Number(ranks[normalized] ?? 0);
+}
+
+function classifySmartRulePendingOutcome(pending = {}, current = {}) {
+  const primaryIntent = (current.analysis?.primaryIntent || "").toString();
+  if (primaryIntent === "complaint") return "protected_escalation";
+  if (primaryIntent === "human") return "human_request";
+  if (current.unknownEvaluation?.capture) return "unknown_after_match";
+  if (current.recovery?.mode === "clarify_reference") return "clarification_after_match";
+
+  const currentFingerprint = getSmartRuleAnalyticsTextFingerprint(current.text || "");
+  if (currentFingerprint && currentFingerprint === pending.textFingerprint) return "repeated_after_match";
+
+  const previousGoalRank = getSmartRuleGoalRank(pending.goalState || "");
+  const currentGoalRank = getSmartRuleGoalRank(current.goalTracker?.state || current.memory?.conversationState || "");
+  const previousScore = Number(pending.leadScore || 0);
+  const currentScore = Number(current.qualification?.score || current.memory?.leadScore || 0);
+  const progressedIntent = ["booking", "consultation", "current_client_service", "location", "call"].includes(primaryIntent) &&
+    primaryIntent !== pending.primaryIntent;
+  if (currentGoalRank > previousGoalRank || currentScore >= previousScore + 8 || progressedIntent || current.qualification?.becameQualified) {
+    return "positive";
+  }
+  return "neutral";
+}
+
+function observeSmartRulePerformance({
+  phone = "",
+  phoneNumberId = DEFAULT_PHONE_NUMBER_ID,
+  text = "",
+  analysis = {},
+  memory = {},
+  recovery = {},
+  unknownEvaluation = {},
+  goalTracker = {},
+  qualification = {}
+} = {}) {
+  if (!SMART_RULE_ANALYTICS_ENABLED) return { enabled: false };
+  const conversationKey = getSmartRuleAnalyticsConversationHash(phone, phoneNumberId);
+  if (!conversationKey) return { enabled: true, skipped: true };
+  const now = Date.now();
+  const previous = smartRulePendingOutcomeByConversation.get(conversationKey);
+  const resolved = [];
+  if (previous) {
+    const expired = now - Number(previous.startedAt || 0) > SMART_RULE_ANALYTICS_PENDING_TTL_MS;
+    const outcome = expired ? "expired" : classifySmartRulePendingOutcome(previous, {
+      text, analysis, memory, recovery, unknownEvaluation, goalTracker, qualification
+    });
+    (previous.ruleIds || []).forEach((ruleId) => {
+      recordSmartRuleOutcome(ruleId, outcome, { intent: analysis?.primaryIntent || "", source: "next_turn" });
+      resolved.push({ ruleId, outcome });
+    });
+    smartRulePendingOutcomeByConversation.delete(conversationKey);
+  }
+
+  const integratedRules = Array.isArray(analysis?.integratedRules) ? analysis.integratedRules : [];
+  const activated = [];
+  integratedRules.forEach((match) => {
+    if (!match?.id) return;
+    recordSmartRuleMatch({
+      ruleId: match.id,
+      phone,
+      phoneNumberId,
+      text,
+      intent: match.targetIntent || analysis?.primaryIntent || ""
+    });
+    activated.push(match.id);
+  });
+
+  if (activated.length) {
+    smartRulePendingOutcomeByConversation.set(conversationKey, {
+      ruleIds: [...new Set(activated)],
+      startedAt: now,
+      primaryIntent: analysis?.primaryIntent || "",
+      textFingerprint: getSmartRuleAnalyticsTextFingerprint(text),
+      goalState: goalTracker?.state || memory?.conversationState || "",
+      leadScore: Number(qualification?.score || memory?.leadScore || 0)
+    });
+  }
+
+  return {
+    enabled: true,
+    version: SMART_RULE_ANALYTICS_VERSION,
+    resolved,
+    activated,
+    pending: activated.length > 0
+  };
+}
+
+function getSmartRuleAnalyticsRows({ includeInactive = true } = {}) {
+  return getSmartLearningPromotedRules()
+    .filter((rule) => includeInactive || (rule.runtimeApplied && rule.integrationStatus === "active"))
+    .map((rule) => {
+      const analytics = normalizeSmartRuleAnalytics(rule.analytics || {}, rule);
+      return {
+        id: rule.id || "",
+        sourceQueueId: rule.sourceQueueId || "",
+        approvedPhrase: rule.approvedPhrase || "",
+        targetIntent: rule.targetIntent || "",
+        action: rule.action || "",
+        runtimeApplied: Boolean(rule.runtimeApplied),
+        integrationStatus: rule.integrationStatus || "candidate",
+        integratedAt: Number(rule.integratedAt || 0),
+        rolledBackAt: Number(rule.rolledBackAt || 0),
+        analytics
+      };
+    })
+    .sort((a, b) => {
+      const statusOrder = { rollback_recommended: 5, review: 4, watch: 3, healthy: 2, insufficient_data: 1 };
+      return (statusOrder[b.analytics.healthStatus] || 0) - (statusOrder[a.analytics.healthStatus] || 0) ||
+        Number(b.analytics.lastMatchedAt || 0) - Number(a.analytics.lastMatchedAt || 0);
+    });
+}
+
+function getSmartRuleAnalyticsSummary() {
+  const rows = getSmartRuleAnalyticsRows();
+  const byHealth = rows.reduce((acc, row) => {
+    const key = row.analytics.healthStatus || "insufficient_data";
+    acc[key] = Number(acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  return {
+    version: SMART_RULE_ANALYTICS_VERSION,
+    enabled: SMART_RULE_ANALYTICS_ENABLED,
+    totalRules: rows.length,
+    activeRules: rows.filter((row) => row.runtimeApplied && row.integrationStatus === "active").length,
+    totalMatches: rows.reduce((sum, row) => sum + Number(row.analytics.matchCount || 0), 0),
+    totalApplied: rows.reduce((sum, row) => sum + Number(row.analytics.appliedCount || 0), 0),
+    uniqueConversations: new Set(rows.flatMap((row) => row.analytics.uniqueConversationHashes || [])).size,
+    reviewRequired: rows.filter((row) => ["review", "rollback_recommended"].includes(row.analytics.healthStatus)).length,
+    byHealth,
+    pendingConversationOutcomes: smartRulePendingOutcomeByConversation.size
+  };
+}
+
+function submitSmartRuleManualFeedback({ ruleId = "", outcome = "neutral", note = "", reviewer = "Team Inbox" } = {}) {
+  const normalizedOutcome = (outcome || "neutral").toString().trim().toLowerCase();
+  if (!SMART_RULE_ANALYTICS_ALLOWED_FEEDBACK.has(normalizedOutcome)) {
+    return { ok: false, status: 400, error: "invalid_feedback_outcome" };
+  }
+  const entry = findSmartRuleQueueEntry(ruleId);
+  if (!entry) return { ok: false, status: 404, error: "rule_not_found" };
+  const mapped = normalizedOutcome === "helpful"
+    ? "manual_helpful"
+    : (normalizedOutcome === "incorrect" ? "manual_incorrect" : "manual_neutral");
+  const result = recordSmartRuleOutcome(ruleId, mapped, { intent: entry.item?.candidateRule?.targetIntent || "", source: "manual" });
+  if (!result) return { ok: false, status: 500, error: "feedback_update_failed" };
+  const safeNote = redactSmartUnknownText(note || "").slice(0, 240);
+  const now = Date.now();
+  const nextRule = {
+    ...result.rule,
+    analyticsFeedbackHistory: [
+      ...(Array.isArray(result.rule.analyticsFeedbackHistory) ? result.rule.analyticsFeedbackHistory : []),
+      { outcome: normalizedOutcome, note: safeNote, reviewer: reviewer || "Team Inbox", at: now }
+    ].slice(-20)
+  };
+  const nextItem = { ...result.item, candidateRule: nextRule };
+  smartUnknownLearningQueue.set(result.queueId, nextItem);
+  if (smartIntegratedRuleRegistry.has(nextRule.id)) smartIntegratedRuleRegistry.set(nextRule.id, nextRule);
+  scheduleSmartRuleAnalyticsPersistence(result.queueId);
+  return {
+    ok: true,
+    status: 200,
+    ruleId,
+    outcome: normalizedOutcome,
+    analytics: normalizeSmartRuleAnalytics(nextRule.analytics || {}, nextRule),
+    feedbackHistory: nextRule.analyticsFeedbackHistory
+  };
+}
+
+function getSmartRuleAnalyticsRegressionSuite() {
+  return [
+    { id: "healthy_rule", analytics: { appliedCount: 10, positiveOutcomeCount: 7, neutralOutcomeCount: 2, repeatAfterMatchCount: 1 }, expected: "healthy" },
+    { id: "insufficient_rule", analytics: { appliedCount: 2, positiveOutcomeCount: 2 }, expected: "insufficient_data" },
+    { id: "unresolved_rule", analytics: { appliedCount: 10, positiveOutcomeCount: 2, unknownAfterMatchCount: 3, clarificationAfterMatchCount: 2, neutralOutcomeCount: 3 }, expected: "review" },
+    { id: "incorrect_rule", analytics: { appliedCount: 10, positiveOutcomeCount: 2, manualIncorrectCount: 4, neutralOutcomeCount: 4 }, expected: "rollback_recommended" },
+    { id: "privacy_no_text_storage", text: "اتصلوا فيني على 0501234567", expectedFingerprint: true }
+  ];
+}
+
+function runSmartRuleAnalyticsTestCase(testCase = {}) {
+  if (testCase.id === "privacy_no_text_storage") {
+    const fingerprint = getSmartRuleAnalyticsTextFingerprint(testCase.text || "");
+    return {
+      id: testCase.id,
+      passed: Boolean(fingerprint) === Boolean(testCase.expectedFingerprint) && !fingerprint.includes("0501234567"),
+      fingerprint
+    };
+  }
+  const normalized = normalizeSmartRuleAnalytics(testCase.analytics || {}, { id: `test_${testCase.id}`, targetIntent: "price" });
+  return {
+    id: testCase.id,
+    passed: normalized.healthStatus === testCase.expected,
+    expected: testCase.expected,
+    actual: normalized.healthStatus,
+    analytics: normalized
+  };
+}
+
+// OBJECTIONS & SALES INTELLIGENCE V4
+const SMART_SALES_OBJECTION_RULES = Object.freeze([
+  {
+    id: "previous_bad_experience",
+    priority: 100,
+    phrases: [
+      "جربت مكان ثاني", "جربت بمكان ثاني", "تجربتي كانت سيئة", "تجربه سيئه", "انغشيت قبل", "خدعوني قبل",
+      "previous bad experience", "bad experience elsewhere", "tried another place", "another salon failed", "was disappointed before"
+    ]
+  },
+  {
+    id: "privacy_concern",
+    priority: 96,
+    phrases: [
+      "بدي الموضوع سري", "بدي سريه", "بخصوصيه", "حدا يعرف", "ما بدي حدا يعرف", "محرج", "بخجل",
+      "private consultation", "keep it private", "privacy", "confidential", "embarrassed", "do not want anyone to know"
+    ]
+  },
+  {
+    id: "attachment_fear",
+    priority: 92,
+    phrases: [
+      "بيوقع", "بيطيح", "بيفك", "يفك", "يطير", "يوقع", "ثابت ولا", "بيتحرك", "مع العرق", "مع الرياضه", "مع الرياضة",
+      "fall off", "come off", "will it move", "is it secure", "during sports", "with sweat", "can it detach"
+    ]
+  },
+  {
+    id: "naturality_fear",
+    priority: 90,
+    phrases: [
+      "خايف يبين", "خايف يكون واضح", "ما بدي يبين", "شكله صناعي", "شكله مزيف", "الناس تعرف", "حدا يلاحظ", "يبين تركيب",
+      "afraid it looks fake", "will people notice", "looks artificial", "do not want it to show", "will anyone know", "fake look"
+    ]
+  },
+  {
+    id: "warranty_risk",
+    priority: 86,
+    phrases: [
+      "اذا ما ناسبني", "إذا ما ناسبني", "اذا خرب", "لو خرب", "شو الضمان", "في ضمان", "مضمون", "استرجاع", "ترجيع",
+      "what if it does not suit me", "what if it fails", "what is the warranty", "is it guaranteed", "refund", "return policy"
+    ]
+  },
+  {
+    id: "price_resistance",
+    priority: 82,
+    phrases: [
+      "غالي", "غاليه", "غالية", "السعر عالي", "كتير غالي", "كثير غالي", "في ارخص", "ارخص", "خصم", "آخر سعر", "اخر سعر",
+      "too expensive", "price is high", "costly", "cheaper", "discount", "best price", "final price"
+    ]
+  },
+  {
+    id: "hesitation",
+    priority: 74,
+    phrases: [
+      "بفكر", "خليني فكر", "بدي فكر", "بشوف وبرجع", "برجعلكم", "مو هلق", "مش هلق", "يمكن بعدين", "لسا مو متاكد", "لسه مو متأكد",
+      "let me think", "i will think", "maybe later", "not now", "i will get back", "not sure yet", "need time"
+    ]
+  }
+]);
+
+function scoreSmartSalesRule(normalizedText = "", rule = {}, analysis = {}) {
+  const matches = (rule.phrases || []).filter((phrase) => smartPhraseMatches(normalizedText, phrase));
+  let score = matches.length ? Math.min(0.98, 0.78 + ((matches.length - 1) * 0.06)) : 0;
+
+  if (rule.id === "price_resistance" && analysis?.primaryIntent === "expensive") {
+    score = Math.max(score, 0.92);
+  }
+  if (rule.id === "warranty_risk" && analysis?.primaryIntent === "warranty") {
+    score = Math.max(score, 0.82);
+  }
+  if (rule.id === "naturality_fear" && analysis?.primaryIntent === "natural" && matches.length) {
+    score = Math.max(score, 0.88);
+  }
+
+  return {
+    score: Number(score.toFixed(2)),
+    matches: matches.slice(0, 4)
+  };
+}
+
+function getSmartSalesLeadTemperature(memory = {}, analysis = {}) {
+  const intentIds = new Set(getSmartMemoryIntentIds(analysis));
+  if (memory?.bookingReadiness === "ready" || intentIds.has("booking")) return "hot";
+
+  const warmSignals = [
+    Boolean(memory?.priceAsked),
+    Boolean(memory?.resultsRequested || memory?.resultsSeen),
+    Boolean(memory?.branch),
+    Boolean(memory?.coverage),
+    memory?.bookingReadiness === "considering",
+    Number(memory?.turnCount || 0) >= 2,
+    intentIds.has("consultation")
+  ].filter(Boolean).length;
+
+  return warmSignals >= 2 ? "warm" : "cold";
+}
+
+function analyzeSmartSalesObjection({ text = "", analysis = {}, memory = {}, integratedRules = null } = {}) {
+  if (!SMART_SALES_ENABLED || analysis?.isActionLike) return null;
+  if (["complaint", "human"].includes(analysis?.primaryIntent)) return null;
+
+  const normalizedText = normalizeSmartUnderstandingText(text || analysis?.normalizedText || "");
+  if (!normalizedText) return null;
+
+  const staticCandidates = SMART_SALES_OBJECTION_RULES
+    .map((rule) => {
+      const result = scoreSmartSalesRule(normalizedText, rule, analysis);
+      return {
+        id: rule.id,
+        priority: rule.priority,
+        score: result.score,
+        evidence: result.matches
+      };
+    })
+    .filter((item) => item.score >= SMART_SALES_MIN_SCORE);
+
+  const learnedCandidates = getSmartIntegratedSalesCandidates(normalizedText, {
+    rules: integratedRules
+  });
+
+  const mergedCandidates = new Map();
+  [...staticCandidates, ...learnedCandidates].forEach((candidate) => {
+    const current = mergedCandidates.get(candidate.id);
+    if (!current || candidate.score > current.score || candidate.priority > current.priority) {
+      mergedCandidates.set(candidate.id, candidate);
+    }
+  });
+
+  const candidates = [...mergedCandidates.values()]
+    .sort((a, b) => (b.score - a.score) || (b.priority - a.priority));
+
+  const primary = candidates[0] || null;
+  if (!primary) return null;
+
+  return {
+    version: SMART_SALES_VERSION,
+    objection: primary.id,
+    score: primary.score,
+    confidence: primary.score >= 0.9 ? "high" : "medium",
+    evidence: primary.evidence,
+    alternatives: candidates.slice(1, 3).map((item) => item.id),
+    leadTemperature: getSmartSalesLeadTemperature(memory, analysis),
+    normalizedText
+  };
+}
+
+function getSmartSalesButtons(objection = "", leadTemperature = "cold") {
+  if (["previous_bad_experience", "warranty_risk", "privacy_concern"].includes(objection)) {
+    return [
+      { id: "talk_to_team", title: "Team | فريقنا" },
+      { id: "consult_menu", title: "Consult | استشارة" },
+      { id: "results", title: "Results | نتائج" }
+    ];
+  }
+
+  if (objection === "attachment_fear") {
+    return [
+      { id: "how_it_works", title: "Details | التفاصيل" },
+      { id: "consult_menu", title: "Consult | استشارة" },
+      { id: "talk_to_team", title: "Team | فريقنا" }
+    ];
+  }
+
+  if (leadTemperature === "hot") {
+    return getDirectBookingChoiceButtons();
+  }
+
+  return [
+    { id: "results", title: "Results | نتائج" },
+    { id: "consult_menu", title: "Consult | استشارة" },
+    { id: "talk_to_team", title: "Team | فريقنا" }
+  ];
+}
+
+function getSmartSalesReplyContent(objection = "", language = "en", leadTemperature = "cold") {
+  const ar = language === "ar";
+  const content = {
+    price_resistance: {
+      empathy: ar ? "أتفهم عليك، السعر نقطة مهمة أكيد." : "I understand; price is an important point.",
+      answer: ar
+        ? "التكلفة تختلف حسب مساحة التغطية، الكثافة، نوع النظام، وطريقة التركيب. لذلك ما رح نعطيك رقم عشوائي أو نعدك بخصم غير مؤكد."
+        : "Cost varies by coverage area, density, system type, and fitting method, so we will not give a random quote or promise an unconfirmed discount.",
+      next: ar
+        ? "شاهد النتائج أولاً أو ابدأ استشارة قصيرة حتى تعرف الخيار الأنسب لحالتك."
+        : "You can view results first or start a short consultation to understand the suitable option for your case."
+    },
+    hesitation: {
+      empathy: ar ? "أكيد، خذ وقتك وما في أي ضغط." : "Of course—take your time; there is no pressure.",
+      answer: ar
+        ? "حتى يكون قرارك أوضح، ركّز على النتيجة الطبيعية، طريقة العناية، والخيار المناسب لحالتك بدل الاستعجال."
+        : "To make the decision clearer, focus on the natural result, care requirements, and what suits your case rather than rushing.",
+      next: ar
+        ? "تقدر تشوف النتائج أو تسأل الفريق سؤالاً محدداً قبل ما تقرر."
+        : "You can view results or ask the team one specific question before deciding."
+    },
+    naturality_fear: {
+      empathy: ar ? "مفهوم، أهم خوف عند أغلب العملاء هو أن تكون النتيجة واضحة." : "That is understandable; the main concern for many clients is an obvious result.",
+      answer: ar
+        ? "المظهر الطبيعي يعتمد على لون مناسب، كثافة متوازنة، وخط شعر يلائم شكل الوجه. ما منوعد بنتيجة عامة قبل تقييم الحالة."
+        : "A natural look depends on matching color, balanced density, and a hairline suited to the face. We do not make a general promise before assessing the case.",
+      next: ar
+        ? "شاهد النتائج الحقيقية، وبعدها يشرح لك المختص كيف يتم اختيار الشكل المناسب لك."
+        : "View real results first, then a specialist can explain how the suitable look is selected for you."
+    },
+    attachment_fear: {
+      empathy: ar ? "سؤالك بمحله، الثبات والراحة مهمين بالحياة اليومية." : "Good question; security and comfort matter in daily life.",
+      answer: ar
+        ? "درجة الثبات تعتمد على طريقة التثبيت، حالة فروة الرأس، النشاط، التعرق، والعناية. لذلك ما منقدر نعطي ضماناً عاماً بدون تقييم."
+        : "Security depends on the fitting method, scalp condition, activity, sweating, and care, so a blanket guarantee cannot be given without assessment.",
+      next: ar
+        ? "شاهد التفاصيل أو اسأل الفريق عن الخيار الأنسب لنمط حياتك."
+        : "View the details or ask the team which option best fits your lifestyle."
+    },
+    previous_bad_experience: {
+      empathy: ar ? "أتفهم ترددك، خصوصاً بعد تجربة سابقة غير مريحة." : "I understand your hesitation, especially after an uncomfortable previous experience.",
+      answer: ar
+        ? "الأفضل ما نعمّم ولا نوعدك قبل ما نفهم شو صار سابقاً وشو النتيجة التي تبحث عنها. الفريق يراجع حالتك بهدوء وبدون ضغط."
+        : "It is better not to generalize or promise anything before understanding what happened previously and the result you want. The team can review your case without pressure.",
+      next: ar
+        ? "تحدث مباشرة مع المختص أو ابدأ استشارة خاصة."
+        : "Talk directly with a specialist or start a private consultation."
+    },
+    warranty_risk: {
+      empathy: ar ? "سؤالك مهم لأن التفاصيل لازم تكون واضحة قبل أي قرار." : "That is an important question; the terms should be clear before any decision.",
+      answer: ar
+        ? "الضمان والعناية والمتابعة تختلف حسب النظام والخدمة والحالة. ما رح نعطيك وعداً عاماً أو سياسة استرجاع غير مؤكدة داخل البوت."
+        : "Warranty, care, and follow-up vary by system, service, and case. The bot will not make a general promise or state an unconfirmed return policy.",
+      next: ar
+        ? "الفريق يوضح لك الشروط المرتبطة بالخيار المقترح قبل الحجز."
+        : "The team can explain the terms connected to the proposed option before booking."
+    },
+    privacy_concern: {
+      empathy: ar ? "مفهوم، الخصوصية مهمة جداً بهذا النوع من الاستشارات." : "Understood; privacy is very important for this kind of consultation.",
+      answer: ar
+        ? "يمكنك مشاركة الحد الأدنى من المعلومات داخل المحادثة، والتفاصيل الشخصية تناقشها مباشرة مع المختص عند الحاجة."
+        : "You can share only the minimum information in chat and discuss personal details directly with the specialist when needed.",
+      next: ar
+        ? "ابدأ استشارة خاصة أو اطلب التحدث مع الفريق."
+        : "Start a private consultation or ask to speak with the team."
+    }
+  };
+
+  const selected = content[objection];
+  if (!selected) return null;
+
+  if (leadTemperature === "hot" && !["previous_bad_experience", "warranty_risk", "privacy_concern"].includes(objection)) {
+    selected.next = ar
+      ? "بما أنك قريب من القرار، اختر نوع الحجز المناسب: استشارة لعميل جديد أو سيرفس لعميل حالي."
+      : "Since you are close to deciding, choose the correct booking type: Consultation for a new client or Service for an existing client.";
+  }
+
+  return selected;
+}
+
+function buildSmartSalesObjectionReply({ phone = "", text = "", analysis = {}, memory = {}, customerName = "", language = "en" } = {}) {
+  const salesAnalysis = analyzeSmartSalesObjection({ text, analysis, memory });
+  if (!salesAnalysis) return null;
+
+  const content = getSmartSalesReplyContent(
+    salesAnalysis.objection,
+    language,
+    salesAnalysis.leadTemperature
+  );
+  if (!content) return null;
+
+  const cleanName = namePhrase(customerName);
+  const intro = cleanName
+    ? (language === "ar" ? `${content.empathy} ${cleanName}،` : `${content.empathy} ${cleanName},`)
+    : content.empathy;
+  const body = [intro, "", content.answer, "", content.next]
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return {
+    version: SMART_SALES_VERSION,
+    topic: `sales_objection:${salesAnalysis.objection}`,
+    status: "Sales Objection V4",
+    messageType: "Objections & Sales Intelligence V4",
+    objection: salesAnalysis.objection,
+    confidence: salesAnalysis.confidence,
+    score: salesAnalysis.score,
+    evidence: salesAnalysis.evidence,
+    alternatives: salesAnalysis.alternatives,
+    leadTemperature: salesAnalysis.leadTemperature,
+    body,
+    buttons: getSmartSalesButtons(salesAnalysis.objection, salesAnalysis.leadTemperature)
+  };
+}
+
+function rememberSmartSalesReply(phone = "", reply = {}, text = "", language = "en") {
+  if (!reply) return null;
+  const cleanPhone = getSmartMemoryPhoneKey(phone);
+  if (!cleanPhone) return null;
+
+  const previous = getSmartConversationMemory(cleanPhone) || buildEmptySmartConversationMemory(cleanPhone);
+  const bookingReadiness = reply.leadTemperature === "hot"
+    ? "ready"
+    : (previous.bookingReadiness || "considering");
+
+  const next = rememberSmartMemoryObject(cleanPhone, {
+    ...previous,
+    topic: reply.topic || previous.topic || "",
+    lastBotTopic: reply.topic || previous.lastBotTopic || "",
+    lastText: normalizeSmartUnderstandingText(text || previous.lastText || ""),
+    language: language === "ar" ? "ar" : "en",
+    objection: reply.objection || previous.objection || "",
+    bookingReadiness,
+    pendingQuestion: "",
+    updatedAt: Date.now()
+  });
+
+  scheduleSmartMemoryPersistence(cleanPhone);
+  return next;
+}
+
+
+// CONVERSATION STATE MACHINE & GOAL TRACKING V5
+const SMART_GOAL_STATES = Object.freeze({
+  NEW: "new",
+  DISCOVERY: "discovery",
+  QUALIFICATION: "qualification",
+  CONSIDERATION: "consideration",
+  OBJECTION: "objection",
+  BOOKING: "booking",
+  SERVICE: "service",
+  HANDOFF: "handoff",
+  COMPLETED: "completed"
+});
+
+function getSmartGoalIntentSet(analysis = {}) {
+  return new Set(getSmartMemoryIntentIds(analysis));
+}
+
+function getSmartGoalSlotValue(memory = {}, slot = "") {
+  if (slot === "branch") return normalizeInboxBranchName(memory.branch || "");
+  if (slot === "customer_type") return (memory.customerType || "").toString();
+  if (slot === "coverage") return (memory.coverage || "").toString();
+  if (slot === "service_type") return (memory.serviceInterest || "").toString() === "service" ? "service" : "";
+  return "";
+}
+
+function getSmartGoalResolvedSlots(previous = {}, current = {}) {
+  return ["branch", "customer_type", "coverage", "service_type"].filter((slot) => {
+    return !getSmartGoalSlotValue(previous, slot) && Boolean(getSmartGoalSlotValue(current, slot));
+  });
+}
+
+function getSmartGoalProgressSignature(memory = {}, analysis = {}) {
+  const intents = getSmartMemoryIntentIds(analysis).sort();
+  return JSON.stringify({
+    branch: normalizeInboxBranchName(memory.branch || ""),
+    customerType: memory.customerType || "",
+    coverage: memory.coverage || "",
+    serviceInterest: memory.serviceInterest || "",
+    priceAsked: Boolean(memory.priceAsked),
+    resultsRequested: Boolean(memory.resultsRequested),
+    resultsSeen: Boolean(memory.resultsSeen),
+    bookingReadiness: memory.bookingReadiness || "",
+    objection: memory.objection || "",
+    complaint: Boolean(memory.complaint),
+    intents
+  });
+}
+
+function getSmartGoalCompletedGoals(previous = {}, nextGoal = "", nextStatus = "") {
+  const completed = new Set(Array.isArray(previous.completedGoals) ? previous.completedGoals : []);
+  const previousGoal = (previous.activeGoal || "").toString();
+
+  if (previousGoal && previousGoal !== nextGoal && ["active", "waiting"].includes(previous.goalStatus || "active")) {
+    if (
+      (previousGoal === "choose_customer_type" && previous.customerType) ||
+      (previousGoal === "select_branch" && previous.branch) ||
+      (previousGoal === "qualify_price" && previous.coverage && previous.branch) ||
+      (previousGoal === "resolve_objection" && !previous.objection) ||
+      nextStatus === "completed"
+    ) {
+      completed.add(previousGoal);
+    }
+  }
+
+  if (nextStatus === "completed" && nextGoal) completed.add(nextGoal);
+  return [...completed].slice(-12);
+}
+
+function deriveSmartConversationGoal({ analysis = {}, memory = {}, salesReply = null, decisionReply = null } = {}) {
+  const intents = getSmartGoalIntentSet(analysis);
+  const branch = normalizeInboxBranchName(analysis?.entities?.branch || memory.branch || "");
+  const customerType = analysis?.entities?.customerType || memory.customerType || "";
+  const coverage = analysis?.entities?.coverage || memory.coverage || "";
+  const bookingReady = memory.bookingReadiness === "ready" || intents.has("booking");
+
+  if (intents.has("complaint") || memory.complaint) {
+    return {
+      state: SMART_GOAL_STATES.HANDOFF,
+      goal: "human_handoff",
+      status: "handoff",
+      missingSlots: [],
+      nextAction: "pause_bot_and_handoff"
+    };
+  }
+
+  if (intents.has("human")) {
+    return {
+      state: SMART_GOAL_STATES.HANDOFF,
+      goal: "human_handoff",
+      status: "handoff",
+      missingSlots: [],
+      nextAction: "pause_bot_and_handoff"
+    };
+  }
+
+  if (salesReply?.objection || memory.objection) {
+    return {
+      state: SMART_GOAL_STATES.OBJECTION,
+      goal: "resolve_objection",
+      status: "active",
+      missingSlots: [],
+      nextAction: salesReply?.leadTemperature === "hot" ? "offer_booking" : "offer_proof_or_consultation"
+    };
+  }
+
+  if (customerType === "existing" || intents.has("current_client_service")) {
+    return {
+      state: bookingReady ? SMART_GOAL_STATES.BOOKING : SMART_GOAL_STATES.SERVICE,
+      goal: "book_service",
+      status: "waiting",
+      missingSlots: memory.serviceInterest === "service" ? [] : ["service_type"],
+      nextAction: "open_service_path"
+    };
+  }
+
+  if (bookingReady) {
+    if (!customerType) {
+      return {
+        state: SMART_GOAL_STATES.QUALIFICATION,
+        goal: "choose_customer_type",
+        status: "waiting",
+        missingSlots: ["customer_type"],
+        nextAction: "ask_customer_type"
+      };
+    }
+
+    return {
+      state: SMART_GOAL_STATES.BOOKING,
+      goal: "book_consultation",
+      status: "waiting",
+      missingSlots: branch ? [] : ["branch"],
+      nextAction: branch ? "open_consultation_path" : "ask_branch"
+    };
+  }
+
+  if (memory.priceAsked || intents.has("price") || intents.has("expensive")) {
+    const missingSlots = [];
+    if (!coverage) missingSlots.push("coverage");
+    if (!branch) missingSlots.push("branch");
+
+    return {
+      state: missingSlots.length ? SMART_GOAL_STATES.QUALIFICATION : SMART_GOAL_STATES.CONSIDERATION,
+      goal: "qualify_price",
+      status: missingSlots.length ? "waiting" : "active",
+      missingSlots,
+      nextAction: missingSlots[0] === "coverage"
+        ? "ask_coverage"
+        : (missingSlots[0] === "branch" ? "ask_branch" : "offer_consultation")
+    };
+  }
+
+  if (intents.has("consultation")) {
+    return {
+      state: branch ? SMART_GOAL_STATES.CONSIDERATION : SMART_GOAL_STATES.QUALIFICATION,
+      goal: "book_consultation",
+      status: "waiting",
+      missingSlots: branch ? [] : ["branch"],
+      nextAction: branch ? "offer_consultation" : "ask_branch"
+    };
+  }
+
+  if (intents.has("location")) {
+    return {
+      state: branch ? SMART_GOAL_STATES.DISCOVERY : SMART_GOAL_STATES.QUALIFICATION,
+      goal: branch ? "explore_solution" : "select_branch",
+      status: branch ? "active" : "waiting",
+      missingSlots: branch ? [] : ["branch"],
+      nextAction: branch ? "offer_consultation_or_results" : "ask_branch"
+    };
+  }
+
+  if (intents.has("media") || memory.resultsRequested) {
+    return {
+      state: SMART_GOAL_STATES.CONSIDERATION,
+      goal: "review_results",
+      status: "active",
+      missingSlots: [],
+      nextAction: "offer_consultation"
+    };
+  }
+
+  if ([
+    "services", "natural", "density", "hair_type", "duration_maintenance",
+    "warranty", "women", "full_bald"
+  ].some((id) => intents.has(id))) {
+    return {
+      state: SMART_GOAL_STATES.DISCOVERY,
+      goal: "explore_solution",
+      status: "active",
+      missingSlots: [],
+      nextAction: decisionReply?.decision || "offer_consultation_or_results"
+    };
+  }
+
+  return {
+    state: memory.conversationState || SMART_GOAL_STATES.NEW,
+    goal: memory.activeGoal || "understand_need",
+    status: memory.goalStatus || "active",
+    missingSlots: Array.isArray(memory.missingSlots) ? memory.missingSlots : [],
+    nextAction: memory.nextAction || "identify_need"
+  };
+}
+
+function updateSmartConversationGoalState({ phone = "", analysis = {}, memory = {}, previousMemory = null, salesReply = null, decisionReply = null, persist = true } = {}) {
+  if (!SMART_GOAL_ENABLED || !SMART_MEMORY_ENABLED) {
+    return { memory, enabled: false, stateChanged: false, goalChanged: false, progressMade: false, resolvedSlots: [] };
+  }
+
+  const cleanPhone = getSmartMemoryPhoneKey(phone || memory.phone || "");
+  if (!cleanPhone) {
+    return { memory, enabled: true, stateChanged: false, goalChanged: false, progressMade: false, resolvedSlots: [] };
+  }
+
+  const previous = previousMemory
+    ? normalizeSmartMemoryForStorage(previousMemory)
+    : (getSmartConversationMemory(cleanPhone) || buildEmptySmartConversationMemory(cleanPhone));
+  const currentBase = { ...previous, ...memory, phone: cleanPhone };
+  const derived = deriveSmartConversationGoal({ analysis, memory: currentBase, salesReply, decisionReply });
+  const progressSignature = getSmartGoalProgressSignature(currentBase, analysis);
+  const previousSignature = (previous.lastProgressSignature || "").toString();
+  const resolvedSlots = getSmartGoalResolvedSlots(previous, currentBase);
+  const stateChanged = (previous.conversationState || "new") !== derived.state;
+  const goalChanged = (previous.activeGoal || "understand_need") !== derived.goal;
+  const missingChanged = JSON.stringify(previous.missingSlots || []) !== JSON.stringify(derived.missingSlots || []);
+  const progressMade = Boolean(
+    resolvedSlots.length ||
+    progressSignature !== previousSignature ||
+    stateChanged ||
+    goalChanged ||
+    missingChanged
+  );
+  const stalledTurns = progressMade ? 0 : Number(previous.stalledTurns || 0) + 1;
+  const now = Date.now();
+  const stateHistory = Array.isArray(previous.stateHistory) ? [...previous.stateHistory] : [];
+
+  if (stateChanged || goalChanged) {
+    stateHistory.push({ state: derived.state, goal: derived.goal, at: now });
+  }
+
+  const next = rememberSmartMemoryObject(cleanPhone, {
+    ...currentBase,
+    conversationState: derived.state,
+    activeGoal: derived.goal,
+    goalStatus: derived.status,
+    completedGoals: getSmartGoalCompletedGoals(previous, derived.goal, derived.status),
+    missingSlots: derived.missingSlots,
+    nextAction: derived.nextAction,
+    stateHistory: stateHistory.slice(-SMART_GOAL_HISTORY_LIMIT),
+    stalledTurns,
+    lastProgressSignature: progressSignature,
+    lastProgressAt: progressMade ? now : Number(previous.lastProgressAt || now),
+    stateEnteredAt: stateChanged ? now : Number(previous.stateEnteredAt || now),
+    goalUpdatedAt: goalChanged || progressMade ? now : Number(previous.goalUpdatedAt || now),
+    updatedAt: now
+  });
+
+  if (persist) scheduleSmartMemoryPersistence(cleanPhone);
+
+  return {
+    version: SMART_GOAL_VERSION,
+    enabled: true,
+    memory: next,
+    previousState: previous.conversationState || "new",
+    previousGoal: previous.activeGoal || "understand_need",
+    stateChanged,
+    goalChanged,
+    progressMade,
+    resolvedSlots,
+    stalledTurns,
+    state: derived.state,
+    goal: derived.goal,
+    goalStatus: derived.status,
+    missingSlots: derived.missingSlots,
+    nextAction: derived.nextAction
+  };
+}
+
+function getSmartGoalLoopBreakButtons(goal = "") {
+  if (goal === "book_service") return getServiceSubMenuButtons();
+  if (goal === "choose_customer_type") return getDirectBookingChoiceButtons();
+  if (goal === "select_branch" || goal === "book_consultation") return getFastBookingBranchButtons();
+  return [
+    { id: "consult_menu", title: "Consult | استشارة" },
+    { id: "results", title: "Results | نتائج" },
+    { id: "talk_to_team", title: "Team | فريقنا" }
+  ];
+}
+
+function buildSmartGoalTrackingReply({ tracker = {}, analysis = {}, memory = {}, customerName = "", language = "en", salesReply = null } = {}) {
+  if (!SMART_GOAL_ENABLED || !tracker?.enabled || salesReply) return null;
+  if (analysis?.isActionLike || ["complaint", "human"].includes(analysis?.primaryIntent || "")) return null;
+
+  const finalMemory = tracker.memory || memory || {};
+  const cleanName = namePhrase(customerName);
+  const ar = language === "ar";
+
+  if (Number(tracker.stalledTurns || 0) >= SMART_GOAL_STALL_LIMIT) {
+    const body = ar
+      ? [
+          cleanName ? `تمام ${cleanName}، حتى ما نضل نكرر نفس السؤال:` : "تمام، حتى ما نضل نكرر نفس السؤال:",
+          "",
+          "ما رح أعطيك جواب عشوائي أو أعيد نفس القائمة.",
+          "اختر الخطوة الأقرب لك، أو حوّل المحادثة للفريق حتى يكمل معك مباشرة."
+        ].join("\n")
+      : [
+          cleanName ? `Alright ${cleanName}, to avoid repeating the same question:` : "Alright, to avoid repeating the same question:",
+          "",
+          "I will not give a random answer or repeat the same menu.",
+          "Choose the closest next step, or hand the conversation to the team."
+        ].join("\n");
+
+    return {
+      version: SMART_GOAL_VERSION,
+      topic: `goal_loop_break:${tracker.goal || finalMemory.activeGoal || "unknown"}`,
+      status: "Goal Tracking V5 - Loop Break",
+      messageType: "Conversation State & Goal V5",
+      state: tracker.state || finalMemory.conversationState || "",
+      goal: tracker.goal || finalMemory.activeGoal || "",
+      goalStatus: tracker.goalStatus || finalMemory.goalStatus || "",
+      missingSlots: tracker.missingSlots || finalMemory.missingSlots || [],
+      nextAction: "offer_controlled_escape",
+      body,
+      buttons: getSmartGoalLoopBreakButtons(tracker.goal || finalMemory.activeGoal || "")
+    };
+  }
+
+  if (tracker.previousGoal === "choose_customer_type" && tracker.goal === "book_service" && finalMemory.customerType === "existing") {
+    return {
+      version: SMART_GOAL_VERSION,
+      topic: "goal:book_service",
+      status: "Goal Tracking V5 - Service Route",
+      messageType: "Conversation State & Goal V5",
+      state: tracker.state,
+      goal: tracker.goal,
+      goalStatus: tracker.goalStatus,
+      missingSlots: tracker.missingSlots,
+      nextAction: "open_service_path",
+      body: ar
+        ? "تمام، سجلت أنك عميل حالي ✅\n\nخلينا نكمل بمسار السيرفس حتى نرتب متابعة، تركيب، أو تعديل بالطريقة الصحيحة."
+        : "Got it—you are an existing client ✅\n\nLet us continue through the Service path for follow-up, fitting, or adjustment.",
+      buttons: getServiceSubMenuButtons()
+    };
+  }
+
+  if (tracker.previousGoal === "choose_customer_type" && tracker.goal === "book_consultation" && finalMemory.customerType === "new") {
+    return {
+      version: SMART_GOAL_VERSION,
+      topic: "goal:book_consultation",
+      status: "Goal Tracking V5 - Consultation Route",
+      messageType: "Conversation State & Goal V5",
+      state: tracker.state,
+      goal: tracker.goal,
+      goalStatus: tracker.goalStatus,
+      missingSlots: tracker.missingSlots,
+      nextAction: tracker.nextAction,
+      body: ar
+        ? "تمام، سجلت أنك عميل جديد ✅\n\nالخطوة الصحيحة هي استشارة قصيرة. اختر الفرع المناسب حتى نكمل بدون ما نرجع نعيد الأسئلة."
+        : "Got it—you are a new client ✅\n\nThe correct next step is a short consultation. Choose the suitable branch so we can continue without repeating questions.",
+      buttons: getFastBookingBranchButtons()
+    };
+  }
+
+  if (tracker.goal === "choose_customer_type" && (analysis?.primaryIntent === "booking" || finalMemory.bookingReadiness === "ready")) {
+    return {
+      version: SMART_GOAL_VERSION,
+      topic: "goal:choose_customer_type",
+      status: "Goal Tracking V5 - Qualification",
+      messageType: "Conversation State & Goal V5",
+      state: tracker.state,
+      goal: tracker.goal,
+      goalStatus: tracker.goalStatus,
+      missingSlots: tracker.missingSlots,
+      nextAction: "ask_customer_type",
+      body: ar
+        ? "ممتاز، صار هدفنا الحجز ✅\n\nحتى أفتح المسار الصحيح مرة واحدة: هل أنت عميل جديد أم عميل حالي؟"
+        : "Great—our goal is now booking ✅\n\nTo open the correct path once: are you a new or an existing client?",
+      buttons: getDirectBookingChoiceButtons()
+    };
+  }
+
+  if (tracker.goal === "qualify_price" && tracker.resolvedSlots?.includes("coverage") && tracker.missingSlots?.includes("branch")) {
+    return {
+      version: SMART_GOAL_VERSION,
+      topic: "goal:qualify_price_branch",
+      status: "Goal Tracking V5 - Price Qualification",
+      messageType: "Conversation State & Goal V5",
+      state: tracker.state,
+      goal: tracker.goal,
+      goalStatus: tracker.goalStatus,
+      missingSlots: tracker.missingSlots,
+      nextAction: "ask_branch",
+      body: ar
+        ? "تمام، سجلت نوع التغطية ✅\n\nبقي سؤال واحد حتى نكمل بشكل مرتب: أي فرع أنسب لك، دبي أم أبوظبي؟"
+        : "Got it—I saved the coverage type ✅\n\nOne question remains: which branch suits you better, Dubai or Abu Dhabi?",
+      buttons: getFastBookingBranchButtons()
+    };
+  }
+
+  if (tracker.goal === "qualify_price" && tracker.resolvedSlots?.includes("branch") && !tracker.missingSlots?.length) {
+    return {
+      version: SMART_GOAL_VERSION,
+      topic: "goal:qualify_price_complete",
+      status: "Goal Tracking V5 - Price Qualified",
+      messageType: "Conversation State & Goal V5",
+      state: tracker.state,
+      goal: tracker.goal,
+      goalStatus: tracker.goalStatus,
+      missingSlots: [],
+      nextAction: "offer_consultation",
+      body: ar
+        ? "ممتاز، صار عندي نوع التغطية والفرع ✅\n\nهيك ما عاد في داعي نكرر أسئلة السعر. الخطوة الأدق الآن استشارة قصيرة حسب حالتك."
+        : "Great—I now have the coverage type and branch ✅\n\nThere is no need to repeat the price questions. The most accurate next step is a short consultation for your case.",
+      buttons: getSmartConsultTeamButtons()
+    };
+  }
+
+  return null;
+}
+
+function rememberSmartGoalTrackingReply(phone = "", reply = {}, text = "", language = "en") {
+  if (!reply) return null;
+  const cleanPhone = getSmartMemoryPhoneKey(phone);
+  if (!cleanPhone) return null;
+
+  const previous = getSmartConversationMemory(cleanPhone) || buildEmptySmartConversationMemory(cleanPhone);
+  const next = rememberSmartMemoryObject(cleanPhone, {
+    ...previous,
+    topic: reply.topic || previous.topic || "goal_tracking",
+    lastBotTopic: reply.topic || previous.lastBotTopic || "goal_tracking",
+    lastText: normalizeSmartUnderstandingText(text || previous.lastText || ""),
+    language: language === "ar" ? "ar" : "en",
+    pendingQuestion: (reply.missingSlots || [])[0] || "",
+    nextAction: reply.nextAction || previous.nextAction || "",
+    updatedAt: Date.now()
+  });
+
+  scheduleSmartMemoryPersistence(cleanPhone);
+  return next;
+}
+
+
+
+// LEAD QUALIFICATION & SMART HANDOFF V6
+function getSmartLeadTextSignals(text = "") {
+  const value = compactText(normalizeSmartUnderstandingText(text || ""));
+  const hasPhrase = (phrases = []) => phrases.some((phrase) => {
+    const clean = compactText(normalizeSmartUnderstandingText(phrase || ""));
+    return clean && value.includes(clean);
+  });
+
+  const urgency = hasPhrase([
+    "اليوم", "بكرا", "غدا", "هلق", "حالا", "فورا", "ضروري", "مستعجل",
+    "اسرع وقت", "هذا الاسبوع", "today", "tomorrow", "asap", "urgent",
+    "as soon as possible", "this week"
+  ]);
+  const callbackRequested = hasPhrase([
+    "اتصلوا فيني", "اتصل فيني", "كلموني", "دقوا علي", "حدا يتصل فيني",
+    "اريد اتصال", "بدي اتصال", "call me", "contact me", "give me a call",
+    "someone call me", "please call"
+  ]);
+  const appointmentSpecific = hasPhrase([
+    "موعد اليوم", "موعد بكرا", "في موعد", "ثبتلي موعد", "احجزلي موعد",
+    "available today", "available tomorrow", "appointment today",
+    "appointment tomorrow", "available appointment", "book me", "schedule me", "slot"
+  ]);
+  const commitment = isExplicitReadyToBookText(text) || hasPhrase([
+    "بدي احجز", "اريد الحجز", "جاهز احجز", "احجزلي", "ثبتلي",
+    "i want to book", "ready to book", "book me", "schedule me"
+  ]);
+
+  return { value, urgency, callbackRequested, appointmentSpecific, commitment };
+}
+
+function getSmartLeadQualificationMissingSlots(memory = {}, tracker = {}) {
+  const missing = [];
+  const customerType = (memory.customerType || "").toString();
+  const branch = normalizeInboxBranchName(memory.branch || "");
+  const serviceInterest = (memory.serviceInterest || "").toString();
+  const coverage = (memory.coverage || "").toString();
+  const bookingReady = memory.bookingReadiness === "ready" || tracker?.goal === "book_consultation" || tracker?.goal === "book_service";
+
+  if (bookingReady && !customerType) missing.push("customer_type");
+  if (memory.priceAsked && !coverage) missing.push("coverage");
+  if ((bookingReady || memory.priceAsked || tracker?.goal === "book_consultation" || tracker?.goal === "book_service") && !branch) {
+    missing.push("branch");
+  }
+  if (customerType === "existing" && serviceInterest !== "service") missing.push("service_type");
+  if (customerType === "new" && !coverage && !serviceInterest && !memory.priceAsked) missing.push("coverage_or_need");
+
+  return [...new Set(missing)];
+}
+
+function buildSmartLeadVerifiedSummary(memory = {}, signals = {}) {
+  return {
+    branch: normalizeInboxBranchName(memory.branch || ""),
+    customerType: ["new", "existing"].includes(memory.customerType) ? memory.customerType : "",
+    coverage: ["light", "full"].includes(memory.coverage) ? memory.coverage : "",
+    interest: (memory.serviceInterest || memory.activeGoal || "").toString().slice(0, 80),
+    readiness: (memory.bookingReadiness || "").toString().slice(0, 40),
+    objection: (memory.objection || "").toString().slice(0, 80),
+    urgency: Boolean(signals.urgency),
+    callbackRequested: Boolean(signals.callbackRequested)
+  };
+}
+
+function analyzeSmartLeadQualification({ text = "", analysis = {}, memory = {}, tracker = {}, salesReply = null } = {}) {
+  const intents = new Set(getSmartMemoryIntentIds(analysis));
+  const signals = getSmartLeadTextSignals(text);
+  const reasons = [];
+  let score = 0;
+  const add = (points, reason) => {
+    score += points;
+    reasons.push(`${reason}:${points >= 0 ? "+" : ""}${points}`);
+  };
+
+  const bookingReady = memory.bookingReadiness === "ready" || intents.has("booking") || signals.commitment;
+  const branch = normalizeInboxBranchName(memory.branch || analysis?.entities?.branch || "");
+  const customerType = memory.customerType || analysis?.entities?.customerType || "";
+  const coverage = memory.coverage || analysis?.entities?.coverage || "";
+  const serviceInterest = (memory.serviceInterest || "").toString();
+  const existingService = customerType === "existing" && (serviceInterest === "service" || intents.has("current_client_service"));
+
+  if (bookingReady) add(32, "booking_ready");
+  if (intents.has("consultation") || tracker?.goal === "book_consultation") add(12, "consultation_interest");
+  if (branch) add(12, "branch_known");
+  if (customerType) add(12, "customer_type_known");
+  if (coverage) add(8, "coverage_known");
+  if (existingService) add(12, "service_need_known");
+  else if (serviceInterest) add(7, "need_known");
+  if (memory.priceAsked || intents.has("price")) add(7, "price_engagement");
+  if (memory.resultsRequested || memory.resultsSeen || intents.has("media")) add(6, "results_engagement");
+  if (["natural", "density", "hair_type", "duration_maintenance", "warranty", "full_bald", "women"].some((id) => intents.has(id))) {
+    add(5, "specific_question");
+  }
+  if (Number(memory.turnCount || 0) >= 3) add(6, "multi_turn_engagement");
+  if (signals.urgency) add(10, "urgent_timing");
+  if (signals.appointmentSpecific) add(8, "specific_appointment");
+  if (signals.callbackRequested) add(12, "callback_requested");
+  if (memory.objection === "hesitation") add(-10, "hesitation");
+  else if (memory.objection && !bookingReady) add(-5, "active_objection");
+  if (Number(memory.stalledTurns || 0) >= SMART_GOAL_STALL_LIMIT) add(-5, "stalled_conversation");
+
+  score = Math.min(100, Math.max(0, score));
+  const missingSlots = getSmartLeadQualificationMissingSlots(memory, tracker);
+  const coreQualified = Boolean(
+    customerType &&
+    branch &&
+    (
+      existingService ||
+      bookingReady ||
+      intents.has("consultation") ||
+      tracker?.goal === "book_consultation" ||
+      tracker?.goal === "book_service"
+    )
+  );
+
+  let grade = "cold";
+  if (score >= SMART_LEAD_PRIORITY_SCORE || (existingService && bookingReady && score >= SMART_LEAD_HOT_SCORE)) grade = "priority";
+  else if (score >= SMART_LEAD_HOT_SCORE) grade = "hot";
+  else if (score >= SMART_LEAD_WARM_SCORE) grade = "warm";
+
+  let qualificationStatus = "unqualified";
+  if (coreQualified && score >= SMART_LEAD_WARM_SCORE) qualificationStatus = "qualified";
+  else if (score >= 20 || branch || customerType || coverage || serviceInterest) qualificationStatus = "partial";
+
+  let handoffMode = "continue_bot";
+  let handoffReason = "";
+  if (intents.has("complaint") || intents.has("human") || memory.complaint) {
+    handoffMode = "protected_existing_route";
+    handoffReason = "protected_complaint_or_explicit_human_route";
+  } else if (signals.callbackRequested && score >= 50) {
+    handoffMode = "human_required";
+    handoffReason = "qualified_callback_request";
+  } else if (signals.appointmentSpecific && bookingReady && branch && score >= 65) {
+    handoffMode = "human_required";
+    handoffReason = "urgent_specific_booking";
+  } else if (existingService && bookingReady && branch && score >= 65) {
+    handoffMode = "human_required";
+    handoffReason = "existing_client_service_booking";
+  } else if ((salesReply?.objection || memory.objection) === "previous_bad_experience" && bookingReady && score >= SMART_LEAD_HOT_SCORE) {
+    handoffMode = "human_required";
+    handoffReason = "high_intent_after_previous_bad_experience";
+  } else if (["hot", "priority"].includes(grade) && qualificationStatus === "qualified") {
+    handoffMode = "priority_queue";
+    handoffReason = "qualified_high_intent_lead";
+  }
+
+  if (handoffMode === "human_required") qualificationStatus = "handoff";
+
+  return {
+    version: SMART_LEAD_VERSION,
+    score,
+    grade,
+    qualificationStatus,
+    reasons,
+    missingSlots,
+    handoffMode,
+    handoffReason,
+    signals,
+    summary: buildSmartLeadVerifiedSummary({
+      ...memory,
+      branch,
+      customerType,
+      coverage,
+      serviceInterest
+    }, signals)
+  };
+}
+
+function updateSmartLeadQualification({ phone = "", text = "", analysis = {}, memory = {}, tracker = {}, salesReply = null, persist = true } = {}) {
+  if (!SMART_LEAD_ENABLED || !SMART_MEMORY_ENABLED) {
+    return { enabled: false, memory, shouldSyncInbox: false, shouldWriteSummary: false };
+  }
+
+  const cleanPhone = getSmartMemoryPhoneKey(phone || memory.phone || "");
+  if (!cleanPhone) return { enabled: true, memory, shouldSyncInbox: false, shouldWriteSummary: false };
+
+  const previous = normalizeSmartMemoryForStorage(
+    getSmartConversationMemory(cleanPhone) || buildEmptySmartConversationMemory(cleanPhone)
+  );
+  const current = { ...previous, ...memory, phone: cleanPhone };
+  const qualification = analyzeSmartLeadQualification({ text, analysis, memory: current, tracker, salesReply });
+  const gradeChanged = previous.leadGrade !== qualification.grade;
+  const statusChanged = previous.qualificationStatus !== qualification.qualificationStatus;
+  const handoffModeChanged = previous.handoffMode !== qualification.handoffMode;
+  const becameHot = !["hot", "priority"].includes(previous.leadGrade) && ["hot", "priority"].includes(qualification.grade);
+  const becameQualified = previous.qualificationStatus !== "qualified" && qualification.qualificationStatus === "qualified";
+  const now = Date.now();
+  const leadHistory = Array.isArray(previous.leadHistory) ? [...previous.leadHistory] : [];
+
+  if (gradeChanged || statusChanged || handoffModeChanged) {
+    leadHistory.push({
+      score: qualification.score,
+      grade: qualification.grade,
+      status: qualification.qualificationStatus,
+      handoffMode: qualification.handoffMode,
+      at: now
+    });
+  }
+
+  const next = rememberSmartMemoryObject(cleanPhone, {
+    ...current,
+    leadScore: qualification.score,
+    leadGrade: qualification.grade,
+    qualificationStatus: qualification.qualificationStatus,
+    qualificationReasons: qualification.reasons,
+    qualificationMissingSlots: qualification.missingSlots,
+    handoffMode: qualification.handoffMode,
+    handoffReason: qualification.handoffReason,
+    leadSummary: qualification.summary,
+    leadQualifiedAt: ["qualified", "handoff"].includes(qualification.qualificationStatus)
+      ? Number(previous.leadQualifiedAt || now)
+      : Number(previous.leadQualifiedAt || 0),
+    leadUpdatedAt: now,
+    leadHistory: leadHistory.slice(-SMART_LEAD_HISTORY_LIMIT),
+    updatedAt: now
+  });
+
+  if (persist) scheduleSmartMemoryPersistence(cleanPhone);
+
+  return {
+    ...qualification,
+    enabled: true,
+    memory: next,
+    gradeChanged,
+    statusChanged,
+    handoffModeChanged,
+    becameHot,
+    becameQualified,
+    shouldSyncInbox: qualification.handoffMode === "priority_queue" && (becameHot || becameQualified || handoffModeChanged),
+    shouldWriteSummary: (becameHot || becameQualified || qualification.handoffMode === "human_required") && (gradeChanged || statusChanged || handoffModeChanged)
+  };
+}
+
+function getSmartLeadInboxTags(qualification = {}) {
+  const summary = qualification.summary || {};
+  const tags = [
+    "Smart Lead V6",
+    qualification.grade === "priority" ? "Priority Lead" : (qualification.grade === "hot" ? "Hot Lead" : "Qualified Lead")
+  ];
+  if (summary.customerType === "new") tags.push("New Client");
+  if (summary.customerType === "existing") tags.push("Existing Client");
+  if (summary.branch) tags.push(summary.branch);
+  if (qualification.handoffMode === "human_required") tags.push("Smart Handoff", "Bot Paused");
+  return [...new Set(tags)].slice(0, 10);
+}
+
+function buildSmartLeadInternalSummary(qualification = {}, language = "en") {
+  const summary = qualification.summary || {};
+  const value = (input, fallback = "Not confirmed") => input || fallback;
+  const customerType = summary.customerType === "new"
+    ? "New client"
+    : (summary.customerType === "existing" ? "Existing client" : "Not confirmed");
+  const coverage = summary.coverage === "light"
+    ? "Light / partial"
+    : (summary.coverage === "full" ? "Full" : "Not confirmed");
+
+  return [
+    "LEAD SUMMARY V6",
+    `Lead grade: ${qualification.grade || "cold"} (${qualification.score || 0}/100)`,
+    `Qualification: ${qualification.qualificationStatus || "unqualified"}`,
+    `Customer type: ${customerType}`,
+    `Branch: ${value(summary.branch)}`,
+    `Coverage: ${coverage}`,
+    `Interest: ${value(summary.interest)}`,
+    `Readiness: ${value(summary.readiness)}`,
+    `Objection: ${value(summary.objection, "None confirmed")}`,
+    `Urgent timing: ${summary.urgency ? "Yes" : "No"}`,
+    `Callback requested: ${summary.callbackRequested ? "Yes" : "No"}`,
+    `Recommended action: ${qualification.handoffMode || "continue_bot"}`,
+    `Reason: ${qualification.handoffReason || "Continue qualification"}`
+  ].join("\n");
+}
+
+async function syncSmartLeadPriorityState({ phone = "", phoneNumberId = "", lineConfig = {}, qualification = {}, customerName = "" } = {}) {
+  if (!qualification?.shouldSyncInbox) return { ok: false, skipped: true };
+
+  await saveConversationStateToGoogleSheetFromServer({
+    phone,
+    phoneNumberId,
+    branch: lineConfig.branch,
+    status: qualification.grade === "priority" ? "Priority Lead" : "Qualified Lead",
+    assignee: getBranchTeamAssignee(lineConfig.branch),
+    tags: getSmartLeadInboxTags(qualification),
+    updatedBy: SMART_LEAD_VERSION
+  });
+
+  if (qualification.shouldWriteSummary) {
+    addInboxMessage(
+      phone,
+      "system",
+      buildSmartLeadInternalSummary(qualification),
+      qualification.grade === "priority" ? "Priority Lead" : "Qualified Lead",
+      phoneNumberId,
+      { customerName, messageType: "Smart Lead Summary V6" }
+    );
+  }
+
+  return { ok: true };
+}
+
+function buildSmartLeadHandoffReply({ qualification = {}, analysis = {}, customerName = "", language = "en" } = {}) {
+  if (!SMART_LEAD_ENABLED || qualification?.handoffMode !== "human_required") return null;
+  if (["complaint", "human"].includes(analysis?.primaryIntent || "")) return null;
+
+  const cleanName = namePhrase(customerName);
+  const ar = language === "ar";
+  const summary = qualification.summary || {};
+  const verifiedParts = [];
+  if (summary.customerType === "existing") verifiedParts.push(ar ? "عميل حالي" : "existing client");
+  if (summary.customerType === "new") verifiedParts.push(ar ? "عميل جديد" : "new client");
+  if (summary.branch) verifiedParts.push(summary.branch);
+  if (summary.coverage === "light") verifiedParts.push(ar ? "تغطية خفيفة" : "light coverage");
+  if (summary.coverage === "full") verifiedParts.push(ar ? "تغطية كاملة" : "full coverage");
+
+  const verifiedLine = verifiedParts.length
+    ? (ar ? `التفاصيل المؤكدة: ${verifiedParts.join(" • ")}` : `Confirmed details: ${verifiedParts.join(" • ")}`)
+    : "";
+  const body = ar
+    ? [
+        cleanName ? `ممتاز ${cleanName}، صار عندي المعلومات الأساسية ✅` : "ممتاز، صار عندي المعلومات الأساسية ✅",
+        verifiedLine,
+        "",
+        "حوّلت المحادثة للفريق كأولوية حتى يكمل معك بخصوص الموعد أو الاتصال بدون ما نرجع نكرر الأسئلة.",
+        "تم إيقاف الردود التلقائية مؤقتاً، وسيكمل معك أحد المختصين من نفس المحادثة."
+      ].filter(Boolean).join("\n")
+    : [
+        cleanName ? `Great ${cleanName}, I now have the essential details ✅` : "Great, I now have the essential details ✅",
+        verifiedLine,
+        "",
+        "I have prioritized and transferred the conversation to the team so they can continue regarding the appointment or callback without repeating the questions.",
+        "Automatic replies are now paused, and a specialist will continue in this same conversation."
+      ].filter(Boolean).join("\n");
+
+  return {
+    version: SMART_LEAD_VERSION,
+    topic: "smart_lead_handoff",
+    status: "Talk to Team",
+    messageType: "Smart Lead Handoff V6",
+    body,
+    buttons: null,
+    qualification
+  };
+}
+
+function rememberSmartLeadHandoffReply(phone = "", reply = {}, text = "", language = "en") {
+  if (!reply?.qualification) return null;
+  const cleanPhone = getSmartMemoryPhoneKey(phone);
+  if (!cleanPhone) return null;
+  const previous = getSmartConversationMemory(cleanPhone) || buildEmptySmartConversationMemory(cleanPhone);
+  const next = rememberSmartMemoryObject(cleanPhone, {
+    ...previous,
+    topic: reply.topic || "smart_lead_handoff",
+    lastBotTopic: reply.topic || "smart_lead_handoff",
+    lastText: normalizeSmartUnderstandingText(text || previous.lastText || ""),
+    language: language === "ar" ? "ar" : "en",
+    conversationState: SMART_GOAL_STATES.HANDOFF,
+    activeGoal: "human_handoff",
+    goalStatus: "handoff",
+    nextAction: "human_follow_up",
+    qualificationStatus: "handoff",
+    handoffMode: "human_required",
+    handoffReason: reply.qualification.handoffReason || previous.handoffReason || "smart_handoff",
+    updatedAt: Date.now()
+  });
+  scheduleSmartMemoryPersistence(cleanPhone);
+  return next;
+}
+
+
+
+// NATURAL CONVERSATION QUALITY & REPETITION CONTROL V7
+function normalizeNaturalConversationText(value = "") {
+  return normalizeSmartUnderstandingText(value || "")
+    .replace(/[\u064B-\u065F\u0670]/g, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getNaturalConversationTokens(value = "") {
+  return normalizeNaturalConversationText(value)
+    .split(/\s+/)
+    .filter((token) => token && token.length > 1)
+    .slice(0, 160);
+}
+
+function getNaturalReplyFingerprint(body = "", buttons = []) {
+  const buttonKey = (buttons || [])
+    .map((button) => `${button?.id || ""}:${button?.title || ""}`)
+    .join("|");
+  const normalized = `${normalizeNaturalConversationText(body)}|${normalizeNaturalConversationText(buttonKey)}`;
+  return crypto.createHash("sha256").update(normalized || "empty").digest("hex").slice(0, 24);
+}
+
+function getNaturalReplySimilarity(first = "", second = "") {
+  const a = new Set(getNaturalConversationTokens(first));
+  const b = new Set(getNaturalConversationTokens(second));
+  if (!a.size || !b.size) return 0;
+  let intersection = 0;
+  a.forEach((token) => {
+    if (b.has(token)) intersection += 1;
+  });
+  const union = new Set([...a, ...b]).size;
+  return union ? Number((intersection / union).toFixed(3)) : 0;
+}
+
+function getNaturalFirstParagraph(body = "") {
+  return (body || "")
+    .toString()
+    .split(/\n\s*\n/)
+    .map((part) => part.trim())
+    .find(Boolean) || "";
+}
+
+function getNaturalIntroKey(body = "") {
+  return normalizeNaturalConversationText(getNaturalFirstParagraph(body)).slice(0, 160);
+}
+
+function isNaturalAcknowledgementText(text = "") {
+  const value = normalizeNaturalConversationText(text);
+  if (!value || value.length > 48) return false;
+  return [
+    "تمام", "اوكي", "أوكي", "اوكيه", "ماشي", "حلو", "ممتاز", "شكرا", "شكرًا", "مشكور", "يعطيك العافية",
+    "ok", "okay", "okey", "sure", "great", "good", "thanks", "thank you", "got it", "understood"
+  ].some((phrase) => value === normalizeNaturalConversationText(phrase));
+}
+
+function getNaturalPendingSlot(memory = {}) {
+  const explicit = (memory.pendingQuestion || "").toString().trim();
+  if (explicit) return explicit;
+  const missing = Array.isArray(memory.missingSlots) && memory.missingSlots.length
+    ? memory.missingSlots
+    : (Array.isArray(memory.qualificationMissingSlots) ? memory.qualificationMissingSlots : []);
+  return (missing[0] || "").toString().trim();
+}
+
+function buildNaturalProgressPrompt(memory = {}, language = "en") {
+  const slot = getNaturalPendingSlot(memory);
+  const ar = language === "ar";
+  const prompts = {
+    coverage: ar
+      ? "حتى أكمل معك بدقة، ناقصني بس أعرف: المطلوب تغطية فراغات خفيفة أم حل كامل؟"
+      : "To continue accurately, I only need to know: do you need light gap coverage or a full solution?",
+    branch: ar
+      ? "تمام. ناقصني بس الفرع الأنسب لك: دبي أم أبوظبي؟"
+      : "Got it. I only need your preferred branch: Dubai or Abu Dhabi?",
+    customer_type: ar
+      ? "حتى أفتح لك المسار الصحيح: أنت عميل جديد أم عميل حالي؟"
+      : "To open the correct route: are you a new or an existing client?",
+    service_type: ar
+      ? "شو نوع الموعد المطلوب: متابعة، تركيب، أو تعديل؟"
+      : "What type of appointment do you need: follow-up, fitting, or adjustment?",
+    booking_type: ar
+      ? "اختَر استشارة إذا كنت عميل جديد، أو سيرفس إذا كنت عميل حالي."
+      : "Choose Consultation if you are new, or Service if you are an existing client.",
+    preferred_day: ar
+      ? "أي يوم مناسب لك؟"
+      : "Which day suits you?",
+    preferred_time: ar
+      ? "وأي وقت تفضّل؟"
+      : "And what time do you prefer?"
+  };
+  return prompts[slot] || (ar
+    ? "حتى ما أكرر عليك نفس المعلومات، اكتبلي النقطة اللي بدك نكمل منها."
+    : "To avoid repeating the same information, tell me which point you would like to continue from.");
+}
+
+function buildNaturalAcknowledgementReply(memory = {}, language = "en", hasButtons = false) {
+  const pending = getNaturalPendingSlot(memory);
+  if (pending) return buildNaturalProgressPrompt(memory, language);
+  if (hasButtons) {
+    return language === "ar"
+      ? "تمام 😊 اختَر الخطوة اللي بتحب تكمل فيها من تحت."
+      : "Sure 😊 Choose the step you would like to continue with below.";
+  }
+  return language === "ar"
+    ? "تمام 😊 اكتبلي شو النقطة اللي بتحب نكمل فيها."
+    : "Sure 😊 Tell me which point you would like to continue with.";
+}
+
+function removeRepeatedCustomerNameFromIntro(body = "", customerName = "", memory = {}) {
+  const cleanName = cleanCustomerName(customerName);
+  if (!cleanName) return body;
+  const currentTurn = Math.max(0, Number(memory.turnCount || 0));
+  const lastUsedTurn = Number(memory.lastNameUsedTurn || -99);
+  if ((currentTurn - lastUsedTurn) > SMART_NATURAL_NAME_COOLDOWN_TURNS) return body;
+
+  const paragraphs = (body || "").toString().split(/\n\s*\n/);
+  if (!paragraphs.length) return body;
+  const escaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  paragraphs[0] = paragraphs[0]
+    .replace(new RegExp(`\\s+${escaped}(?=[،,!؟?\\s]|$)`, "i"), "")
+    .replace(new RegExp(`^${escaped}[،,!؟?\\s]+`, "i"), "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return paragraphs.filter((part) => part.trim()).join("\n\n").trim();
+}
+
+function replaceRepeatedIntro(body = "", memory = {}, language = "en") {
+  const currentIntro = getNaturalIntroKey(body);
+  const recent = new Set(Array.isArray(memory.recentIntroKeys) ? memory.recentIntroKeys : []);
+  if (!currentIntro || !recent.has(currentIntro)) return body;
+
+  const paragraphs = (body || "").toString().split(/\n\s*\n/).map((part) => part.trim()).filter(Boolean);
+  if (!paragraphs.length || paragraphs[0].length > 140) return body;
+  paragraphs[0] = language === "ar" ? "تمام، خلّينا نكمل من آخر نقطة 👌" : "Got it, let us continue from the last point 👌";
+  return paragraphs.join("\n\n").trim();
+}
+
+function shouldProtectNaturalReply(status = "", topic = "") {
+  const value = `${status || ""} ${topic || ""}`.toLowerCase();
+  return [
+    "talk to team", "complaint", "handoff", "reminder", "opt-in", "opt out",
+    "appointment reminder", "booking confirmed", "staff", "flow"
+  ].some((token) => value.includes(token));
+}
+
+function finalizeNaturalConversationReply({
+  phone = "",
+  customerText = "",
+  body = "",
+  buttons = [],
+  status = "",
+  topic = "",
+  action = "",
+  pendingQuestion = "",
+  customerName = "",
+  language = "en"
+} = {}) {
+  const originalBody = (body || "").toString().trim();
+  const localizedButtons = Array.isArray(buttons) ? buttons : [];
+  const memory = normalizeSmartMemoryForStorage(
+    getSmartConversationMemory(phone) || buildEmptySmartConversationMemory(phone)
+  );
+
+  if (!SMART_NATURAL_ENABLED || !originalBody || shouldProtectNaturalReply(status, topic)) {
+    return {
+      version: SMART_NATURAL_VERSION,
+      enabled: SMART_NATURAL_ENABLED,
+      body: originalBody,
+      buttons: localizedButtons,
+      changed: false,
+      reason: "protected_or_disabled",
+      similarity: 0,
+      fingerprint: getNaturalReplyFingerprint(originalBody, localizedButtons),
+      topic,
+      action,
+      pendingQuestion
+    };
+  }
+
+  const workingMemory = {
+    ...memory,
+    pendingQuestion: pendingQuestion || memory.pendingQuestion || ""
+  };
+  const fingerprint = getNaturalReplyFingerprint(originalBody, localizedButtons);
+  const recentReplies = Array.isArray(memory.recentBotReplies) ? memory.recentBotReplies : [];
+  const exactDuplicate = recentReplies.some((item) => item.fingerprint && item.fingerprint === fingerprint);
+  const lastBody = memory.lastBotReplyBody || recentReplies[recentReplies.length - 1]?.body || "";
+  const similarity = getNaturalReplySimilarity(originalBody, lastBody);
+  const nearDuplicate = Boolean(lastBody) && similarity >= SMART_NATURAL_SIMILARITY_THRESHOLD;
+  const acknowledgement = isNaturalAcknowledgementText(customerText);
+
+  let finalBody = originalBody;
+  let reason = "unchanged";
+
+  if (acknowledgement) {
+    finalBody = buildNaturalAcknowledgementReply(workingMemory, language, localizedButtons.length > 0);
+    reason = "acknowledgement_shortened";
+  } else if (exactDuplicate || nearDuplicate) {
+    finalBody = buildNaturalProgressPrompt(workingMemory, language);
+    reason = exactDuplicate ? "exact_duplicate_replaced" : "near_duplicate_replaced";
+  } else {
+    finalBody = removeRepeatedCustomerNameFromIntro(finalBody, customerName, memory);
+    const withoutRepeatedIntro = replaceRepeatedIntro(finalBody, memory, language);
+    if (withoutRepeatedIntro !== finalBody) reason = "intro_rotated";
+    else if (finalBody !== originalBody) reason = "name_cooldown";
+    finalBody = withoutRepeatedIntro;
+  }
+
+  return {
+    version: SMART_NATURAL_VERSION,
+    enabled: true,
+    body: finalBody || originalBody,
+    buttons: localizedButtons,
+    changed: (finalBody || originalBody) !== originalBody,
+    reason,
+    similarity,
+    fingerprint: getNaturalReplyFingerprint(finalBody || originalBody, localizedButtons),
+    originalFingerprint: fingerprint,
+    topic,
+    action,
+    pendingQuestion: workingMemory.pendingQuestion || ""
+  };
+}
+
+function rememberNaturalConversationReply(phone = "", naturalReply = {}, customerName = "") {
+  if (!SMART_NATURAL_ENABLED || !naturalReply?.body) return null;
+  const cleanPhone = getSmartMemoryPhoneKey(phone);
+  if (!cleanPhone) return null;
+
+  const previous = normalizeSmartMemoryForStorage(
+    getSmartConversationMemory(cleanPhone) || buildEmptySmartConversationMemory(cleanPhone)
+  );
+  const now = Date.now();
+  const introKey = getNaturalIntroKey(naturalReply.body);
+  const recentBotReplies = Array.isArray(previous.recentBotReplies) ? [...previous.recentBotReplies] : [];
+  recentBotReplies.push({
+    fingerprint: naturalReply.fingerprint || getNaturalReplyFingerprint(naturalReply.body, naturalReply.buttons || []),
+    topic: naturalReply.topic || previous.topic || "",
+    action: naturalReply.action || "",
+    pendingQuestion: naturalReply.pendingQuestion || previous.pendingQuestion || "",
+    introKey,
+    body: (naturalReply.body || "").toString().slice(0, 1200),
+    at: now
+  });
+
+  const recentIntroKeys = Array.isArray(previous.recentIntroKeys) ? [...previous.recentIntroKeys] : [];
+  if (introKey) recentIntroKeys.push(introKey);
+  const cleanName = cleanCustomerName(customerName);
+  const nameUsed = cleanName && normalizeNaturalConversationText(getNaturalFirstParagraph(naturalReply.body))
+    .includes(normalizeNaturalConversationText(cleanName));
+  const duplicateReason = ["exact_duplicate_replaced", "near_duplicate_replaced"].includes(naturalReply.reason);
+
+  const next = rememberSmartMemoryObject(cleanPhone, {
+    ...previous,
+    recentBotReplies: recentBotReplies.slice(-SMART_NATURAL_HISTORY_LIMIT),
+    recentIntroKeys: [...new Set(recentIntroKeys.filter(Boolean))].slice(-6),
+    lastBotReplyFingerprint: naturalReply.fingerprint || "",
+    lastBotReplyBody: (naturalReply.body || "").toString().slice(0, 1200),
+    lastBotReplyTopic: (naturalReply.topic || previous.topic || "").toString(),
+    lastBotReplyAt: now,
+    repeatedReplyCount: duplicateReason ? Number(previous.repeatedReplyCount || 0) + 1 : 0,
+    lastNameUsedTurn: nameUsed ? Number(previous.turnCount || 0) : Number(previous.lastNameUsedTurn || -99),
+    lastNaturalAction: (naturalReply.action || naturalReply.reason || "").toString(),
+    naturalQualityUpdatedAt: now,
+    updatedAt: now
+  });
+  scheduleSmartMemoryPersistence(cleanPhone);
+  return next;
+}
+
+
+// KNOWLEDGE COVERAGE & ANSWER PRECISION V8
+function getSmartKnowledgeCatalog() {
+  return [
+    {
+      id: "warranty_policy",
+      priority: 120,
+      intentIds: ["warranty"],
+      phrases: [
+        "ضمان", "كفاله", "كفالة", "مضمون", "استرجاع", "ترجيع", "return policy",
+        "warranty", "guarantee", "guaranteed", "refund"
+      ],
+      policy: "team_confirmed_policy",
+      title: { ar: "الضمان والشروط", en: "Warranty and terms" },
+      answer: {
+        ar: "شروط الضمان أو الاسترجاع تعتمد على الخدمة والحالة. الفريق يؤكد لك الشروط المطبقة قبل الحجز، لذلك ما نعطي وعداً عاماً غير دقيق.",
+        en: "Warranty or return terms depend on the service and the individual case. The team confirms the applicable terms before booking, so we do not make a general promise that may be inaccurate."
+      }
+    },
+    {
+      id: "attachment_method",
+      priority: 115,
+      intentIds: [],
+      phrases: [
+        "طريقة التثبيت", "كيف يثبت", "كيف بتثبت", "كيف بينثبت", "هل بيفك", "بيفك مع العرق",
+        "بيوقع", "يقع", "ينفك", "ثبات", "لاصق", "غرا", "glue", "attachment",
+        "how is it attached", "how does it stay", "will it come off", "can it fall", "sweat"
+      ],
+      policy: "case_dependent",
+      title: { ar: "طريقة التثبيت والثبات", en: "Attachment and security" },
+      answer: {
+        ar: "طريقة التثبيت تختلف حسب الحالة، نوع النظام، وطبيعة الاستخدام اليومي. الثبات الصحيح يحتاج اختياراً وتركيباً مناسبين، والفريق يؤكد التفاصيل بعد تقييم الحالة.",
+        en: "The attachment method depends on the case, the selected system, and daily use. Proper security requires the right selection and fitting, and the team confirms the details after assessment."
+      }
+    },
+    {
+      id: "daily_life",
+      priority: 110,
+      intentIds: [],
+      phrases: [
+        "استحم", "اتحمم", "شاور", "حمام", "سباحه", "سباحة", "مسبح", "بحر", "رياضه", "رياضة",
+        "جيم", "نوم", "نام فيه", "عرق", "تعرق", "shower", "wash while wearing", "swim",
+        "swimming", "gym", "sport", "exercise", "sleep", "sleep with it", "daily life"
+      ],
+      policy: "case_dependent",
+      title: { ar: "الاستخدام اليومي", en: "Daily use" },
+      answer: {
+        ar: "الاستحمام والرياضة والنوم والسباحة تعتمد على نوع النظام، طريقة التثبيت، وتعليمات العناية الخاصة بحالتك. الفريق يعطيك تعليمات دقيقة للنظام الذي سيتم اختياره.",
+        en: "Showering, exercise, sleeping, and swimming depend on the selected system, attachment method, and the care instructions for your case. The team provides specific guidance for the system chosen for you."
+      }
+    },
+    {
+      id: "duration_maintenance",
+      priority: 108,
+      intentIds: ["duration_maintenance"],
+      phrases: [
+        "كم يدوم", "قديش يدوم", "كم بيدوم", "بيدوم", "كم يعيش", "قديش بيعيش", "بيعيش",
+        "قديش بيضل", "بيضل", "مدة", "المده", "المدة",
+        "كل قديش سيرفس", "كل كم صيانة", "كل كم صيانه", "صيانة", "صيانه", "سيرفس",
+        "how long does it last", "how long it stays", "maintenance", "service schedule", "refit"
+      ],
+      policy: "case_dependent",
+      title: { ar: "المدة والصيانة", en: "Duration and maintenance" },
+      answer: {
+        ar: "المدة وجدول الصيانة يتأثران بنوع النظام، الاستخدام، التعرق، العناية، ونمط الحياة. الفريق يحدد الجدول المناسب بعد معرفة حالتك، بدل إعطاء مدة ثابتة قد لا تنطبق عليك.",
+        en: "Duration and the maintenance schedule are affected by the system type, use, sweating, care, and lifestyle. The team confirms the suitable schedule after understanding your case rather than giving one fixed duration that may not apply to you."
+      }
+    },
+    {
+      id: "care_hygiene",
+      priority: 106,
+      intentIds: [],
+      phrases: [
+        "كيف انظفه", "كيف بنظفه", "تنظيف", "نظافه", "نظافة", "غسيل", "اغسله", "شامبو",
+        "عناية", "العنايه", "العناية", "ريحة", "رائحه", "رائحة", "clean it", "cleaning",
+        "wash it", "care routine", "hygiene", "shampoo", "smell"
+      ],
+      policy: "case_dependent",
+      title: { ar: "العناية والنظافة", en: "Care and hygiene" },
+      answer: {
+        ar: "طريقة التنظيف والعناية تعتمد على نوع النظام وطريقة التثبيت. الأفضل اتباع تعليمات الفريق والمنتجات المناسبة للنظام حتى لا تتأثر النتيجة أو الراحة.",
+        en: "Cleaning and care depend on the system type and attachment method. It is best to follow the team's instructions and use products suitable for the selected system so the result and comfort are not affected."
+      }
+    },
+    {
+      id: "styling_options",
+      priority: 104,
+      intentIds: [],
+      phrases: [
+        "قصه", "قصة", "اقصه", "قص الشعر", "تسريحه", "تسريحة", "اسرحه", "سيشوار",
+        "صبغه", "صبغة", "اصبغه", "لون", "تغيير اللون", "ستايل", "كيرلي", "مجعد",
+        "cut it", "haircut", "style it", "styling", "blow dry", "dye it", "color it", "curly"
+      ],
+      policy: "case_dependent",
+      title: { ar: "القص والتصفيف واللون", en: "Cut, styling, and color" },
+      answer: {
+        ar: "إمكانية القص والتصفيف أو تغيير اللون تعتمد على نوع الشعر والنظام المختار. لازم يؤكد المختص ما يناسب النظام قبل أي تعديل حتى لا يتضرر.",
+        en: "Cutting, styling, or changing the color depends on the selected hair and system. A specialist should confirm what is suitable before any alteration to avoid damage."
+      }
+    },
+    {
+      id: "price",
+      priority: 102,
+      intentIds: ["price"],
+      phrases: [
+        "كم السعر", "شو السعر", "قديش السعر", "بكم", "التكلفه", "التكلفة", "سعر",
+        "price", "how much", "cost", "pricing", "quotation", "quote"
+      ],
+      policy: "assessment_required",
+      title: { ar: "السعر", en: "Price" },
+      answer: {
+        ar: "السعر ما إله رقم ثابت قبل معرفة مساحة التغطية، الكثافة، ونوع الحل المناسب. الفريق يحدد السعر الصحيح بعد تقييم مختصر للحالة.",
+        en: "There is no single fixed price before understanding the coverage area, density, and suitable solution. The team confirms the correct price after a brief assessment."
+      }
+    },
+    {
+      id: "hair_type",
+      priority: 100,
+      intentIds: ["hair_type"],
+      phrases: [
+        "نوع الشعر", "نوع النظام", "شعر طبيعي", "شعر بشري", "الخامة", "الخامات",
+        "hair type", "system type", "human hair", "material", "base type"
+      ],
+      policy: "assessment_required",
+      title: { ar: "نوع الشعر والنظام", en: "Hair and system type" },
+      answer: {
+        ar: "اختيار نوع الشعر والنظام يعتمد على اللون، الكثافة، التسريحة المطلوبة، وطريقة الاستخدام اليومية. المختص يوصي بالنوع الأنسب بعد الاستشارة.",
+        en: "The hair and system type are selected according to color, density, desired hairstyle, and daily use. A specialist recommends the suitable option after consultation."
+      }
+    },
+    {
+      id: "density",
+      priority: 98,
+      intentIds: ["density"],
+      phrases: [
+        "كثافة", "الكثافه", "الكثافة", "خفيف من قدام", "فراغات", "تغطيه", "تغطية",
+        "density", "thickness", "thin front", "hair gaps", "coverage"
+      ],
+      policy: "assessment_required",
+      title: { ar: "الكثافة والتغطية", en: "Density and coverage" },
+      answer: {
+        ar: "الكثافة لازم تتوازن مع شكل الوجه والشعر الموجود ومساحة التغطية حتى تكون النتيجة طبيعية وغير مبالغ فيها. تحديدها النهائي يحتاج تقييم الحالة.",
+        en: "Density should be balanced with the face shape, existing hair, and coverage area so the result looks natural rather than overdone. The final choice requires an assessment."
+      }
+    },
+    {
+      id: "full_bald_suitability",
+      priority: 96,
+      intentIds: ["full_bald"],
+      phrases: [
+        "صلع كامل", "اصلع", "أصلع", "كل الراس", "كل الرأس", "ما عندي شعر", "بدون شعر",
+        "full bald", "fully bald", "whole head", "no hair", "complete hair loss", "alopecia"
+      ],
+      policy: "assessment_required",
+      title: { ar: "الصلع الكامل أو المساحة الكبيرة", en: "Full baldness or large coverage" },
+      answer: {
+        ar: "قد يكون Hair Replacement مناسباً للصلع الكامل أو المساحات الكبيرة، لكن لازم يتقيّم حجم التغطية، الشكل المطلوب، وطريقة التثبيت قبل تأكيد الحل.",
+        en: "Hair replacement may be suitable for full baldness or large areas, but the coverage, desired look, and fitting method must be assessed before confirming the solution."
+      }
+    },
+    {
+      id: "women_suitability",
+      priority: 94,
+      intentIds: ["women"],
+      phrases: [
+        "للنساء", "نساء", "سيدات", "بنات", "للبنات", "امرأة", "للستات",
+        "for women", "for ladies", "female", "woman", "ladies"
+      ],
+      policy: "approved_general",
+      title: { ar: "للرجال والنساء", en: "For men and women" },
+      answer: {
+        ar: "توجد حلول Hair Replacement للرجال والنساء. الاختيار يعتمد على شكل الفراغات، الكثافة، واللوك المطلوب لكل حالة.",
+        en: "Hair replacement solutions are available for men and women. The selection depends on the pattern of hair loss, density, and the desired look for each case."
+      }
+    },
+    {
+      id: "natural_look",
+      priority: 92,
+      intentIds: ["natural"],
+      phrases: [
+        "طبيعي", "يبين تركيب", "بيبين تركيب", "شكله حقيقي", "خط امامي", "خط أمامي",
+        "natural", "looks real", "obvious", "undetectable", "front line", "hairline"
+      ],
+      policy: "assessment_required",
+      title: { ar: "المظهر الطبيعي", en: "Natural appearance" },
+      answer: {
+        ar: "المظهر الطبيعي يعتمد على توافق اللون، كثافة مدروسة، وخط أمامي وتصميم يناسبان شكل الوجه. النتيجة تختلف حسب الحالة، لذلك الاختيار الدقيق يتم بعد الاستشارة.",
+        en: "A natural appearance depends on matching the color, balanced density, and a hairline and design that suit the face shape. Results vary by case, so the precise choice is made after consultation."
+      }
+    },
+    {
+      id: "privacy",
+      priority: 90,
+      intentIds: [],
+      phrases: [
+        "خصوصيه", "خصوصية", "سري", "سريه", "سرية", "ما بدي حدا يعرف", "بدون ما حدا يعرف",
+        "private", "privacy", "confidential", "discreet", "do not want anyone to know"
+      ],
+      policy: "approved_general",
+      title: { ar: "الخصوصية", en: "Privacy" },
+      answer: {
+        ar: "تقدر تطلب استشارة خاصة، والفريق يتعامل مع تفاصيل الحالة بشكل مهني وهادئ. اذكر من البداية أنك تفضّل أعلى قدر من الخصوصية أثناء الاستشارة.",
+        en: "You can request a private consultation, and the team handles case details professionally and discreetly. Let the team know from the start that privacy is especially important to you."
+      }
+    },
+    {
+      id: "consultation_process",
+      priority: 88,
+      intentIds: ["consultation"],
+      phrases: [
+        "شو بصير بالاستشاره", "شو بصير بالاستشارة", "كيف الاستشاره", "كيف الاستشارة",
+        "شو بتعملوا بالاستشارة", "شو لازم اجيب", "كيف بتقيموا", "consultation process",
+        "what happens in consultation", "how is the consultation", "assessment process", "what do you check"
+      ],
+      policy: "approved_general",
+      title: { ar: "ماذا يحدث في الاستشارة", en: "What happens in the consultation" },
+      answer: {
+        ar: "خلال الاستشارة يفهم الفريق مساحة التغطية، الكثافة واللون المناسبين، اللوك المطلوب، وطبيعة الاستخدام اليومي، ثم يشرح الخيارات الملائمة للحالة.",
+        en: "During the consultation, the team reviews the coverage area, suitable density and color, desired look, and daily-use needs, then explains the options that fit the case."
+      }
+    },
+    {
+      id: "service_overview",
+      priority: 80,
+      intentIds: ["services"],
+      phrases: [
+        "شو خدمتكم", "شو بتعملوا", "شو النظام", "كيف بتشتغل", "شو هو هير ريبليسمنت",
+        "hair replacement", "what is the service", "what do you do", "how does it work",
+        "non surgical hair", "non-surgical hair"
+      ],
+      policy: "approved_general",
+      title: { ar: "الخدمة", en: "The service" },
+      answer: {
+        ar: "Hair Replacement هو حل غير جراحي لتعويض مناطق الفراغ أو فقدان الشعر. يتم اختيار التغطية والكثافة واللوك وفق الحالة حتى يكون الشكل متناسقاً ومريحاً.",
+        en: "Hair replacement is a non-surgical solution for areas of thinning or hair loss. Coverage, density, and the look are selected for the individual case so the result is balanced and comfortable."
+      }
+    }
+  ];
+}
+
+function analyzeSmartKnowledgeCoverage(text = "", analysis = {}) {
+  const normalizedText = normalizeSmartUnderstandingText(text || analysis?.normalizedText || "");
+  const analysisIntentScores = new Map(
+    (analysis?.intents || [])
+      .map((item) => [
+        (item?.id || "").toString(),
+        Number(item?.score || 0)
+      ])
+      .filter(([id]) => Boolean(id))
+  );
+  const topics = [];
+
+  for (const item of getSmartKnowledgeCatalog()) {
+    const phraseMatches = (item.phrases || [])
+      .filter((phrase) => smartPhraseMatches(normalizedText, phrase))
+      .slice(0, 6);
+    // V1 can occasionally produce broad secondary intents from short Arabic
+    // substrings. Only use intent-only evidence when V1 is highly confident;
+    // direct V8 phrase evidence remains the primary source of truth.
+    const intentMatches = (item.intentIds || []).filter(
+      (id) =>
+        id === (analysis?.primaryIntent || "") &&
+        Number(analysisIntentScores.get(id) || 0) >= 0.86
+    );
+
+    let score = 0;
+    if (phraseMatches.length) {
+      score = Math.min(0.99, 0.82 + ((phraseMatches.length - 1) * 0.04));
+    }
+    if (intentMatches.length) {
+      score = Math.max(score, Math.min(0.94, 0.78 + ((intentMatches.length - 1) * 0.04)));
+    }
+
+    if (score >= SMART_KNOWLEDGE_MIN_SCORE) {
+      topics.push({
+        id: item.id,
+        priority: item.priority,
+        score: Number(score.toFixed(2)),
+        confidence: score >= 0.88 ? "high" : "medium",
+        policy: item.policy,
+        phraseMatches,
+        intentMatches,
+        title: item.title,
+        answer: item.answer
+      });
+    }
+  }
+
+  topics.sort((a, b) => (b.score - a.score) || (b.priority - a.priority));
+  const selected = topics.slice(0, SMART_KNOWLEDGE_MAX_TOPICS);
+  const primary = selected[0] || null;
+
+  return {
+    version: SMART_KNOWLEDGE_VERSION,
+    normalizedText,
+    topics: selected,
+    primaryTopic: primary?.id || "",
+    score: primary?.score || 0,
+    confidence: primary?.confidence || "none",
+    matched: selected.length > 0
+  };
+}
+
+function auditSmartKnowledgeAnswer(body = "") {
+  const value = (body || "").toString();
+  const blockedRules = [
+    { id: "exact_price", regex: /(?:\bAED\b|\bDHS\b|درهم)\s*\d+|\d+\s*(?:\bAED\b|\bDHS\b|درهم)/i },
+    { id: "exact_duration", regex: /\b\d+\s*(?:days?|weeks?|months?|years?)\b|\d+\s*(?:يوم|ايام|أيام|اسبوع|أسبوع|اسابيع|أسابيع|شهر|اشهر|أشهر|سنه|سنة|سنوات)/i },
+    { id: "absolute_percent", regex: /100\s*(?:%|٪)/i },
+    { id: "permanent_promise", regex: /\bpermanent(?:ly)?\b|\blifetime\b|دائم(?:اً|ا)?|مدى الحياة/i },
+    { id: "never_falls", regex: /\bnever (?:falls?|comes? off)\b|\bcannot (?:fall|come off)\b|ما بيوقع ابدا|مستحيل يوقع|ما بينفك ابدا/i },
+    { id: "unrestricted_water", regex: /\bfully waterproof\b|\bwaterproof guarantee\b|مقاوم للماء بالكامل|ضد الماء تماما/i },
+    { id: "no_maintenance", regex: /\bno maintenance\b|\bmaintenance free\b|بدون صيانة|ما بيحتاج صيانة/i },
+    { id: "guaranteed_result", regex: /\bguaranteed result\b|\bresult is guaranteed\b|نتيجة مضمونة|النتيجة مضمونة/i }
+  ];
+  const blockedClaims = blockedRules
+    .filter((rule) => rule.regex.test(value))
+    .map((rule) => rule.id);
+
+  return {
+    safe: blockedClaims.length === 0,
+    blockedClaims,
+    policy: "approved_facts_only",
+    exactPriceAllowed: false,
+    exactDurationAllowed: false,
+    absolutePromiseAllowed: false
+  };
+}
+
+function buildSmartKnowledgePrecisionFallback(language = "en") {
+  return language === "ar"
+    ? [
+        "حتى تكون المعلومة دقيقة، هالتفصيل يعتمد على الحالة والنظام المناسب.",
+        "",
+        "الفريق يؤكد لك الجواب بعد تقييم مختصر، بدون إعطاء أرقام أو وعود عامة ممكن ما تنطبق عليك."
+      ].join("\n")
+    : [
+        "To keep the information accurate, this detail depends on the case and the suitable system.",
+        "",
+        "The team confirms the answer after a brief assessment, without giving general numbers or promises that may not apply to you."
+      ].join("\n");
+}
+
+function getSmartKnowledgeNextStep(topics = [], memory = {}, language = "en") {
+  const ids = new Set((topics || []).map((item) => item.id));
+
+  if (
+    memory?.customerType === "existing" &&
+    (ids.has("duration_maintenance") || ids.has("care_hygiene") || ids.has("attachment_method"))
+  ) {
+    return {
+      action: "service_booking",
+      pendingQuestion: "service_type",
+      text: language === "ar"
+        ? "بما أنك عميل حالي، الخطوة الأنسب اختيار سيرفس حتى يراجع الفريق النظام والخدمة المطلوبة."
+        : "As an existing client, the best next step is to choose Service so the team can review the system and required service.",
+      buttons: getServiceSubMenuButtons()
+    };
+  }
+
+  if (ids.has("price") && !memory?.coverage) {
+    return {
+      action: "price_qualification",
+      pendingQuestion: "coverage",
+      text: language === "ar"
+        ? "حتى نكمل السعر بدقة: هل المطلوب تغطية فراغات خفيفة أم حل كامل؟"
+        : "To continue accurately on price: do you need light gap coverage or a full solution?",
+      buttons: getSmartConsultTeamButtons()
+    };
+  }
+
+  if (ids.has("price") && memory?.coverage && !memory?.branch) {
+    return {
+      action: "branch_qualification",
+      pendingQuestion: "branch",
+      text: language === "ar"
+        ? "وأي فرع أنسب لك: دبي أم أبوظبي؟"
+        : "Which branch suits you better: Dubai or Abu Dhabi?",
+      buttons: getSmartConsultTeamButtons()
+    };
+  }
+
+  if (
+    ids.has("warranty_policy") ||
+    ids.has("attachment_method") ||
+    ids.has("daily_life") ||
+    ids.has("styling_options") ||
+    ids.has("care_hygiene")
+  ) {
+    return {
+      action: "team_confirmation",
+      pendingQuestion: "",
+      text: language === "ar"
+        ? "الخطوة الأنسب أن يؤكد لك الفريق هالتفصيل حسب النظام المناسب لحالتك."
+        : "The best next step is for the team to confirm this detail for the system suitable for your case.",
+      buttons: getSmartConsultTeamButtons()
+    };
+  }
+
+  return {
+    action: "consultation",
+    pendingQuestion: "",
+    text: language === "ar"
+      ? "الخطوة التالية استشارة قصيرة حتى يطابق الفريق هالمعلومات مع حالتك."
+      : "The next step is a short consultation so the team can match this information to your case.",
+    buttons: getSmartConsultTeamButtons()
+  };
+}
+
+function shouldUseSmartKnowledgeReply({ analysis = {}, detection = {}, salesReply = null } = {}) {
+  if (!SMART_KNOWLEDGE_ENABLED || !detection?.matched) return false;
+  if (salesReply) return false;
+  if (analysis?.isActionLike) return false;
+  if (["complaint", "human", "media", "current_client_service"].includes(analysis?.primaryIntent)) return false;
+
+  const operationalIds = new Set(["booking", "location", "working_hours", "call", "human", "complaint", "current_client_service"]);
+  const analysisIds = (analysis?.intents || []).map((item) => item?.id || "").filter(Boolean);
+  if (analysisIds.some((id) => operationalIds.has(id))) return false;
+
+  return detection.score >= SMART_KNOWLEDGE_MIN_SCORE;
+}
+
+function buildSmartKnowledgeReply({
+  phone = "",
+  text = "",
+  analysis = {},
+  memory = {},
+  customerName = "",
+  language = "en",
+  salesReply = null
+} = {}) {
+  const detection = analyzeSmartKnowledgeCoverage(text, analysis);
+  if (!shouldUseSmartKnowledgeReply({ analysis, detection, salesReply })) return null;
+
+  const sections = detection.topics.map((topic) => {
+    const title = topic.title?.[language] || topic.title?.en || topic.id;
+    const answer = topic.answer?.[language] || topic.answer?.en || "";
+    return `*${title}*\n${answer}`;
+  });
+  const nextStep = getSmartKnowledgeNextStep(detection.topics, memory, language);
+  const cleanName = namePhrase(customerName);
+  const intro = language === "ar"
+    ? (cleanName ? `أكيد ${cleanName}، خليني أعطيك معلومة دقيقة:` : "أكيد، خليني أعطيك معلومة دقيقة:")
+    : (cleanName ? `Sure ${cleanName}, here is the accurate information:` : "Sure, here is the accurate information:");
+
+  let body = [
+    intro,
+    "",
+    ...sections.flatMap((section, index) => index ? ["", section] : [section]),
+    "",
+    nextStep.text
+  ].join("\n").replace(/\n{3,}/g, "\n\n").trim();
+
+  let precisionAudit = auditSmartKnowledgeAnswer(body);
+  let precisionFallbackUsed = false;
+
+  if (!precisionAudit.safe) {
+    body = [
+      intro,
+      "",
+      buildSmartKnowledgePrecisionFallback(language),
+      "",
+      nextStep.text
+    ].join("\n").trim();
+    precisionFallbackUsed = true;
+    precisionAudit = auditSmartKnowledgeAnswer(body);
+  }
+
+  return {
+    version: SMART_KNOWLEDGE_VERSION,
+    topic: `knowledge:${detection.topics.map((item) => item.id).join("+")}`,
+    status: "Knowledge Answer V8",
+    messageType: "Knowledge Answer V8",
+    body,
+    buttons: nextStep.buttons,
+    decision: nextStep.action,
+    pendingQuestion: nextStep.pendingQuestion,
+    topics: detection.topics.map((item) => ({
+      id: item.id,
+      score: item.score,
+      confidence: item.confidence,
+      policy: item.policy,
+      evidence: [...item.phraseMatches, ...item.intentMatches].slice(0, 6)
+    })),
+    confidence: detection.confidence,
+    score: detection.score,
+    precisionAudit,
+    precisionFallbackUsed
+  };
+}
+
+function rememberSmartKnowledgeReply(phone = "", reply = {}, text = "", language = "en") {
+  if (!reply?.topics?.length) return null;
+  const cleanPhone = getSmartMemoryPhoneKey(phone);
+  if (!cleanPhone) return null;
+
+  const previous = normalizeSmartMemoryForStorage(
+    getSmartConversationMemory(cleanPhone) || buildEmptySmartConversationMemory(cleanPhone)
+  );
+  const topicIds = reply.topics.map((item) => item.id).filter(Boolean);
+  const history = [...(previous.lastKnowledgeTopics || []), ...topicIds];
+
+  const next = rememberSmartMemoryObject(cleanPhone, {
+    ...previous,
+    topic: reply.topic || previous.topic || "",
+    lastBotTopic: reply.topic || previous.lastBotTopic || "",
+    lastText: normalizeSmartUnderstandingText(text || previous.lastText || ""),
+    language: language === "ar" ? "ar" : "en",
+    lastIntent: topicIds[0] || previous.lastIntent || "",
+    recentIntents: [...(previous.recentIntents || []), ...topicIds],
+    serviceInterest: previous.serviceInterest || topicIds[0] || "",
+    priceAsked: Boolean(previous.priceAsked || topicIds.includes("price")),
+    pendingQuestion: reply.pendingQuestion || "",
+    nextAction: reply.decision || previous.nextAction || "consultation",
+    lastKnowledgeTopics: history.slice(-SMART_KNOWLEDGE_HISTORY_LIMIT),
+    knowledgeAnswerCount: Number(previous.knowledgeAnswerCount || 0) + 1,
+    knowledgePrecisionStatus: reply.precisionAudit?.safe ? "safe" : "blocked",
+    knowledgeUpdatedAt: Date.now(),
+    updatedAt: Date.now()
+  });
+  scheduleSmartMemoryPersistence(cleanPhone);
+  return next;
+}
+
+function getSmartUnderstandingLogPayload(analysis = {}) {
+  return {
+    version: analysis.version || SMART_UNDERSTANDING_VERSION,
+    normalizedText: analysis.normalizedText || "",
+    primaryIntent: analysis.primaryIntent || "",
+    confidence: analysis.confidence || "none",
+    score: analysis.score || 0,
+    intents: (analysis.intents || []).map((item) => ({
+      id: item.id,
+      score: item.score
+    })),
+    integratedRules: (analysis.integratedRules || []).map((rule) => ({
+      id: rule.id,
+      targetIntent: rule.targetIntent,
+      action: rule.action
+    })),
+    entities: analysis.entities || {}
+  };
 }
 
 function isOptInText(text) {
@@ -8954,6 +15536,958 @@ app.get("/api/version", (req, res) => {
   });
 });
 
+
+// SMART UNDERSTANDING V1 test endpoint.
+// Example: /api/smart-understanding/test?text=كم السعر ووين فرع دبي
+// Protected by Team Inbox credentials and never sends a WhatsApp message.
+app.get("/api/smart-understanding/test", protectInbox, (req, res) => {
+  const sampleText = (req.query.text || "").toString().trim();
+
+  if (!sampleText) {
+    return res.status(400).json({
+      ok: false,
+      error: "Missing text query parameter",
+      example: "/api/smart-understanding/test?text=كم السعر ووين فرع دبي"
+    });
+  }
+
+  const analysis = analyzeSmartUnderstanding(sampleText);
+  const language = detectIncomingLanguage(sampleText, "en");
+  const multiIntentReply = getSmartMultiIntentReply({
+    analysis,
+    customerName: "Test Customer",
+    language
+  });
+  const decisionReply = buildSmartDecisionReply({
+    phone: "971500000003",
+    analysis,
+    memory: {},
+    customerName: "Test Customer",
+    language,
+    phoneNumberId: DEFAULT_PHONE_NUMBER_ID
+  });
+
+  return res.json({
+    ok: true,
+    enabled: SMART_UNDERSTANDING_ENABLED,
+    multiIntentEnabled: SMART_MULTI_INTENT_ENABLED,
+    version: SMART_UNDERSTANDING_VERSION,
+    memoryVersion: SMART_MEMORY_VERSION,
+    memoryEnabled: SMART_MEMORY_ENABLED,
+    memoryPersistEnabled: SMART_MEMORY_PERSIST_ENABLED,
+    decisionVersion: SMART_DECISION_VERSION,
+    decisionEnabled: SMART_DECISION_ENABLED,
+    goalVersion: SMART_GOAL_VERSION,
+    goalEnabled: SMART_GOAL_ENABLED,
+    analysis: getSmartUnderstandingLogPayload(analysis),
+    decisionPreview: decisionReply
+      ? {
+          status: decisionReply.status,
+          intents: decisionReply.intents,
+          decision: decisionReply.decision,
+          pendingQuestion: decisionReply.pendingQuestion,
+          body: decisionReply.body,
+          buttons: localizeReplyButtons(decisionReply.buttons || [], language)
+        }
+      : null,
+    preview: multiIntentReply
+      ? {
+          status: multiIntentReply.status,
+          intents: multiIntentReply.intents,
+          body: multiIntentReply.body,
+          buttons: localizeReplyButtons(multiIntentReply.buttons || [], language)
+        }
+      : null
+  });
+});
+
+// SMART CONVERSATION MEMORY V2 test endpoint.
+// It updates only local test memory unless persist=true is explicitly supplied.
+app.get("/api/smart-memory/test", protectInbox, async (req, res) => {
+  const phone = normalizePhoneDigits(req.query.phone || "971500000002");
+  const sampleText = (req.query.text || "").toString().trim();
+  const persist = ["true", "1", "yes", "on"].includes((req.query.persist || "false").toString().toLowerCase());
+
+  if (!sampleText) {
+    return res.status(400).json({
+      ok: false,
+      error: "Missing text query parameter",
+      example: "/api/smart-memory/test?phone=971500000002&text=كم السعر"
+    });
+  }
+
+  if ((req.query.reset || "").toString().toLowerCase() === "true") {
+    delete conversationSmartContext[phone];
+  }
+
+  const language = detectIncomingLanguage(sampleText, "en");
+  const analysis = analyzeSmartUnderstanding(sampleText);
+  const memory = updateSmartConversationMemory({
+    phone,
+    analysis,
+    text: sampleText,
+    language,
+    phoneNumberId: DEFAULT_PHONE_NUMBER_ID,
+    branch: AI_303_BRANCH_NAME,
+    persist
+  });
+  const preview = getSmartMemoryAwareReply({
+    phone,
+    text: sampleText,
+    customerName: "Test Customer",
+    language,
+    analysis,
+    phoneNumberId: DEFAULT_PHONE_NUMBER_ID
+  });
+
+  return res.json({
+    ok: true,
+    version: SMART_MEMORY_VERSION,
+    persist,
+    analysis: getSmartUnderstandingLogPayload(analysis),
+    memory: normalizeSmartMemoryForStorage(memory || {}),
+    preview: preview ? {
+      topic: preview.topic,
+      status: preview.status,
+      messageType: preview.messageType,
+      body: preview.body,
+      buttons: localizeReplyButtons(preview.buttons || [], language)
+    } : null
+  });
+});
+
+
+// SMART DECISION & REPLY COMPOSER V3 test endpoint.
+// Call sequentially with the same phone to test memory-aware decisions.
+// Example 1: /api/smart-decision/test?phone=971500000003&reset=true&text=كم السعر
+// Example 2: /api/smart-decision/test?phone=971500000003&text=دبي
+app.get("/api/smart-decision/test", protectInbox, async (req, res) => {
+  const phone = normalizePhoneDigits(req.query.phone || "971500000003");
+  const sampleText = (req.query.text || "").toString().trim();
+
+  if (!sampleText) {
+    return res.status(400).json({
+      ok: false,
+      error: "Missing text query parameter",
+      example: "/api/smart-decision/test?phone=971500000003&text=كم السعر ووين فرع دبي"
+    });
+  }
+
+  if (["true", "1", "yes", "on"].includes((req.query.reset || "false").toString().toLowerCase())) {
+    delete conversationSmartContext[phone];
+  }
+
+  const language = detectIncomingLanguage(sampleText, "en");
+  const analysis = analyzeSmartUnderstanding(sampleText);
+  const memory = updateSmartConversationMemory({
+    phone,
+    analysis,
+    text: sampleText,
+    language,
+    phoneNumberId: DEFAULT_PHONE_NUMBER_ID,
+    branch: AI_303_BRANCH_NAME,
+    persist: false
+  });
+  const reply = buildSmartDecisionReply({
+    phone,
+    analysis,
+    memory: memory || {},
+    customerName: "Test Customer",
+    language,
+    phoneNumberId: DEFAULT_PHONE_NUMBER_ID
+  });
+
+  if (reply) {
+    rememberSmartDecisionReply(phone, reply, sampleText, language);
+  }
+
+  return res.json({
+    ok: true,
+    version: SMART_DECISION_VERSION,
+    enabled: SMART_DECISION_ENABLED,
+    analysis: getSmartUnderstandingLogPayload(analysis),
+    memory: normalizeSmartMemoryForStorage(getSmartConversationMemory(phone) || memory || {}),
+    preview: reply ? {
+      topic: reply.topic,
+      status: reply.status,
+      messageType: reply.messageType,
+      intents: reply.intents,
+      decision: reply.decision,
+      pendingQuestion: reply.pendingQuestion,
+      context: reply.context,
+      body: reply.body,
+      buttons: localizeReplyButtons(reply.buttons || [], language)
+    } : null
+  });
+});
+
+
+// OBJECTIONS & SALES INTELLIGENCE V4 test endpoint.
+// Protected and preview-only; it never sends a WhatsApp message.
+// Example: /api/smart-sales/test?text=خايف يبين انه تركيب
+app.get("/api/smart-sales/test", protectInbox, async (req, res) => {
+  const phone = normalizePhoneDigits(req.query.phone || "971500000004");
+  const sampleText = (req.query.text || "").toString().trim();
+
+  if (!sampleText) {
+    return res.status(400).json({
+      ok: false,
+      error: "Missing text query parameter",
+      example: "/api/smart-sales/test?text=خايف يبين انه تركيب"
+    });
+  }
+
+  if (["true", "1", "yes", "on"].includes((req.query.reset || "false").toString().toLowerCase())) {
+    delete conversationSmartContext[phone];
+  }
+
+  const language = detectIncomingLanguage(sampleText, "en");
+  const analysis = analyzeSmartUnderstanding(sampleText);
+  const memory = updateSmartConversationMemory({
+    phone,
+    analysis,
+    text: sampleText,
+    language,
+    phoneNumberId: DEFAULT_PHONE_NUMBER_ID,
+    branch: AI_303_BRANCH_NAME,
+    persist: false
+  });
+  const salesAnalysis = analyzeSmartSalesObjection({
+    text: sampleText,
+    analysis,
+    memory: memory || {}
+  });
+  const reply = buildSmartSalesObjectionReply({
+    phone,
+    text: sampleText,
+    analysis,
+    memory: memory || {},
+    customerName: "Test Customer",
+    language
+  });
+
+  return res.json({
+    ok: true,
+    version: SMART_SALES_VERSION,
+    enabled: SMART_SALES_ENABLED,
+    reservedFuturePhase: "Unknown / Low Confidence",
+    analysis: salesAnalysis,
+    memory: normalizeSmartMemoryForStorage(memory || {}),
+    preview: reply ? {
+      status: reply.status,
+      messageType: reply.messageType,
+      objection: reply.objection,
+      confidence: reply.confidence,
+      score: reply.score,
+      leadTemperature: reply.leadTemperature,
+      body: reply.body,
+      buttons: localizeReplyButtons(reply.buttons || [], language)
+    } : null
+  });
+});
+
+
+// CONVERSATION STATE MACHINE & GOAL TRACKING V5 test endpoint.
+// Use the same phone across requests to test progress and loop prevention.
+// It is preview-only and never sends a WhatsApp message.
+app.get("/api/smart-goal/test", protectInbox, async (req, res) => {
+  const phone = normalizePhoneDigits(req.query.phone || "971500000005");
+  const sampleText = (req.query.text || "").toString().trim();
+
+  if (!sampleText) {
+    return res.status(400).json({
+      ok: false,
+      error: "Missing text query parameter",
+      example: "/api/smart-goal/test?phone=971500000005&reset=true&text=بدي احجز"
+    });
+  }
+
+  if (["true", "1", "yes", "on"].includes((req.query.reset || "false").toString().toLowerCase())) {
+    delete conversationSmartContext[phone];
+  }
+
+  const previous = normalizeSmartMemoryForStorage(
+    getSmartConversationMemory(phone) || buildEmptySmartConversationMemory(phone)
+  );
+  const language = detectIncomingLanguage(sampleText, previous.language || "en");
+  const analysis = analyzeSmartUnderstanding(sampleText);
+  const memory = updateSmartConversationMemory({
+    phone,
+    analysis,
+    text: sampleText,
+    language,
+    phoneNumberId: DEFAULT_PHONE_NUMBER_ID,
+    branch: AI_303_BRANCH_NAME,
+    persist: false
+  });
+  const decisionReply = buildSmartDecisionReply({
+    phone,
+    analysis,
+    memory: memory || {},
+    customerName: "Test Customer",
+    language,
+    phoneNumberId: DEFAULT_PHONE_NUMBER_ID
+  });
+  const salesReply = buildSmartSalesObjectionReply({
+    phone,
+    text: sampleText,
+    analysis,
+    memory: memory || {},
+    customerName: "Test Customer",
+    language
+  });
+  const tracker = updateSmartConversationGoalState({
+    phone,
+    analysis,
+    memory: memory || {},
+    previousMemory: previous,
+    salesReply,
+    decisionReply,
+    persist: false
+  });
+  const reply = buildSmartGoalTrackingReply({
+    tracker,
+    analysis,
+    memory: tracker.memory || memory || {},
+    customerName: "Test Customer",
+    language,
+    salesReply
+  });
+
+  if (reply) rememberSmartGoalTrackingReply(phone, reply, sampleText, language);
+
+  return res.json({
+    ok: true,
+    version: SMART_GOAL_VERSION,
+    enabled: SMART_GOAL_ENABLED,
+    reservedFuturePhase: "Unknown / Low Confidence",
+    analysis: getSmartUnderstandingLogPayload(analysis),
+    transition: {
+      previousState: tracker.previousState,
+      previousGoal: tracker.previousGoal,
+      state: tracker.state,
+      goal: tracker.goal,
+      goalStatus: tracker.goalStatus,
+      stateChanged: tracker.stateChanged,
+      goalChanged: tracker.goalChanged,
+      progressMade: tracker.progressMade,
+      resolvedSlots: tracker.resolvedSlots,
+      missingSlots: tracker.missingSlots,
+      nextAction: tracker.nextAction,
+      stalledTurns: tracker.stalledTurns
+    },
+    memory: normalizeSmartMemoryForStorage(getSmartConversationMemory(phone) || tracker.memory || memory || {}),
+    preview: reply ? {
+      status: reply.status,
+      messageType: reply.messageType,
+      state: reply.state,
+      goal: reply.goal,
+      goalStatus: reply.goalStatus,
+      missingSlots: reply.missingSlots,
+      nextAction: reply.nextAction,
+      body: reply.body,
+      buttons: localizeReplyButtons(reply.buttons || [], language)
+    } : null
+  });
+});
+
+
+// LEAD QUALIFICATION & SMART HANDOFF V6 test endpoint.
+// Preview-only: it never sends a WhatsApp message or pauses a real conversation.
+app.get("/api/smart-lead/test", protectInbox, async (req, res) => {
+  const phone = normalizePhoneDigits(req.query.phone || "971500000006");
+  const sampleText = (req.query.text || "").toString().trim();
+
+  if (!sampleText) {
+    return res.status(400).json({
+      ok: false,
+      error: "Missing text query parameter",
+      example: "/api/smart-lead/test?phone=971500000006&reset=true&text=انا عميل جديد وبدي احجز بكرا في دبي"
+    });
+  }
+
+  if (["true", "1", "yes", "on"].includes((req.query.reset || "false").toString().toLowerCase())) {
+    delete conversationSmartContext[phone];
+  }
+
+  const previous = normalizeSmartMemoryForStorage(
+    getSmartConversationMemory(phone) || buildEmptySmartConversationMemory(phone)
+  );
+  const language = detectIncomingLanguage(sampleText, previous.language || "en");
+  const analysis = analyzeSmartUnderstanding(sampleText);
+  const memory = updateSmartConversationMemory({
+    phone,
+    analysis,
+    text: sampleText,
+    language,
+    phoneNumberId: DEFAULT_PHONE_NUMBER_ID,
+    branch: AI_303_BRANCH_NAME,
+    persist: false
+  });
+  const decisionReply = buildSmartDecisionReply({
+    phone,
+    analysis,
+    memory: memory || {},
+    customerName: "Test Customer",
+    language,
+    phoneNumberId: DEFAULT_PHONE_NUMBER_ID
+  });
+  const salesReply = buildSmartSalesObjectionReply({
+    phone,
+    text: sampleText,
+    analysis,
+    memory: memory || {},
+    customerName: "Test Customer",
+    language
+  });
+  const tracker = updateSmartConversationGoalState({
+    phone,
+    analysis,
+    memory: memory || {},
+    previousMemory: previous,
+    salesReply,
+    decisionReply,
+    persist: false
+  });
+  const qualification = updateSmartLeadQualification({
+    phone,
+    text: sampleText,
+    analysis,
+    memory: tracker.memory || memory || {},
+    tracker,
+    salesReply,
+    persist: false
+  });
+  const handoffReply = buildSmartLeadHandoffReply({
+    qualification,
+    analysis,
+    customerName: "Test Customer",
+    language
+  });
+
+  return res.json({
+    ok: true,
+    version: SMART_LEAD_VERSION,
+    enabled: SMART_LEAD_ENABLED,
+    reservedFuturePhase: "Unknown / Low Confidence",
+    analysis: getSmartUnderstandingLogPayload(analysis),
+    qualification: {
+      score: qualification.score,
+      grade: qualification.grade,
+      qualificationStatus: qualification.qualificationStatus,
+      reasons: qualification.reasons,
+      missingSlots: qualification.missingSlots,
+      handoffMode: qualification.handoffMode,
+      handoffReason: qualification.handoffReason,
+      summary: qualification.summary
+    },
+    memory: normalizeSmartMemoryForStorage(qualification.memory || memory || {}),
+    preview: handoffReply ? {
+      status: handoffReply.status,
+      messageType: handoffReply.messageType,
+      body: handoffReply.body,
+      buttons: []
+    } : null
+  });
+});
+
+
+
+// NATURAL CONVERSATION QUALITY & REPETITION CONTROL V7 test endpoint.
+// Preview-only: it never sends WhatsApp messages.
+app.get("/api/smart-natural/test", protectInbox, (req, res) => {
+  const phone = normalizePhoneDigits(req.query.phone || "971500000007");
+  const customerText = (req.query.text || "تمام").toString().trim();
+  const proposedBody = (req.query.reply || "أكيد، خليني أرتبلك الجواب بشكل واضح.\n\nالسعر يعتمد على الحالة والتغطية المطلوبة.\n\nحتى يكون التوجيه أدق: هل المطلوب تغطية فراغات خفيفة أم حل كامل؟").toString().trim();
+  const pendingQuestion = (req.query.pending || "coverage").toString().trim();
+  const topic = (req.query.topic || "decision:price").toString().trim();
+  const status = (req.query.status || "Smart Decision V3").toString().trim();
+  const customerName = (req.query.name || "Test Customer").toString().trim();
+  const language = detectIncomingLanguage(customerText || proposedBody, "ar");
+
+  if (["true", "1", "yes", "on"].includes((req.query.reset || "false").toString().toLowerCase())) {
+    delete conversationSmartContext[phone];
+  }
+
+  const current = getSmartConversationMemory(phone) || buildEmptySmartConversationMemory(phone);
+  rememberSmartMemoryObject(phone, {
+    ...current,
+    phone,
+    pendingQuestion,
+    turnCount: Math.max(1, Number(current.turnCount || 0) + 1),
+    language,
+    updatedAt: Date.now()
+  });
+
+  const result = finalizeNaturalConversationReply({
+    phone,
+    customerText,
+    body: proposedBody,
+    buttons: getSmartConsultTeamButtons(),
+    status,
+    topic,
+    action: "price_qualification",
+    pendingQuestion,
+    customerName,
+    language
+  });
+  const memory = rememberNaturalConversationReply(phone, result, customerName);
+
+  return res.json({
+    ok: true,
+    version: SMART_NATURAL_VERSION,
+    enabled: SMART_NATURAL_ENABLED,
+    reservedFuturePhase: "Unknown / Low Confidence",
+    result: {
+      changed: result.changed,
+      reason: result.reason,
+      similarity: result.similarity,
+      body: result.body,
+      buttons: localizeReplyButtons(result.buttons || [], language),
+      fingerprint: result.fingerprint
+    },
+    memory: {
+      repeatedReplyCount: memory?.repeatedReplyCount || 0,
+      recentReplies: (memory?.recentBotReplies || []).length,
+      recentIntroKeys: memory?.recentIntroKeys || [],
+      lastNaturalAction: memory?.lastNaturalAction || "",
+      pendingQuestion: memory?.pendingQuestion || ""
+    }
+  });
+});
+
+
+
+
+
+// UNKNOWN / LOW CONFIDENCE CAPTURE & LEARNING QUEUE V11 endpoints.
+// Protected review endpoints; none of them sends WhatsApp messages.
+app.get("/api/smart-unknown/test", protectInbox, (req, res) => {
+  const text = (req.query?.text || "عندي سؤال مو عارف كيف اشرحه").toString();
+  const language = detectIncomingLanguage(text, "ar");
+  const analysis = analyzeSmartUnderstanding(text);
+  const memory = {};
+  const evaluation = evaluateSmartUnknownCapture({ text, analysis, messageType: "text", memory });
+  const shouldCapture = ["true", "1", "yes", "on"].includes((req.query?.capture || "false").toString().toLowerCase());
+  const event = evaluation.capture ? captureSmartUnknownEvent({
+    phone: normalizePhoneDigits(req.query?.phone || "971500000011"),
+    text,
+    language,
+    evaluation,
+    analysis,
+    memory,
+    persist: shouldCapture,
+    targetQueue: shouldCapture ? smartUnknownLearningQueue : new Map()
+  }) : null;
+  const preview = buildSmartUnknownClarificationReply({ evaluation, event, customerName: "Test Customer", language });
+  return res.status(200).json({
+    ok: true,
+    version: SMART_UNKNOWN_VERSION,
+    enabled: SMART_UNKNOWN_ENABLED,
+    captured: Boolean(event && shouldCapture),
+    evaluation,
+    event,
+    preview: preview ? { body: preview.body, buttons: localizeReplyButtons(preview.buttons || [], language) } : null
+  });
+});
+
+app.get("/api/smart-unknown/suite", protectInbox, (req, res) => {
+  const results = getSmartUnknownRegressionSuite().map(runSmartUnknownTestCase);
+  const passed = results.filter((result) => result.passed).length;
+  return res.status(passed === results.length ? 200 : 422).json({
+    ok: passed === results.length,
+    version: SMART_UNKNOWN_VERSION,
+    total: results.length,
+    passed,
+    failed: results.length - passed,
+    results
+  });
+});
+
+app.get("/api/smart-unknown/queue", protectInbox, (req, res) => {
+  return res.status(200).json({
+    ok: true,
+    version: SMART_UNKNOWN_VERSION,
+    summary: getSmartUnknownQueueSummary(),
+    items: getSmartUnknownQueueSnapshot({ status: req.query?.status || "", limit: req.query?.limit || 50 })
+  });
+});
+
+app.get("/api/smart-unknown/summary", protectInbox, (req, res) => {
+  return res.status(200).json({ ok: true, version: SMART_UNKNOWN_VERSION, summary: getSmartUnknownQueueSummary() });
+});
+
+app.post("/api/smart-unknown/queue/:id/status", protectInbox, async (req, res) => {
+  const id = (req.params?.id || "").toString().trim();
+  const status = (req.body?.status || "").toString().trim().toLowerCase();
+  const item = smartUnknownLearningQueue.get(id);
+  if (!item) return res.status(404).json({ ok: false, error: "queue_item_not_found" });
+  if (!SMART_UNKNOWN_ALLOWED_STATUSES.has(status)) {
+    return res.status(400).json({ ok: false, error: "invalid_status", allowed: [...SMART_UNKNOWN_ALLOWED_STATUSES] });
+  }
+  const next = {
+    ...item,
+    status,
+    reviewNote: redactSmartUnknownText(req.body?.reviewNote || item.reviewNote || "").slice(0, 300),
+    promotedIntent: status === "promoted" ? (req.body?.promotedIntent || item.promotedIntent || "").toString().trim().slice(0, 80) : (item.promotedIntent || ""),
+    reviewedAt: Date.now(),
+    reviewedBy: req.inboxUser || "Team Inbox"
+  };
+  smartUnknownLearningQueue.set(id, next);
+  const persisted = await persistSmartUnknownLearningEvent(id);
+  return res.status(200).json({ ok: true, version: SMART_UNKNOWN_VERSION, persisted, item: next });
+});
+
+// LEARNING REVIEW & SAFE PROMOTION CONSOLE V12 endpoints.
+// These endpoints only review/export candidate rules. They never mutate the live
+// intent catalogs, deploy code, or send WhatsApp messages.
+app.get("/api/smart-learning/catalog", protectInbox, (req, res) => {
+  return res.status(200).json({
+    ok: true,
+    version: SMART_LEARNING_REVIEW_VERSION,
+    enabled: SMART_LEARNING_REVIEW_ENABLED,
+    intents: getSmartLearningIntentCatalog(),
+    actions: [...SMART_LEARNING_ALLOWED_ACTIONS]
+  });
+});
+
+app.get("/api/smart-learning/item/:id", protectInbox, (req, res) => {
+  const id = (req.params?.id || "").toString().trim();
+  const item = smartUnknownLearningQueue.get(id);
+  if (!item) return res.status(404).json({ ok: false, error: "queue_item_not_found" });
+  return res.status(200).json({ ok: true, version: SMART_LEARNING_REVIEW_VERSION, item });
+});
+
+app.post("/api/smart-learning/queue/:id/review", protectInbox, async (req, res) => {
+  const result = await saveSmartLearningReview({
+    id: (req.params?.id || "").toString().trim(),
+    payload: { ...(req.body || {}), reviewConfirmed: false },
+    reviewer: req.inboxUser || "Team Inbox",
+    promote: false
+  });
+  return res.status(result.status || (result.ok ? 200 : 400)).json({
+    ...result,
+    version: SMART_LEARNING_REVIEW_VERSION,
+    runtimeApplied: false
+  });
+});
+
+app.post("/api/smart-learning/queue/:id/promote", protectInbox, async (req, res) => {
+  const result = await saveSmartLearningReview({
+    id: (req.params?.id || "").toString().trim(),
+    payload: { ...(req.body || {}), reviewConfirmed: Boolean(req.body?.reviewConfirmed) },
+    reviewer: req.inboxUser || "Team Inbox",
+    promote: true
+  });
+  return res.status(result.status || (result.ok ? 200 : 422)).json({
+    ...result,
+    version: SMART_LEARNING_REVIEW_VERSION,
+    runtimeApplied: false,
+    deploymentRequired: true
+  });
+});
+
+app.post("/api/smart-learning/queue/:id/ignore", protectInbox, async (req, res) => {
+  const result = await ignoreSmartLearningItem({
+    id: (req.params?.id || "").toString().trim(),
+    reviewNote: req.body?.reviewNote || "",
+    reviewer: req.inboxUser || "Team Inbox"
+  });
+  return res.status(result.status || (result.ok ? 200 : 400)).json({
+    ...result,
+    version: SMART_LEARNING_REVIEW_VERSION,
+    runtimeApplied: false
+  });
+});
+
+app.get("/api/smart-learning/export", protectInbox, (req, res) => {
+  const rules = getSmartLearningPromotedRules();
+  const payload = {
+    ok: true,
+    version: SMART_LEARNING_REVIEW_VERSION,
+    generatedAt: new Date().toISOString(),
+    generatedBy: req.inboxUser || "Team Inbox",
+    runtimeApplied: rules.some((rule) => Boolean(rule.runtimeApplied)),
+    deploymentRequired: false,
+    integrationVersion: SMART_RULE_INTEGRATION_VERSION,
+    integrationSummary: getSmartRuleIntegrationSummary(),
+    rules
+  };
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="iconic-303-learning-rules-v14.json"');
+  return res.status(200).send(JSON.stringify(payload, null, 2));
+});
+
+app.get("/api/smart-learning/suite", protectInbox, (req, res) => {
+  const results = getSmartLearningReviewRegressionSuite().map(runSmartLearningReviewTestCase);
+  const passed = results.filter((result) => result.passed).length;
+  return res.status(passed === results.length ? 200 : 422).json({
+    ok: passed === results.length,
+    version: SMART_LEARNING_REVIEW_VERSION,
+    total: results.length,
+    passed,
+    failed: results.length - passed,
+    runtimeApplied: false,
+    results
+  });
+});
+
+
+// CANDIDATE RULE INTEGRATION & REGRESSION GATE V13 endpoints.
+// Preview, activation, and rollback all require Team Inbox authentication.
+app.get("/api/smart-learning/integration", protectInbox, (req, res) => {
+  return res.status(200).json({
+    ok: true,
+    version: SMART_RULE_INTEGRATION_VERSION,
+    enabled: SMART_RULE_INTEGRATION_ENABLED,
+    runtimeEnabled: SMART_RULE_RUNTIME_ENABLED,
+    summary: getSmartRuleIntegrationSummary(),
+    activeRules: getSmartIntegratedRulesSnapshot()
+  });
+});
+
+app.post("/api/smart-learning/integration/:id/gate", protectInbox, (req, res) => {
+  const id = (req.params?.id || "").toString().trim();
+  const item = smartUnknownLearningQueue.get(id);
+  if (!item) return res.status(404).json({ ok: false, error: "queue_item_not_found" });
+  const gate = runSmartRuleIntegrationGate({
+    item,
+    candidateRule: item.candidateRule || {},
+    integrationConfirmed: false,
+    requireConfirmation: false
+  });
+  return res.status(gate.safeToIntegrate ? 200 : 422).json({
+    ok: gate.safeToIntegrate,
+    version: SMART_RULE_INTEGRATION_VERSION,
+    runtimeApplied: Boolean(item.candidateRule?.runtimeApplied),
+    gate
+  });
+});
+
+app.post("/api/smart-learning/integration/:id/activate", protectInbox, async (req, res) => {
+  const result = await activateSmartLearningCandidateRule({
+    id: (req.params?.id || "").toString().trim(),
+    reviewer: req.inboxUser || "Team Inbox",
+    integrationConfirmed: Boolean(req.body?.integrationConfirmed)
+  });
+  return res.status(result.status || (result.ok ? 200 : 422)).json({
+    ...result,
+    version: SMART_RULE_INTEGRATION_VERSION,
+    runtimeApplied: Boolean(result.rule?.runtimeApplied),
+    deploymentRequired: false
+  });
+});
+
+app.post("/api/smart-learning/integration/:id/rollback", protectInbox, async (req, res) => {
+  const result = await rollbackSmartLearningCandidateRule({
+    id: (req.params?.id || "").toString().trim(),
+    reviewer: req.inboxUser || "Team Inbox",
+    reason: req.body?.reason || "Manual rollback from V13 console"
+  });
+  return res.status(result.status || (result.ok ? 200 : 400)).json({
+    ...result,
+    version: SMART_RULE_INTEGRATION_VERSION,
+    runtimeApplied: false,
+    deploymentRequired: false
+  });
+});
+
+app.get("/api/smart-learning/integration/suite", protectInbox, (req, res) => {
+  const results = getSmartRuleIntegrationRegressionSuite().map(runSmartRuleIntegrationTestCase);
+  const passed = results.filter((result) => result.passed).length;
+  return res.status(passed === results.length ? 200 : 422).json({
+    ok: passed === results.length,
+    version: SMART_RULE_INTEGRATION_VERSION,
+    total: results.length,
+    passed,
+    failed: results.length - passed,
+    runtimeRegistryUnchanged: true,
+    results
+  });
+});
+
+
+// LEARNING ANALYTICS & RULE PERFORMANCE MONITORING V14 endpoints.
+app.get("/api/smart-learning/analytics", protectInbox, (req, res) => {
+  const includeInactive = !["false", "0", "no", "off"].includes((req.query?.includeInactive || "true").toString().toLowerCase());
+  return res.status(200).json({
+    ok: true,
+    version: SMART_RULE_ANALYTICS_VERSION,
+    enabled: SMART_RULE_ANALYTICS_ENABLED,
+    summary: getSmartRuleAnalyticsSummary(),
+    rules: getSmartRuleAnalyticsRows({ includeInactive })
+  });
+});
+
+app.get("/api/smart-learning/analytics/suite", protectInbox, (req, res) => {
+  const results = getSmartRuleAnalyticsRegressionSuite().map(runSmartRuleAnalyticsTestCase);
+  const passed = results.filter((result) => result.passed).length;
+  return res.status(passed === results.length ? 200 : 422).json({
+    ok: passed === results.length,
+    version: SMART_RULE_ANALYTICS_VERSION,
+    total: results.length,
+    passed,
+    failed: results.length - passed,
+    results
+  });
+});
+
+app.get("/api/smart-learning/analytics/:id", protectInbox, (req, res) => {
+  const id = (req.params?.id || "").toString().trim();
+  const row = getSmartRuleAnalyticsRows().find((item) => item.id === id || item.sourceQueueId === id);
+  if (!row) return res.status(404).json({ ok: false, error: "rule_not_found" });
+  return res.status(200).json({ ok: true, version: SMART_RULE_ANALYTICS_VERSION, rule: row });
+});
+
+app.post("/api/smart-learning/analytics/:id/feedback", protectInbox, (req, res) => {
+  const result = submitSmartRuleManualFeedback({
+    ruleId: (req.params?.id || "").toString().trim(),
+    outcome: req.body?.outcome || "neutral",
+    note: req.body?.note || "",
+    reviewer: req.inboxUser || "Team Inbox"
+  });
+  return res.status(result.status || (result.ok ? 200 : 400)).json({
+    ...result,
+    version: SMART_RULE_ANALYTICS_VERSION
+  });
+});
+
+// CONVERSATION RECOVERY & CLARIFICATION STRATEGY V10 test endpoints.
+// Preview-only: they never send WhatsApp messages and require Team Inbox auth.
+app.get("/api/smart-recovery/test", protectInbox, (req, res) => {
+  const text = (req.query?.text || "التاني").toString();
+  const previousMemory = {
+    pendingQuestion: (req.query?.pendingQuestion || "coverage").toString(),
+    recoverySuspendedQuestion: (req.query?.suspendedQuestion || "").toString(),
+    lastIntent: (req.query?.lastIntent || "").toString(),
+    branch: normalizeInboxBranchName((req.query?.branch || "").toString()),
+    customerType: (req.query?.customerType || "").toString(),
+    coverage: (req.query?.coverage || "").toString(),
+    priceAsked: ["true", "1", "yes", "on"].includes((req.query?.priceAsked || "false").toString().toLowerCase())
+  };
+  const result = runSmartRecoveryTestCase({ id: "manual", text, previousMemory, expected: {} });
+  return res.status(200).json({ ok: true, version: SMART_RECOVERY_VERSION, enabled: SMART_RECOVERY_ENABLED, reservedFuturePhase: "Unknown / Low Confidence", result });
+});
+
+app.get("/api/smart-recovery/suite", protectInbox, (req, res) => {
+  const results = getSmartRecoveryRegressionSuite().map(runSmartRecoveryTestCase);
+  const passed = results.filter((result) => result.passed).length;
+  return res.status(passed === results.length ? 200 : 422).json({
+    ok: passed === results.length,
+    version: SMART_RECOVERY_VERSION,
+    total: results.length,
+    passed,
+    failed: results.length - passed,
+    reservedFuturePhase: "Unknown / Low Confidence",
+    results
+  });
+});
+
+// SCENARIO SIMULATION & EDGE-CASE HARDENING V9 test endpoints.
+// They never send WhatsApp messages and are protected by Team Inbox Basic Auth.
+app.get("/api/smart-scenarios/test", protectInbox, (req, res) => {
+  const sampleText = (req.query?.text || "بدي فرع دبي، لا قصدي أبوظبي").toString();
+  const previousMemory = {
+    branch: normalizeInboxBranchName((req.query?.previousBranch || "").toString()),
+    customerType: (req.query?.previousCustomerType || "").toString(),
+    coverage: (req.query?.previousCoverage || "").toString(),
+    lastIntent: (req.query?.previousIntent || "").toString(),
+    pendingQuestion: (req.query?.pendingQuestion || "").toString()
+  };
+  const result = runSmartScenarioTestCase({
+    id: "manual",
+    text: sampleText,
+    previousMemory,
+    expected: {}
+  });
+
+  return res.status(200).json({
+    ok: true,
+    version: SMART_SCENARIO_VERSION,
+    enabled: SMART_SCENARIO_ENABLED,
+    result
+  });
+});
+
+app.get("/api/smart-scenarios/suite", protectInbox, (req, res) => {
+  const results = getSmartScenarioRegressionSuite().map(runSmartScenarioTestCase);
+  const passed = results.filter((result) => result.passed).length;
+  return res.status(passed === results.length ? 200 : 422).json({
+    ok: passed === results.length,
+    version: SMART_SCENARIO_VERSION,
+    total: results.length,
+    passed,
+    failed: results.length - passed,
+    results
+  });
+});
+
+// KNOWLEDGE COVERAGE & ANSWER PRECISION V8 test endpoint.
+// Preview-only: it never sends WhatsApp messages.
+app.get("/api/smart-knowledge/test", protectInbox, (req, res) => {
+  const phone = normalizePhoneDigits(req.query.phone || "971500000008");
+  const sampleText = (req.query.text || "هل فيني اتحمم والعب رياضة وكم بيدوم؟").toString().trim();
+  const customerName = (req.query.name || "Test Customer").toString().trim();
+  const language = detectIncomingLanguage(sampleText, "ar");
+
+  if (["true", "1", "yes", "on"].includes((req.query.reset || "false").toString().toLowerCase())) {
+    delete conversationSmartContext[phone];
+  }
+
+  const analysis = analyzeSmartUnderstanding(sampleText);
+  const memory = normalizeSmartMemoryForStorage(
+    getSmartConversationMemory(phone) || buildEmptySmartConversationMemory(phone)
+  );
+  const reply = buildSmartKnowledgeReply({
+    phone,
+    text: sampleText,
+    analysis,
+    memory,
+    customerName,
+    language,
+    salesReply: null
+  });
+  const remembered = reply
+    ? rememberSmartKnowledgeReply(phone, reply, sampleText, language)
+    : memory;
+  const detection = analyzeSmartKnowledgeCoverage(sampleText, analysis);
+
+  return res.json({
+    ok: true,
+    version: SMART_KNOWLEDGE_VERSION,
+    enabled: SMART_KNOWLEDGE_ENABLED,
+    reservedFuturePhase: "Unknown / Low Confidence",
+    matched: Boolean(reply),
+    detection: {
+      primaryTopic: detection.primaryTopic,
+      score: detection.score,
+      confidence: detection.confidence,
+      topics: detection.topics.map((item) => ({
+        id: item.id,
+        score: item.score,
+        confidence: item.confidence,
+        policy: item.policy,
+        evidence: [...item.phraseMatches, ...item.intentMatches].slice(0, 6)
+      }))
+    },
+    precision: reply?.precisionAudit || null,
+    preview: reply ? {
+      status: reply.status,
+      messageType: reply.messageType,
+      topic: reply.topic,
+      decision: reply.decision,
+      pendingQuestion: reply.pendingQuestion,
+      body: reply.body,
+      buttons: localizeReplyButtons(reply.buttons || [], language)
+    } : null,
+    memory: {
+      lastKnowledgeTopics: remembered?.lastKnowledgeTopics || [],
+      knowledgeAnswerCount: remembered?.knowledgeAnswerCount || 0,
+      knowledgePrecisionStatus: remembered?.knowledgePrecisionStatus || ""
+    }
+  });
+});
+
 app.get("/api/flows/iconic-booking/time-options", protectInbox, (req, res) => {
   const preferredDay = (req.query.preferredDay || req.query.day || "Today").toString().trim();
 
@@ -9855,21 +17389,11 @@ function filterArchivedInboxPayload(messages = [], conversationStates = [], book
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
   const sheetData = await loadMessagesFromGoogleSheetForMessagesApi();
-  const rawSheetMessages = sheetData.messages || [];
-  const rawMemoryMessages = inboxMessages || [];
-  const rawConversationStates = sheetData.conversationStates || [];
-  const rawBookingRequests = sheetData.bookingRequests || [];
-  const rawMergedMessages = mergeInboxHistory(rawSheetMessages, rawMemoryMessages);
-  const ai303OnlyPayload = filterAi303InboxPayload(
-    rawMergedMessages,
-    rawConversationStates,
-    rawBookingRequests
-  );
-  const sheetMessages = rawSheetMessages.filter(isAi303InboxRecord);
-  const memoryMessages = rawMemoryMessages.filter(isAi303InboxRecord);
-  const mergedMessages = ai303OnlyPayload.messages;
-  const conversationStates = ai303OnlyPayload.conversationStates;
-  const bookingRequests = ai303OnlyPayload.bookingRequests;
+  const sheetMessages = sheetData.messages || [];
+  const memoryMessages = inboxMessages || [];
+  const conversationStates = sheetData.conversationStates || [];
+  const bookingRequests = sheetData.bookingRequests || [];
+  const mergedMessages = mergeInboxHistory(sheetMessages, memoryMessages);
   const branchFilteredPayload = filterInboxPayloadByBranchAccess(
     mergedMessages,
     conversationStates,
@@ -9901,10 +17425,7 @@ function filterArchivedInboxPayload(messages = [], conversationStates = [], book
     bookingRequests: archiveFilteredPayload.bookingRequests,
     debug: {
       botVersion: BOT_VERSION,
-      rawSheetMessagesCount: rawSheetMessages.length,
-      filteredOutNon303SheetMessagesCount: Math.max(0, rawSheetMessages.length - sheetMessages.length),
       sheetMessagesCount: sheetMessages.length,
-      rawMemoryMessagesCount: rawMemoryMessages.length,
       memoryMessagesCount: memoryMessages.length,
       returnedMessagesCount: archiveFilteredPayload.messages.length,
       unfilteredMessagesCount: mergedMessages.length,
@@ -10837,6 +18358,363 @@ async function getInboxBootstrapDataForServerRender() {
     };
   }
 }
+
+app.get("/learning-analytics", redirectLegacyInboxHost, protectInbox, (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Iconic 303 — Learning Analytics V14</title>
+  <link rel="icon" href="${INBOX_FAVICON_DATA_URI}" type="image/svg+xml" />
+  <style>
+    :root{--bg:#f4f7f2;--panel:#fff;--ink:#14201a;--muted:#65736b;--line:#dbe5dc;--accent:#5d9f35;--danger:#a43737;--warn:#9a6812}
+    *{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:#f4f7f2;color:var(--ink)} button,input,select,textarea{font:inherit}
+    .page{max-width:1480px;margin:0 auto;padding:22px}.header{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:16px}.header h1{margin:0 0 5px;font-size:24px}.header p{margin:0;color:var(--muted)}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:10px;padding:9px 13px;text-decoration:none;cursor:pointer}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+    .metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:14px}.metric{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px}.label{font-size:12px;color:var(--muted)}.value{font-size:24px;font-weight:700;margin-top:4px}
+    .panel{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}.toolbar{display:grid;grid-template-columns:190px 1fr auto;gap:10px;padding:12px;border-bottom:1px solid var(--line)} input,select,textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px;background:#fff}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:1050px}th,td{text-align:left;padding:11px;border-bottom:1px solid #edf1ed;vertical-align:top}th{font-size:12px;color:var(--muted);background:#fafcf9;position:sticky;top:0}td{font-size:14px}.phrase{max-width:330px;overflow-wrap:anywhere}.badge{display:inline-flex;border-radius:999px;padding:3px 8px;background:#eef3ee;font-size:12px}.healthy{background:#e4f5df;color:#2f6a22}.review{background:#fff3d6;color:#75500a}.rollback_recommended{background:#fde8e8;color:#8d2525}.watch{background:#e7f1ff;color:#24558d}.insufficient_data{background:#f1f1f1;color:#666}.bar{width:110px;height:8px;border-radius:999px;background:#e8eee8;overflow:hidden;margin-top:5px}.bar span{display:block;height:100%;background:var(--accent)}.feedback{display:grid;grid-template-columns:120px minmax(180px,1fr) auto;gap:6px}.status{padding:10px 12px;color:var(--muted);min-height:38px}
+    @media(max-width:900px){.metrics{grid-template-columns:repeat(3,1fr)}.header{display:block}.actions{margin-top:10px}}@media(max-width:560px){.page{padding:12px}.metrics{grid-template-columns:repeat(2,1fr)}.toolbar,.feedback{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="header"><div><h1>Learning Analytics & Rule Performance</h1><p>V14 monitors active learning rules without storing customer text.</p></div><div class="actions"><a class="btn" href="/inbox">Team Inbox</a><a class="btn" href="/learning-review">Learning Review</a><button class="btn primary" id="refresh" type="button">Refresh</button></div></header>
+    <section class="metrics"><div class="metric"><div class="label">Rules</div><div class="value" id="mRules">0</div></div><div class="metric"><div class="label">Active</div><div class="value" id="mActive">0</div></div><div class="metric"><div class="label">Matches</div><div class="value" id="mMatches">0</div></div><div class="metric"><div class="label">Unique conversations</div><div class="value" id="mUnique">0</div></div><div class="metric"><div class="label">Needs review</div><div class="value" id="mReview">0</div></div><div class="metric"><div class="label">Pending outcomes</div><div class="value" id="mPending">0</div></div></section>
+    <section class="panel"><div class="toolbar"><select id="health"><option value="">All health states</option><option value="healthy">Healthy</option><option value="watch">Watch</option><option value="review">Review</option><option value="rollback_recommended">Rollback recommended</option><option value="insufficient_data">Insufficient data</option></select><input id="search" type="search" placeholder="Search phrase or intent"/><button class="btn" id="apply" type="button">Apply</button></div><div class="table-wrap"><table><thead><tr><th>Rule</th><th>Status</th><th>Uses</th><th>Outcomes</th><th>Success</th><th>Unresolved</th><th>Recommendation</th><th>Reviewer feedback</th></tr></thead><tbody id="rows"><tr><td colspan="8">Loading...</td></tr></tbody></table></div><div class="status" id="status" aria-live="polite"></div></section>
+  </main>
+  <script>
+    (function(){var data=[];var rows=document.getElementById('rows');var status=document.getElementById('status');
+      function request(url,options){return fetch(url,options||{}).then(function(r){return r.text().then(function(t){var d={};try{d=t?JSON.parse(t):{}}catch(e){d={ok:false,error:t}}if(!r.ok)throw new Error(d.error||'Request failed');return d})})}
+      function set(id,v){document.getElementById(id).textContent=String(v||0)} function pct(v){return Math.round(Number(v||0)*100)+'%'} function esc(v){return String(v||'').replace(/[&<>\"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'})[c]})}
+      function render(){var health=document.getElementById('health').value;var q=document.getElementById('search').value.toLowerCase().trim();var filtered=data.filter(function(r){return(!health||r.analytics.healthStatus===health)&&(!q||(r.approvedPhrase+' '+r.targetIntent).toLowerCase().includes(q))});rows.innerHTML=filtered.length?'':'<tr><td colspan="8">No matching rules.</td></tr>';filtered.forEach(function(r){var a=r.analytics||{};var tr=document.createElement('tr');tr.innerHTML='<td class="phrase"><strong>'+esc(r.approvedPhrase)+'</strong><br><span class="label">'+esc(r.targetIntent)+' · '+esc(r.id)+'</span></td><td><span class="badge '+esc(a.healthStatus)+'">'+esc(a.healthStatus)+'</span><br><span class="label">'+esc(r.integrationStatus)+'</span></td><td>'+Number(a.appliedCount||0)+'<br><span class="label">'+Number(a.uniqueConversationCount||0)+' unique</span></td><td><span class="label">Positive '+Number(a.positiveOutcomeCount||0)+' · Unknown '+Number(a.unknownAfterMatchCount||0)+' · Repeat '+Number(a.repeatAfterMatchCount||0)+' · Incorrect '+Number(a.manualIncorrectCount||0)+'</span></td><td>'+pct(a.successRate)+'<div class="bar"><span style="width:'+pct(a.successRate)+'"></span></div></td><td>'+pct(a.unresolvedRate)+'</td><td>'+esc(a.recommendation)+'</td><td><div class="feedback"><select data-outcome><option value="helpful">Helpful</option><option value="incorrect">Incorrect</option><option value="neutral">Neutral</option></select><input data-note placeholder="Optional note"><button class="btn" type="button" data-rule="'+esc(r.id)+'">Save</button></div></td>';rows.appendChild(tr)});Array.prototype.forEach.call(rows.querySelectorAll('button[data-rule]'),function(btn){btn.addEventListener('click',function(){var box=btn.parentElement;var outcome=box.querySelector('[data-outcome]').value;var note=box.querySelector('[data-note]').value;btn.disabled=true;status.textContent='Saving feedback...';request('/api/smart-learning/analytics/'+encodeURIComponent(btn.getAttribute('data-rule'))+'/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({outcome:outcome,note:note})}).then(function(){status.textContent='Feedback saved and analytics recalculated.';return load()}).catch(function(e){status.textContent=e.message}).finally(function(){btn.disabled=false})})})}
+      function load(){status.textContent='Loading analytics...';return request('/api/smart-learning/analytics').then(function(d){data=d.rules||[];var s=d.summary||{};set('mRules',s.totalRules);set('mActive',s.activeRules);set('mMatches',s.totalMatches);set('mUnique',s.uniqueConversations);set('mReview',s.reviewRequired);set('mPending',s.pendingConversationOutcomes);render();status.textContent='Updated '+new Date().toLocaleTimeString()})}
+      document.getElementById('refresh').addEventListener('click',load);document.getElementById('apply').addEventListener('click',render);document.getElementById('search').addEventListener('keydown',function(e){if(e.key==='Enter')render()});load().catch(function(e){status.textContent=e.message});
+    })();
+  </script>
+</body>
+</html>`);
+});
+
+app.get("/learning-review", redirectLegacyInboxHost, protectInbox, (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Iconic 303 — Learning Integration V14</title>
+  <link rel="icon" href="${INBOX_FAVICON_DATA_URI}" type="image/svg+xml" />
+  <style>
+    :root { --bg:#f4f7f2; --panel:#fff; --ink:#14201a; --muted:#65736b; --line:#dbe5dc; --accent:#5d9f35; --accent-dark:#3e7620; --danger:#a43737; --warning:#9a6812; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial,sans-serif; background:linear-gradient(180deg,#fbfdf9,#eef5ec); color:var(--ink); }
+    a { color:inherit; }
+    button, input, select, textarea { font:inherit; }
+    .page { max-width:1460px; margin:0 auto; padding:22px; }
+    .header { display:flex; gap:16px; align-items:flex-start; justify-content:space-between; margin-bottom:18px; }
+    .header h1 { margin:0 0 5px; font-size:24px; }
+    .header p { margin:0; color:var(--muted); }
+    .header-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .btn { border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:10px; padding:9px 13px; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
+    .btn:hover { border-color:#a8b9aa; }
+    .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .btn.danger { color:var(--danger); }
+    .btn:disabled { opacity:.55; cursor:not-allowed; }
+    .notice { background:#edf7e8; border:1px solid #c9dfbc; border-radius:12px; padding:12px 14px; margin-bottom:16px; color:#315127; }
+    .metrics { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
+    .metric { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px; }
+    .metric-label { color:var(--muted); font-size:12px; }
+    .metric-value { font-size:24px; font-weight:700; margin-top:4px; }
+    .toolbar { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px; display:grid; grid-template-columns:180px minmax(220px,1fr) auto; gap:10px; margin-bottom:14px; }
+    .field label { display:block; font-size:12px; color:var(--muted); margin-bottom:5px; }
+    .field input, .field select, .field textarea { width:100%; border:1px solid var(--line); border-radius:9px; padding:9px 10px; background:#fff; color:var(--ink); }
+    .field textarea { min-height:88px; resize:vertical; }
+    .layout { display:grid; grid-template-columns:minmax(300px, .85fr) minmax(420px, 1.35fr); gap:14px; align-items:start; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+    .panel-head { padding:13px 14px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:8px; }
+    .panel-head h2 { margin:0; font-size:16px; }
+    .queue { max-height:720px; overflow:auto; }
+    .queue-item { width:100%; text-align:left; border:0; border-bottom:1px solid var(--line); background:#fff; padding:13px 14px; cursor:pointer; }
+    .queue-item:hover, .queue-item.active { background:#f0f7ec; }
+    .queue-title { font-weight:700; margin-bottom:6px; overflow-wrap:anywhere; }
+    .queue-meta { display:flex; gap:7px; flex-wrap:wrap; color:var(--muted); font-size:12px; }
+    .badge { display:inline-flex; border-radius:999px; padding:3px 8px; background:#eef3ee; color:#435148; font-size:12px; }
+    .badge.new { background:#fff3d6; color:#75500a; }
+    .badge.reviewed { background:#e7f1ff; color:#24558d; }
+    .badge.promoted { background:#e4f5df; color:#2f6a22; }
+    .badge.ignored { background:#f1f1f1; color:#666; }
+    .detail { padding:16px; }
+    .empty { padding:50px 20px; text-align:center; color:var(--muted); }
+    .sample { border:1px solid var(--line); background:#fafcf9; border-radius:11px; padding:12px; margin-bottom:14px; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .info-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:14px; }
+    .info { border:1px solid var(--line); border-radius:10px; padding:9px; }
+    .info span { display:block; color:var(--muted); font-size:11px; margin-bottom:4px; }
+    .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .full { grid-column:1/-1; }
+    .confirm { display:flex; gap:8px; align-items:flex-start; margin:12px 0; color:#37433b; }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; border-top:1px solid var(--line); padding-top:14px; margin-top:14px; }
+    .tests { margin-top:14px; }
+    .test { display:flex; gap:9px; align-items:flex-start; padding:9px 0; border-bottom:1px solid #edf0ed; }
+    .test-mark { font-weight:700; }
+    .test.pass .test-mark { color:var(--accent-dark); }
+    .test.fail .test-mark { color:var(--danger); }
+    .status { margin-top:12px; min-height:22px; color:var(--muted); }
+    .status.error { color:var(--danger); }
+    .status.success { color:var(--accent-dark); }
+    @media (max-width:900px) { .metrics{grid-template-columns:repeat(2,1fr)} .layout{grid-template-columns:1fr} .queue{max-height:420px} }
+    @media (max-width:560px) { .page{padding:12px} .header{display:block} .header-actions{margin-top:12px} .toolbar{grid-template-columns:1fr} .form-grid,.info-grid{grid-template-columns:1fr} .metrics{grid-template-columns:1fr 1fr} }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="header">
+      <div>
+        <h1>Learning Review, Regression Gate & Runtime Integration</h1>
+        <p>V14 console for review, regression gating, runtime activation, rollback, and rule analytics on the isolated 303 bot.</p>
+      </div>
+      <div class="header-actions">
+        <a class="btn" href="/inbox">Back to Team Inbox</a>
+        <a class="btn" href="/learning-analytics">Rule Analytics</a>
+        <a class="btn" href="/api/smart-learning/export">Export promoted JSON</a>
+        <button class="btn" type="button" id="refreshButton">Refresh</button>
+      </div>
+    </header>
+
+    <div class="notice"><strong>Safety lock:</strong> A promoted item stays inactive until Gate & Activate Runtime passes every regression check and receives explicit human confirmation. Performance is then monitored in Rule Analytics.</div>
+
+    <section class="metrics" aria-label="Queue summary">
+      <div class="metric"><div class="metric-label">Total</div><div class="metric-value" id="metricTotal">0</div></div>
+      <div class="metric"><div class="metric-label">New</div><div class="metric-value" id="metricNew">0</div></div>
+      <div class="metric"><div class="metric-label">Reviewed</div><div class="metric-value" id="metricReviewed">0</div></div>
+      <div class="metric"><div class="metric-label">Promoted</div><div class="metric-value" id="metricPromoted">0</div></div>
+      <div class="metric"><div class="metric-label">Occurrences</div><div class="metric-value" id="metricOccurrences">0</div></div>
+    </section>
+
+    <section class="toolbar">
+      <div class="field"><label for="statusFilter">Status</label><select id="statusFilter"><option value="">All</option><option value="new">New</option><option value="reviewed">Reviewed</option><option value="promoted">Promoted</option><option value="ignored">Ignored</option></select></div>
+      <div class="field"><label for="searchInput">Search phrase</label><input id="searchInput" type="search" placeholder="Search captured wording" /></div>
+      <div class="field"><label>&nbsp;</label><button class="btn primary" type="button" id="applyFilterButton">Apply</button></div>
+    </section>
+
+    <section class="layout">
+      <div class="panel">
+        <div class="panel-head"><h2>Learning Queue</h2><span class="badge" id="visibleCount">0 items</span></div>
+        <div class="queue" id="queueList"><div class="empty">Loading queue...</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Human Review</h2><span class="badge" id="selectedStatus">No selection</span></div>
+        <div class="detail" id="detailPanel"><div class="empty">Select a captured phrase to review it.</div></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var state = { items: [], filtered: [], selectedId: '', catalog: [], actions: [] };
+      var queueList = document.getElementById('queueList');
+      var detailPanel = document.getElementById('detailPanel');
+      var selectedStatus = document.getElementById('selectedStatus');
+      var statusFilter = document.getElementById('statusFilter');
+      var searchInput = document.getElementById('searchInput');
+      var visibleCount = document.getElementById('visibleCount');
+
+      function request(url, options) {
+        return fetch(url, options || {}).then(function (response) {
+          return response.text().then(function (text) {
+            var data;
+            try { data = text ? JSON.parse(text) : {}; } catch (error) { data = { ok:false, error:text || 'Invalid response' }; }
+            if (!response.ok) {
+              var err = new Error(data.error || 'Request failed');
+              err.data = data;
+              throw err;
+            }
+            return data;
+          });
+        });
+      }
+
+      function setMetric(id, value) { document.getElementById(id).textContent = String(value || 0); }
+      function formatDate(value) { if (!value) return '—'; try { return new Date(Number(value)).toLocaleString(); } catch (error) { return '—'; } }
+      function create(tag, className, text) { var el = document.createElement(tag); if (className) el.className = className; if (text !== undefined) el.textContent = text; return el; }
+
+      function applyFilters() {
+        var status = statusFilter.value;
+        var query = searchInput.value.trim().toLowerCase();
+        state.filtered = state.items.filter(function (item) {
+          if (status && item.status !== status) return false;
+          if (query && String(item.sampleText || '').toLowerCase().indexOf(query) === -1) return false;
+          return true;
+        });
+        renderQueue();
+      }
+
+      function renderQueue() {
+        queueList.textContent = '';
+        visibleCount.textContent = String(state.filtered.length) + ' items';
+        if (!state.filtered.length) { queueList.appendChild(create('div','empty','No queue items match this filter.')); return; }
+        state.filtered.forEach(function (item) {
+          var button = create('button','queue-item' + (state.selectedId === item.id ? ' active' : ''));
+          button.type = 'button';
+          button.addEventListener('click', function () { state.selectedId = item.id; renderQueue(); renderDetail(item); });
+          button.appendChild(create('div','queue-title',item.sampleText || '(empty phrase)'));
+          var meta = create('div','queue-meta');
+          meta.appendChild(create('span','badge ' + (item.status || 'new'),item.status || 'new'));
+          meta.appendChild(create('span','',String(item.count || 0) + ' occurrences'));
+          meta.appendChild(create('span','',item.reason || 'unknown'));
+          button.appendChild(meta);
+          queueList.appendChild(button);
+        });
+      }
+
+      function addInfo(parent, label, value) { var box=create('div','info'); box.appendChild(create('span','',label)); box.appendChild(create('strong','',value || '—')); parent.appendChild(box); }
+      function addField(parent, labelText, input) { var wrap=create('div','field'); var label=create('label','',labelText); if (input.id) label.htmlFor=input.id; wrap.appendChild(label); wrap.appendChild(input); parent.appendChild(wrap); return wrap; }
+
+      function renderTests(validation) {
+        var testsWrap = create('div','tests');
+        testsWrap.appendChild(create('h3','',validation && validation.safeToPromote ? 'Safe promotion tests passed' : 'Safe promotion test results'));
+        (validation && validation.tests || []).forEach(function (test) {
+          var row=create('div','test ' + (test.pass ? 'pass' : 'fail'));
+          row.appendChild(create('div','test-mark',test.pass ? '✓' : '✕'));
+          var copy=create('div',''); copy.appendChild(create('strong','',test.id)); copy.appendChild(create('div','',test.message || ''));
+          row.appendChild(copy); testsWrap.appendChild(row);
+        });
+        return testsWrap;
+      }
+
+      function renderDetail(item) {
+        selectedStatus.textContent = item.status || 'new';
+        selectedStatus.className = 'badge ' + (item.status || 'new');
+        detailPanel.textContent = '';
+        detailPanel.appendChild(create('div','sample',item.sampleText || ''));
+        var infoGrid=create('div','info-grid');
+        addInfo(infoGrid,'Occurrences',String(item.count || 0));
+        addInfo(infoGrid,'Confidence',String(item.confidence || 'none') + ' / ' + String(item.score || 0));
+        addInfo(infoGrid,'Last seen',formatDate(item.lastSeenAt));
+        addInfo(infoGrid,'Reason',item.reason || 'unknown');
+        addInfo(infoGrid,'Language',item.language || '—');
+        addInfo(infoGrid,'Branch',item.branch || '—');
+        addInfo(infoGrid,'Runtime rule',item.candidateRule && item.candidateRule.runtimeApplied ? 'Active' : ((item.candidateRule && item.candidateRule.integrationStatus) || 'Not active'));
+        addInfo(infoGrid,'Integrated at',item.candidateRule && item.candidateRule.integratedAt ? formatDate(item.candidateRule.integratedAt) : '—');
+        detailPanel.appendChild(infoGrid);
+
+        var form=create('div','form-grid');
+        var intentSelect=create('select',''); intentSelect.id='targetIntent';
+        var blank=create('option','','Select target intent'); blank.value=''; intentSelect.appendChild(blank);
+        state.catalog.forEach(function (intent) { var option=create('option','',intent.label); option.value=intent.id; if ((item.reviewTargetIntent || item.promotedIntent) === intent.id) option.selected=true; intentSelect.appendChild(option); });
+        addField(form,'Correct intent',intentSelect);
+
+        var actionSelect=create('select',''); actionSelect.id='reviewAction';
+        state.actions.forEach(function (action) { var option=create('option','',action.replace(/_/g,' ')); option.value=action; if ((item.reviewAction || 'add_phrase') === action) option.selected=true; actionSelect.appendChild(option); });
+        addField(form,'Learning action',actionSelect);
+
+        var phrase=create('textarea',''); phrase.id='approvedPhrase'; phrase.value=item.approvedPhrase || item.sampleText || '';
+        var phraseWrap=addField(form,'Approved phrase or pattern',phrase); phraseWrap.classList.add('full');
+
+        var answerKey=create('input',''); answerKey.id='answerKey'; answerKey.type='text'; answerKey.value=item.answerKey || ''; answerKey.placeholder='Example: privacy_reassurance';
+        addField(form,'Existing answer key (optional)',answerKey);
+
+        var priority=create('input',''); priority.id='priority'; priority.type='number'; priority.min='1'; priority.max='120'; priority.value=String(item.priority || 70);
+        addField(form,'Priority',priority);
+
+        var negatives=create('textarea',''); negatives.id='negativeExamples'; negatives.value=(item.negativeExamples || []).join('\n'); negatives.placeholder='One do-not-match example per line';
+        var negativeWrap=addField(form,'Negative examples / conflict protection',negatives); negativeWrap.classList.add('full');
+
+        var note=create('textarea',''); note.id='reviewNote'; note.value=item.reviewNote || ''; note.placeholder='Why this mapping is correct';
+        var noteWrap=addField(form,'Reviewer note',note); noteWrap.classList.add('full');
+        detailPanel.appendChild(form);
+
+        var confirmLabel=create('label','confirm'); var confirm=create('input',''); confirm.type='checkbox'; confirm.id='reviewConfirmed'; confirmLabel.appendChild(confirm); confirmLabel.appendChild(create('span','','I reviewed the phrase, target intent, and negative examples.'));
+        detailPanel.appendChild(confirmLabel);
+
+        var actions=create('div','actions');
+        var saveButton=create('button','btn','Save Review'); saveButton.type='button';
+        var promoteButton=create('button','btn primary','Run Tests & Promote'); promoteButton.type='button';
+        var ignoreButton=create('button','btn danger','Ignore'); ignoreButton.type='button';
+        var integrateButton=create('button','btn primary','Gate & Activate Runtime'); integrateButton.type='button';
+        var rollbackButton=create('button','btn','Rollback Runtime Rule'); rollbackButton.type='button';
+        actions.appendChild(saveButton); actions.appendChild(promoteButton); actions.appendChild(integrateButton); actions.appendChild(rollbackButton); actions.appendChild(ignoreButton); detailPanel.appendChild(actions);
+        var status=create('div','status',''); status.id='reviewStatus'; status.setAttribute('aria-live','polite'); detailPanel.appendChild(status);
+        if (item.promotionValidation) detailPanel.appendChild(renderTests(item.promotionValidation));
+
+        function payload() {
+          return {
+            targetIntent:intentSelect.value,
+            action:actionSelect.value,
+            approvedPhrase:phrase.value,
+            answerKey:answerKey.value,
+            priority:Number(priority.value || 70),
+            negativeExamples:negatives.value,
+            reviewNote:note.value,
+            reviewConfirmed:confirm.checked
+          };
+        }
+        function busy(value) { saveButton.disabled=value; promoteButton.disabled=value; integrateButton.disabled=value; rollbackButton.disabled=value; ignoreButton.disabled=value; }
+        function updateStatus(text, kind) { status.textContent=text; status.className='status' + (kind ? ' ' + kind : ''); }
+
+        saveButton.addEventListener('click', function () {
+          busy(true); updateStatus('Saving review...','');
+          request('/api/smart-learning/queue/' + encodeURIComponent(item.id) + '/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())})
+            .then(function () { updateStatus('Review saved. No runtime rule was changed.','success'); return loadQueue(item.id); })
+            .catch(function (error) { updateStatus(error.message,'error'); if (error.data && error.data.validation) detailPanel.appendChild(renderTests(error.data.validation)); })
+            .finally(function () { busy(false); });
+        });
+        promoteButton.addEventListener('click', function () {
+          busy(true); updateStatus('Running conflict tests...','');
+          request('/api/smart-learning/queue/' + encodeURIComponent(item.id) + '/promote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())})
+            .then(function () { updateStatus('Promoted as a safe candidate package. Deployment is still required.','success'); return loadQueue(item.id); })
+            .catch(function (error) { updateStatus(error.message,'error'); if (error.data && error.data.validation) { var old=detailPanel.querySelector('.tests'); if (old) old.remove(); detailPanel.appendChild(renderTests(error.data.validation)); } })
+            .finally(function () { busy(false); });
+        });
+        integrateButton.addEventListener('click', function () {
+          busy(true); updateStatus('Running V13 regression gate...','');
+          request('/api/smart-learning/integration/' + encodeURIComponent(item.id) + '/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({integrationConfirmed:confirm.checked})})
+            .then(function () { updateStatus('Regression gate passed. Rule is active at runtime and persisted.','success'); return loadQueue(item.id); })
+            .catch(function (error) { updateStatus(error.message,'error'); if (error.data && error.data.gate) { var old=detailPanel.querySelector('.tests'); if (old) old.remove(); detailPanel.appendChild(renderTests({safeToPromote:error.data.gate.safeToIntegrate,tests:error.data.gate.tests})); } })
+            .finally(function () { busy(false); });
+        });
+        rollbackButton.addEventListener('click', function () {
+          busy(true); updateStatus('Rolling back runtime rule...','');
+          request('/api/smart-learning/integration/' + encodeURIComponent(item.id) + '/rollback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:note.value || 'Manual rollback from console'})})
+            .then(function () { updateStatus('Runtime rule rolled back. The reviewed candidate remains available.','success'); return loadQueue(item.id); })
+            .catch(function (error) { updateStatus(error.message,'error'); })
+            .finally(function () { busy(false); });
+        });
+        ignoreButton.addEventListener('click', function () {
+          busy(true); updateStatus('Ignoring item...','');
+          request('/api/smart-learning/queue/' + encodeURIComponent(item.id) + '/ignore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reviewNote:note.value})})
+            .then(function () { updateStatus('Item ignored.','success'); return loadQueue(item.id); })
+            .catch(function (error) { updateStatus(error.message,'error'); })
+            .finally(function () { busy(false); });
+        });
+      }
+
+      function loadCatalog() {
+        return request('/api/smart-learning/catalog').then(function (data) { state.catalog=data.intents || []; state.actions=data.actions || []; });
+      }
+      function loadQueue(reselectId) {
+        return request('/api/smart-unknown/queue?limit=200').then(function (data) {
+          state.items=data.items || [];
+          var summary=data.summary || {};
+          setMetric('metricTotal',summary.total); setMetric('metricNew',(summary.byStatus || {}).new); setMetric('metricReviewed',(summary.byStatus || {}).reviewed); setMetric('metricPromoted',(summary.byStatus || {}).promoted); setMetric('metricOccurrences',summary.totalOccurrences);
+          applyFilters();
+          var selected=state.items.find(function (item) { return item.id === (reselectId || state.selectedId); });
+          if (selected) { state.selectedId=selected.id; renderQueue(); renderDetail(selected); }
+        });
+      }
+      function init() { Promise.all([loadCatalog(),loadQueue()]).catch(function (error) { queueList.textContent=''; queueList.appendChild(create('div','empty','Could not load review console: ' + error.message)); }); }
+      document.getElementById('refreshButton').addEventListener('click',function(){loadQueue();});
+      document.getElementById('applyFilterButton').addEventListener('click',applyFilters);
+      statusFilter.addEventListener('change',applyFilters);
+      searchInput.addEventListener('input',applyFilters);
+      init();
+    })();
+  </script>
+</body>
+</html>`);
+});
 
 app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -35163,6 +43041,8 @@ app.get("/inbox", redirectLegacyInboxHost, protectInbox, (req, res) => {
 
       <nav class="sidebar-nav" aria-label="Team Inbox navigation">
         <button type="button" class="sidebar-item active" data-sidebar-action="all" aria-current="page"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5v-11Z"/><path d="M4 14h4.2l1.5 2h4.6l1.5-2H20"/></svg></span><span>Team Inbox</span></button>
+        <a class="sidebar-item" href="/learning-review" style="text-decoration:none"><span class="nav-icon" aria-hidden="true">◎</span><span>Learning Review</span></a>
+        <a class="sidebar-item" href="/learning-analytics" style="text-decoration:none"><span class="nav-icon" aria-hidden="true">◉</span><span>Rule Analytics</span></a>
         <button type="button" class="sidebar-item" data-sidebar-action="dashboard"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13.5V20h6v-5h4v5h6v-6.5"/><path d="M3 12l9-8 9 8"/></svg></span><span>Dashboard</span></button>
         <button type="button" class="sidebar-item" data-sidebar-action="conversations"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v5A2.5 2.5 0 0 1 16.5 14H10l-4 4v-4.5A2.5 2.5 0 0 1 5 11.5v-5Z"/><path d="M8 8h8M8 11h5"/></svg></span><span>Conversations</span></button>
         <button type="button" class="sidebar-item" data-sidebar-action="team"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M16 10a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/><path d="M3.5 20a4.5 4.5 0 0 1 9 0"/><path d="M13.5 19a3.5 3.5 0 0 1 7 0"/></svg></span><span>Team</span></button>
@@ -39434,6 +47314,310 @@ app.post("/webhook", async (req, res) => {
     const text = normalizeText(originalText);
     const replyLanguage = getMessageReplyLanguage(from, message, originalText || text);
 
+    // Restore persisted context once after a Render restart before interpreting
+    // the first new customer message.
+    await ensureSmartConversationMemoryHydrated();
+
+    const smartGoalPreviousMemory = normalizeSmartMemoryForStorage(
+      getSmartConversationMemory(from) || buildEmptySmartConversationMemory(from)
+    );
+    const smartUnderstandingBase = SMART_UNDERSTANDING_ENABLED
+      ? analyzeSmartUnderstanding(originalText || text)
+      : null;
+    const smartScenarioHardening = smartUnderstandingBase
+      ? hardenSmartUnderstandingForScenario({
+          text: originalText || text,
+          baseAnalysis: smartUnderstandingBase,
+          memory: smartGoalPreviousMemory
+        })
+      : null;
+    const smartRecoveryResolution = smartUnderstandingBase
+      ? recoverSmartUnderstandingFromContext({
+          text: originalText || text,
+          analysis: smartScenarioHardening?.analysis || smartUnderstandingBase,
+          memory: smartGoalPreviousMemory,
+          scenario: smartScenarioHardening || {},
+          language: replyLanguage
+        })
+      : null;
+    const smartUnderstanding = smartRecoveryResolution?.analysis || smartScenarioHardening?.analysis || smartUnderstandingBase;
+
+    let smartConversationMemory = updateSmartConversationMemory({
+      phone: from,
+      analysis: smartUnderstanding || {},
+      text: originalText || text,
+      language: replyLanguage,
+      phoneNumberId: incomingPhoneNumberId,
+      branch: lineConfig.branch
+    });
+    smartConversationMemory = applySmartScenarioHardeningToMemory({
+      phone: from,
+      memory: smartConversationMemory || smartGoalPreviousMemory,
+      scenario: smartScenarioHardening || {},
+      persist: true
+    }) || smartConversationMemory;
+    smartConversationMemory = applySmartConversationRecoveryToMemory({
+      phone: from,
+      previousMemory: smartGoalPreviousMemory,
+      memory: smartConversationMemory || smartGoalPreviousMemory,
+      recovery: smartRecoveryResolution || {},
+      scenario: smartScenarioHardening || {},
+      text: originalText || text,
+      persist: true
+    }) || smartConversationMemory;
+    const smartRoutingText = smartUnderstanding?.normalizedText || originalText || text;
+    const smartMultiIntentReply = getSmartMultiIntentReply({
+      analysis: smartUnderstanding,
+      customerName: profileName,
+      language: replyLanguage
+    });
+    const smartDecisionReply = buildSmartDecisionReply({
+      phone: from,
+      analysis: smartUnderstanding || {},
+      memory: smartConversationMemory || {},
+      customerName: profileName,
+      language: replyLanguage,
+      phoneNumberId: incomingPhoneNumberId
+    });
+    const smartSalesReply = buildSmartSalesObjectionReply({
+      phone: from,
+      text: originalText || text,
+      analysis: smartUnderstanding || {},
+      memory: smartConversationMemory || {},
+      customerName: profileName,
+      language: replyLanguage
+    });
+    const smartKnowledgeReply = buildSmartKnowledgeReply({
+      phone: from,
+      text: originalText || text,
+      analysis: smartUnderstanding || {},
+      memory: smartConversationMemory || {},
+      customerName: profileName,
+      language: replyLanguage,
+      salesReply: smartSalesReply
+    });
+    const smartGoalTracker = updateSmartConversationGoalState({
+      phone: from,
+      analysis: smartUnderstanding || {},
+      memory: smartConversationMemory || {},
+      previousMemory: smartGoalPreviousMemory,
+      salesReply: smartSalesReply,
+      decisionReply: smartDecisionReply,
+      persist: true
+    });
+    const smartGoalReply = buildSmartGoalTrackingReply({
+      tracker: smartGoalTracker,
+      analysis: smartUnderstanding || {},
+      memory: smartGoalTracker?.memory || smartConversationMemory || {},
+      customerName: profileName,
+      language: replyLanguage,
+      salesReply: smartSalesReply
+    });
+    const smartLeadQualification = updateSmartLeadQualification({
+      phone: from,
+      text: originalText || text,
+      analysis: smartUnderstanding || {},
+      memory: smartGoalTracker?.memory || smartConversationMemory || {},
+      tracker: smartGoalTracker || {},
+      salesReply: smartSalesReply,
+      persist: true
+    });
+    const smartLeadHandoffReply = buildSmartLeadHandoffReply({
+      qualification: smartLeadQualification,
+      analysis: smartUnderstanding || {},
+      customerName: profileName,
+      language: replyLanguage
+    });
+    const smartRecoveryReply = buildSmartConversationRecoveryReply({
+      recovery: smartRecoveryResolution || {},
+      memory: smartConversationMemory || smartGoalPreviousMemory || {},
+      language: replyLanguage
+    });
+
+    const smartUnknownEvaluation = evaluateSmartUnknownCapture({
+      text: originalText || text,
+      analysis: smartUnderstanding || {},
+      messageType: message?.type || "text",
+      recovery: smartRecoveryResolution || {},
+      memory: smartGoalTracker?.memory || smartConversationMemory || {},
+      knownReplies: [smartSalesReply, smartKnowledgeReply, smartDecisionReply, smartMultiIntentReply]
+    });
+    const smartUnknownEvent = smartUnknownEvaluation.capture
+      ? captureSmartUnknownEvent({
+          phone: from,
+          text: originalText || text,
+          language: replyLanguage,
+          phoneNumberId: incomingPhoneNumberId,
+          branch: lineConfig.branch,
+          messageType: message?.type || "text",
+          evaluation: smartUnknownEvaluation,
+          analysis: smartUnderstanding || {},
+          memory: smartGoalTracker?.memory || smartConversationMemory || {},
+          persist: true
+        })
+      : null;
+    smartConversationMemory = applySmartUnknownCaptureToMemory({
+      phone: from,
+      memory: smartGoalTracker?.memory || smartConversationMemory || {},
+      event: smartUnknownEvent,
+      persist: true
+    }) || smartConversationMemory;
+    const smartUnknownReply = buildSmartUnknownClarificationReply({
+      evaluation: smartUnknownEvaluation,
+      event: smartUnknownEvent,
+      customerName: profileName,
+      language: replyLanguage
+    });
+    const smartRulePerformanceObservation = observeSmartRulePerformance({
+      phone: from,
+      phoneNumberId: incomingPhoneNumberId,
+      text: originalText || text,
+      analysis: smartUnderstanding || {},
+      memory: smartGoalTracker?.memory || smartConversationMemory || {},
+      recovery: smartRecoveryResolution || {},
+      unknownEvaluation: smartUnknownEvaluation || {},
+      goalTracker: smartGoalTracker || {},
+      qualification: smartLeadQualification || {}
+    });
+
+    if (smartLeadQualification?.shouldSyncInbox) {
+      await syncSmartLeadPriorityState({
+        phone: from,
+        phoneNumberId: incomingPhoneNumberId,
+        lineConfig,
+        qualification: smartLeadQualification,
+        customerName: profileName
+      });
+    }
+
+    if (smartUnderstanding) {
+      console.log("[Smart Understanding]", JSON.stringify(getSmartUnderstandingLogPayload(smartUnderstanding)));
+    }
+
+    if (smartScenarioHardening?.enabled) {
+      console.log("[Scenario Hardening V9]", JSON.stringify({
+        version: smartScenarioHardening.version,
+        mode: smartScenarioHardening.mode,
+        flags: smartScenarioHardening.flags,
+        segments: smartScenarioHardening.segments,
+        contradictions: smartScenarioHardening.contradictions,
+        topicSwitch: smartScenarioHardening.topicSwitch,
+        correctionCue: smartScenarioHardening.correctionCue,
+        mixedLanguage: smartScenarioHardening.mixedLanguage,
+        longMessage: smartScenarioHardening.longMessage,
+        duplicateInbound: smartScenarioHardening.duplicateInbound,
+        entities: smartUnderstanding?.entities || {}
+      }));
+    }
+
+    if (smartConversationMemory) {
+      console.log("[Smart Memory V2]", JSON.stringify({
+        phone: smartConversationMemory.phone,
+        branch: smartConversationMemory.branch,
+        customerType: smartConversationMemory.customerType,
+        priceAsked: smartConversationMemory.priceAsked,
+        bookingReadiness: smartConversationMemory.bookingReadiness,
+        lastIntent: smartConversationMemory.lastIntent,
+        recentIntents: smartConversationMemory.recentIntents
+      }));
+    }
+
+    if (smartGoalTracker?.enabled) {
+      console.log("[Goal Tracking V5]", JSON.stringify({
+        version: smartGoalTracker.version,
+        state: smartGoalTracker.state,
+        goal: smartGoalTracker.goal,
+        goalStatus: smartGoalTracker.goalStatus,
+        missingSlots: smartGoalTracker.missingSlots,
+        nextAction: smartGoalTracker.nextAction,
+        progressMade: smartGoalTracker.progressMade,
+        stalledTurns: smartGoalTracker.stalledTurns,
+        resolvedSlots: smartGoalTracker.resolvedSlots
+      }));
+    }
+
+    if (smartLeadQualification?.enabled) {
+      console.log("[Lead Qualification V6]", JSON.stringify({
+        version: smartLeadQualification.version,
+        score: smartLeadQualification.score,
+        grade: smartLeadQualification.grade,
+        qualificationStatus: smartLeadQualification.qualificationStatus,
+        missingSlots: smartLeadQualification.missingSlots,
+        handoffMode: smartLeadQualification.handoffMode,
+        handoffReason: smartLeadQualification.handoffReason,
+        shouldSyncInbox: smartLeadQualification.shouldSyncInbox
+      }));
+    }
+
+    if (smartRecoveryResolution?.enabled && smartRecoveryResolution?.handled) {
+      console.log("[Conversation Recovery V10]", JSON.stringify({
+        version: smartRecoveryResolution.version,
+        mode: smartRecoveryResolution.mode,
+        kind: smartRecoveryResolution.kind,
+        pendingQuestion: smartRecoveryResolution.pendingQuestion,
+        resolvedSlot: smartRecoveryResolution.resolvedSlot,
+        resolvedValue: smartRecoveryResolution.resolvedValue,
+        needsReply: smartRecoveryResolution.needsReply,
+        suspendedQuestion: smartRecoveryResolution.suspendedQuestion
+      }));
+    }
+
+    if (smartUnknownEvaluation?.capture) {
+      console.log("[Unknown Learning V11]", JSON.stringify({
+        version: SMART_UNKNOWN_VERSION,
+        queueId: smartUnknownEvent?.id || "",
+        reason: smartUnknownEvaluation.reason,
+        confidence: smartUnknownEvaluation.confidence,
+        score: smartUnknownEvaluation.score,
+        ambiguityGap: smartUnknownEvaluation.ambiguityGap,
+        candidates: smartUnknownEvaluation.candidates,
+        queueCount: smartUnknownEvent?.count || 0
+      }));
+    }
+
+    if (smartRulePerformanceObservation?.enabled && (smartRulePerformanceObservation.activated?.length || smartRulePerformanceObservation.resolved?.length)) {
+      console.log("[Learning Analytics V14]", JSON.stringify({
+        version: SMART_RULE_ANALYTICS_VERSION,
+        activated: smartRulePerformanceObservation.activated || [],
+        resolved: smartRulePerformanceObservation.resolved || [],
+        pendingOutcomes: smartRulePendingOutcomeByConversation.size
+      }));
+    }
+
+    if (smartSalesReply) {
+      console.log("[Sales Intelligence V4]", JSON.stringify({
+        version: smartSalesReply.version,
+        objection: smartSalesReply.objection,
+        confidence: smartSalesReply.confidence,
+        score: smartSalesReply.score,
+        leadTemperature: smartSalesReply.leadTemperature,
+        alternatives: smartSalesReply.alternatives
+      }));
+    }
+
+    if (smartKnowledgeReply) {
+      console.log("[Knowledge Precision V8]", JSON.stringify({
+        version: smartKnowledgeReply.version,
+        topics: smartKnowledgeReply.topics,
+        confidence: smartKnowledgeReply.confidence,
+        score: smartKnowledgeReply.score,
+        precisionSafe: smartKnowledgeReply.precisionAudit?.safe,
+        blockedClaims: smartKnowledgeReply.precisionAudit?.blockedClaims || [],
+        decision: smartKnowledgeReply.decision,
+        pendingQuestion: smartKnowledgeReply.pendingQuestion
+      }));
+    }
+
+    if (smartDecisionReply) {
+      console.log("[Smart Decision V3]", JSON.stringify({
+        version: smartDecisionReply.version,
+        intents: smartDecisionReply.intents,
+        decision: smartDecisionReply.decision,
+        pendingQuestion: smartDecisionReply.pendingQuestion,
+        context: smartDecisionReply.context
+      }));
+    }
+
     const staffActionHandled = await handleStaffBookingAction({
       from,
       message,
@@ -40035,7 +48219,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* V31.5.8.60.3.9.29 — Fast human assistance handoff */
-    else if (isHumanAssistanceIntentText(originalText || text)) {
+    else if (isHumanAssistanceIntentText(smartRoutingText)) {
       setConversationStatus(from, "Talk to Team");
       rememberSmartIntentContext(from, "human_help", originalText || text, replyLanguage);
       await saveConversationStateToGoogleSheetFromServer({
@@ -40044,23 +48228,180 @@ app.post("/webhook", async (req, res) => {
         branch: lineConfig.branch,
         status: "Talk to Team",
         assignee: getBranchTeamAssignee(lineConfig.branch),
-        tags: ["Human Support", "Bot Paused", "Smart Context"],
-        updatedBy: "Smart Context Human Handoff"
+        tags: [...new Set([
+          "Human Support",
+          "Bot Paused",
+          "Smart Context",
+          ...(smartLeadQualification?.enabled ? getSmartLeadInboxTags(smartLeadQualification) : [])
+        ])].slice(0, 10),
+        updatedBy: smartLeadQualification?.enabled ? SMART_LEAD_VERSION : "Smart Context Human Handoff"
       });
+      if (smartLeadQualification?.shouldWriteSummary) {
+        addInboxMessage(
+          from,
+          "system",
+          buildSmartLeadInternalSummary(smartLeadQualification),
+          "Talk to Team",
+          incomingPhoneNumberId,
+          { customerName: profileName, messageType: "Smart Lead Summary V6" }
+        );
+      }
 
       replyText = buildTeamHandoffBody(profileName);
       replyButtons = null;
     }
 
+    /* SMART UNDERSTANDING V1 — complaint safety handoff */
+    else if (smartUnderstanding?.primaryIntent === "complaint") {
+      setConversationStatus(from, "Talk to Team");
+      rememberSmartIntentContext(from, "complaint", originalText || text, replyLanguage);
+      await saveConversationStateToGoogleSheetFromServer({
+        phone: from,
+        phoneNumberId: incomingPhoneNumberId,
+        branch: lineConfig.branch,
+        status: "Talk to Team",
+        assignee: getBranchTeamAssignee(lineConfig.branch),
+        tags: ["Complaint", "Human Support", "Bot Paused", "Smart Understanding"],
+        updatedBy: SMART_UNDERSTANDING_VERSION
+      });
+
+      replyText = buildSmartComplaintHandoffBody(profileName, replyLanguage);
+      replyButtons = null;
+    }
+
+    /* LEAD QUALIFICATION & SMART HANDOFF V6 — qualified human escalation */
+    else if (smartLeadHandoffReply) {
+      setConversationStatus(from, "Talk to Team");
+      rememberSmartLeadHandoffReply(
+        from,
+        smartLeadHandoffReply,
+        originalText || text,
+        replyLanguage
+      );
+      await saveConversationStateToGoogleSheetFromServer({
+        phone: from,
+        phoneNumberId: incomingPhoneNumberId,
+        branch: lineConfig.branch,
+        status: "Talk to Team",
+        assignee: getBranchTeamAssignee(lineConfig.branch),
+        tags: getSmartLeadInboxTags(smartLeadQualification),
+        updatedBy: SMART_LEAD_VERSION
+      });
+      if (smartLeadQualification?.shouldWriteSummary) {
+        addInboxMessage(
+          from,
+          "system",
+          buildSmartLeadInternalSummary(smartLeadQualification),
+          "Talk to Team",
+          incomingPhoneNumberId,
+          { customerName: profileName, messageType: "Smart Lead Summary V6" }
+        );
+      }
+
+      replyText = smartLeadHandoffReply.body;
+      replyButtons = null;
+    }
+
+    /* CONVERSATION RECOVERY & CLARIFICATION STRATEGY V10 — contextual repair */
+    else if (smartRecoveryReply) {
+      setConversationStatus(from, smartRecoveryReply.status || "Conversation Recovery V10");
+      rememberSmartConversationRecoveryReply(
+        from,
+        smartRecoveryReply,
+        originalText || text,
+        replyLanguage
+      );
+
+      replyText = smartRecoveryReply.body;
+      replyButtons = smartRecoveryReply.buttons;
+    }
+
+    /* UNKNOWN / LOW CONFIDENCE V11 — capture and clarify without guessing */
+    else if (smartUnknownReply) {
+      setConversationStatus(from, smartUnknownReply.status || "Unknown / Low Confidence V11");
+      replyText = smartUnknownReply.body;
+      replyButtons = smartUnknownReply.buttons;
+    }
+
+    /* OBJECTIONS & SALES INTELLIGENCE V4 — safe concern handling */
+    else if (smartSalesReply) {
+      setConversationStatus(from, smartSalesReply.status || "Sales Objection V4");
+      rememberSmartSalesReply(
+        from,
+        smartSalesReply,
+        originalText || text,
+        replyLanguage
+      );
+
+      replyText = smartSalesReply.body;
+      replyButtons = smartSalesReply.buttons;
+    }
+
+    /* KNOWLEDGE COVERAGE & ANSWER PRECISION V8 — approved facts only */
+    else if (smartKnowledgeReply) {
+      setConversationStatus(from, smartKnowledgeReply.status || "Knowledge Answer V8");
+      rememberSmartKnowledgeReply(
+        from,
+        smartKnowledgeReply,
+        originalText || text,
+        replyLanguage
+      );
+
+      replyText = smartKnowledgeReply.body;
+      replyButtons = smartKnowledgeReply.buttons;
+    }
+
+    /* CONVERSATION STATE MACHINE & GOAL TRACKING V5 — progress and loop control */
+    else if (smartGoalReply) {
+      setConversationStatus(from, smartGoalReply.status || "Goal Tracking V5");
+      rememberSmartGoalTrackingReply(
+        from,
+        smartGoalReply,
+        originalText || text,
+        replyLanguage
+      );
+
+      replyText = smartGoalReply.body;
+      replyButtons = smartGoalReply.buttons;
+    }
+
+    /* SMART DECISION & REPLY COMPOSER V3 — context-aware composed reply */
+    else if (smartDecisionReply) {
+      setConversationStatus(from, smartDecisionReply.status || "Smart Decision V3");
+      rememberSmartDecisionReply(
+        from,
+        smartDecisionReply,
+        originalText || text,
+        replyLanguage
+      );
+
+      replyText = smartDecisionReply.body;
+      replyButtons = smartDecisionReply.buttons;
+    }
+
+    /* SMART UNDERSTANDING V1 — answer multiple questions in one message (fallback) */
+    else if (smartMultiIntentReply) {
+      setConversationStatus(from, smartMultiIntentReply.status);
+      rememberSmartIntentContext(
+        from,
+        smartMultiIntentReply.topic,
+        originalText || text,
+        replyLanguage
+      );
+
+      replyText = smartMultiIntentReply.body;
+      replyButtons = smartMultiIntentReply.buttons;
+    }
+
     /* ساعات العمل / الدوام */
-    else if (isWorkingHoursIntentText(originalText || text)) {
+    else if (isWorkingHoursIntentText(smartRoutingText)) {
       setConversationStatus(from, "Working Hours Requested");
       replyText = buildWorkingHoursBody(incomingPhoneNumberId, replyLanguage);
       replyButtons = getActionButtons();
     }
 
     /* زر الموقع الحقيقي — يرسل CTA URL يفتح Google Maps حسب الفرع تلقائياً */
-    else if (isLocationIntentText(originalText || text)) {
+    else if (isLocationIntentText(smartRoutingText)) {
       setConversationStatus(from, "Location Requested");
 
       const locationBody = buildLocationMessageBody(incomingPhoneNumberId);
@@ -40113,7 +48454,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* زر الاتصال الحقيقي — يرسل تمبلت فيه Call Now حسب الفرع تلقائياً */
-    else if (isCallIntentText(originalText || text)) {
+    else if (isCallIntentText(smartRoutingText)) {
       setConversationStatus(from, "Call Requested");
 
       const callTemplateName = getCallNowTemplateName(incomingPhoneNumberId);
@@ -40181,11 +48522,11 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* V31.5 — إرسال فيديو تلقائي عند طلب الصور أو الميديا */
-    else if (isAutoVideoRequestText(text) &&
-      !isPriceIntentText(originalText || text) &&
-      !isBookingIntentText(originalText || text) &&
-      !isLocationIntentText(originalText || text) &&
-      !isCallIntentText(originalText || text)
+    else if (isAutoVideoRequestText(smartRoutingText) &&
+      !isPriceIntentText(smartRoutingText) &&
+      !isBookingIntentText(smartRoutingText) &&
+      !isLocationIntentText(smartRoutingText) &&
+      !isCallIntentText(smartRoutingText)
     ) {
       setConversationStatus(from, "Media Requested");
 
@@ -40248,7 +48589,7 @@ app.post("/webhook", async (req, res) => {
 
     /* V31.5.8.52 — Booking menu */
     else if (
-      isBookingMenuText(originalText || text) ||
+      isBookingMenuText(smartRoutingText) ||
       text === "1" ||
       text === "١"
     ) {
@@ -40266,7 +48607,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* V31.5.8.52 — Service booking submenu */
-    else if (isServiceMenuText(originalText || text)) {
+    else if (isServiceMenuText(smartRoutingText)) {
       setConversationStatus(from, "Service Appointment");
 
       replyText = replyLanguage === "ar"
@@ -40284,6 +48625,30 @@ app.post("/webhook", async (req, res) => {
       replyButtons = getServiceSubMenuButtons();
     }
 
+    /* SMART CONVERSATION MEMORY V2 — persistent short follow-up router */
+    else if (getSmartMemoryAwareReply({
+      phone: from,
+      text: originalText || text,
+      customerName: profileName,
+      language: replyLanguage,
+      analysis: smartUnderstanding || {},
+      phoneNumberId: incomingPhoneNumberId
+    })) {
+      const smartMemoryReply = getSmartMemoryAwareReply({
+        phone: from,
+        text: originalText || text,
+        customerName: profileName,
+        language: replyLanguage,
+        analysis: smartUnderstanding || {},
+        phoneNumberId: incomingPhoneNumberId
+      });
+      setConversationStatus(from, smartMemoryReply.status || "Smart Memory Reply");
+      rememberSmartIntentContext(from, smartMemoryReply.topic || "smart_memory", originalText || text, replyLanguage);
+
+      replyText = smartMemoryReply.body;
+      replyButtons = smartMemoryReply.buttons || getSmartConsultTeamButtons();
+    }
+
     /* V31.5.8.60.3.9.29 — Smart context follow-up router */
     else if (getSmartContextAwareReply({ phone: from, text: originalText || text, customerName: profileName, language: replyLanguage })) {
       const smartContextReply = getSmartContextAwareReply({ phone: from, text: originalText || text, customerName: profileName, language: replyLanguage });
@@ -40295,7 +48660,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* V31.5.8.60.3.9.28 — Smart current-client/service intent */
-    else if (isCurrentClientServiceIntentText(originalText || text)) {
+    else if (isCurrentClientServiceIntentText(smartRoutingText)) {
       setConversationStatus(from, "Service Appointment");
       rememberSmartIntentContext(from, "service", originalText || text, replyLanguage);
 
@@ -40304,7 +48669,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* V31.5.8.60.3.9.29 — Women suitability question */
-    else if (isWomenSuitabilityIntentText(originalText || text)) {
+    else if (isWomenSuitabilityIntentText(smartRoutingText)) {
       setConversationStatus(from, "Women Suitability Question");
       rememberSmartIntentContext(from, "women", originalText || text, replyLanguage);
 
@@ -40313,7 +48678,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* V31.5.8.60.3.9.29 — Full baldness suitability question */
-    else if (isFullBaldSuitabilityIntentText(originalText || text)) {
+    else if (isFullBaldSuitabilityIntentText(smartRoutingText)) {
       setConversationStatus(from, "Full Baldness Question");
       rememberSmartIntentContext(from, "full_bald", originalText || text, replyLanguage);
 
@@ -40322,7 +48687,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* V31.5.8.60.3.9.28 — Expensive / price objection */
-    else if (isExpensiveObjectionIntentText(originalText || text)) {
+    else if (isExpensiveObjectionIntentText(smartRoutingText)) {
       setConversationStatus(from, "Price Objection");
       rememberSmartIntentContext(from, "expensive", originalText || text, replyLanguage);
 
@@ -40331,7 +48696,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* V31.5.8.60.3.9.28 — Density question */
-    else if (isDensityIntentText(originalText || text)) {
+    else if (isDensityIntentText(smartRoutingText)) {
       setConversationStatus(from, "Density Question");
       rememberSmartIntentContext(from, "density", originalText || text, replyLanguage);
 
@@ -40340,7 +48705,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* V31.5.8.60.3.9.28 — Hair type question */
-    else if (isHairTypeIntentText(originalText || text)) {
+    else if (isHairTypeIntentText(smartRoutingText)) {
       setConversationStatus(from, "Hair Type Question");
       rememberSmartIntentContext(from, "hair_type", originalText || text, replyLanguage);
 
@@ -40349,7 +48714,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* V31.5.8.60.3.9.28 — Duration / maintenance question */
-    else if (isDurationMaintenanceIntentText(originalText || text)) {
+    else if (isDurationMaintenanceIntentText(smartRoutingText)) {
       setConversationStatus(from, "Duration Maintenance Question");
       rememberSmartIntentContext(from, "duration_maintenance", originalText || text, replyLanguage);
 
@@ -40358,7 +48723,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* V31.5.8.60.3.9.28 — Warranty / guarantee question */
-    else if (isWarrantyIntentText(originalText || text)) {
+    else if (isWarrantyIntentText(smartRoutingText)) {
       setConversationStatus(from, "Warranty Question");
       rememberSmartIntentContext(from, "warranty", originalText || text, replyLanguage);
 
@@ -40367,10 +48732,10 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* 2 — الخدمات: بوابة ذكية أعمق */
-    else if (isServicesIntentText(originalText || text) &&
-      !isPriceIntentText(originalText || text) &&
-      !isNaturalLookIntentText(originalText || text) &&
-      !isConsultationIntentText(originalText || text)
+    else if (isServicesIntentText(smartRoutingText) &&
+      !isPriceIntentText(smartRoutingText) &&
+      !isNaturalLookIntentText(smartRoutingText) &&
+      !isConsultationIntentText(smartRoutingText)
     ) {
       setConversationStatus(from, "Service Interest");
 
@@ -40379,7 +48744,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* مظهر طبيعي */
-    else if (isNaturalLookIntentText(originalText || text)) {
+    else if (isNaturalLookIntentText(smartRoutingText)) {
       setConversationStatus(from, "Service Interest");
       rememberSmartIntentContext(from, "natural", originalText || text, replyLanguage);
 
@@ -40388,7 +48753,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* السعر */
-    else if (isPriceIntentText(originalText || text)) {
+    else if (isPriceIntentText(smartRoutingText)) {
       setConversationStatus(from, "Price Question");
       rememberSmartIntentContext(from, "price", originalText || text, replyLanguage);
 
@@ -40397,7 +48762,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* استشارة خاصة */
-    else if (isConsultationIntentText(originalText || text)) {
+    else if (isConsultationIntentText(smartRoutingText)) {
       setConversationStatus(from, "Consultation Request");
       rememberSmartIntentContext(from, "consultation", originalText || text, replyLanguage);
 
@@ -40407,13 +48772,13 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* 5 — الموقع وساعات العمل */
-    else if (isLocationIntentText(originalText || text)) {
+    else if (isLocationIntentText(smartRoutingText)) {
       replyText = buildLocationMessageBody(incomingPhoneNumberId);
       replyButtons = null;
     }
 
     /* 6 — التحدث مع موظف */
-    else if (isTalkToTeamText(originalText || text)) {
+    else if (isTalkToTeamText(smartRoutingText)) {
       setConversationStatus(from, "Talk to Team");
       await saveConversationStateToGoogleSheetFromServer({
         phone: from,
@@ -40430,9 +48795,16 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* V31.5.8.60.3.9.28 — unclear/help clarification */
-    else if (isUnclearHelpIntentText(originalText || text)) {
+    else if (isUnclearHelpIntentText(smartRoutingText)) {
       setConversationStatus(from, "Needs Clarification");
 
+      replyText = buildClarifyingIntentBody(profileName, replyLanguage);
+      replyButtons = getClarifyingIntentButtons();
+    }
+
+    /* SMART UNDERSTANDING V1 — do not guess on an unknown full sentence */
+    else if (shouldUseSmartLowConfidenceClarification(smartUnderstanding, message?.type || "")) {
+      setConversationStatus(from, "Needs Clarification");
       replyText = buildClarifyingIntentBody(profileName, replyLanguage);
       replyButtons = getClarifyingIntentButtons();
     }
@@ -40445,10 +48817,34 @@ app.post("/webhook", async (req, res) => {
     }
 
     /* إرسال الرد للعميل */
-    const localizedReplyText = cleanLocalizedReplyBody(replyText, replyLanguage);
-    const localizedReplyButtons = localizeReplyButtons(replyButtons || [], replyLanguage);
+    let localizedReplyText = cleanLocalizedReplyBody(replyText, replyLanguage);
+    let localizedReplyButtons = localizeReplyButtons(replyButtons || [], replyLanguage);
+    const naturalReplySource = smartLeadHandoffReply || smartRecoveryReply || smartUnknownReply || smartSalesReply || smartKnowledgeReply || smartGoalReply || smartDecisionReply || smartMultiIntentReply || {};
+    const naturalConversationReply = finalizeNaturalConversationReply({
+      phone: from,
+      customerText: originalText || text,
+      body: localizedReplyText,
+      buttons: localizedReplyButtons,
+      status: conversationStatus[from] || naturalReplySource.status || "Bot",
+      topic: naturalReplySource.topic || (getSmartConversationMemory(from)?.topic || ""),
+      action: naturalReplySource.decision || naturalReplySource.nextAction || naturalReplySource.action || "",
+      pendingQuestion: naturalReplySource.pendingQuestion || getSmartConversationMemory(from)?.pendingQuestion || "",
+      customerName: profileName,
+      language: replyLanguage
+    });
+    localizedReplyText = naturalConversationReply.body;
+    localizedReplyButtons = naturalConversationReply.buttons;
 
-    if (replyButtons && replyButtons.length > 0) {
+    console.log("[Natural Conversation V7]", JSON.stringify({
+      version: naturalConversationReply.version,
+      changed: naturalConversationReply.changed,
+      reason: naturalConversationReply.reason,
+      similarity: naturalConversationReply.similarity,
+      topic: naturalConversationReply.topic,
+      pendingQuestion: naturalConversationReply.pendingQuestion
+    }));
+
+    if (localizedReplyButtons && localizedReplyButtons.length > 0) {
       await sendWhatsAppButtonMessage(from, localizedReplyText, localizedReplyButtons, incomingPhoneNumberId, {
         ...(replyOptions || {}),
         replyLanguage,
@@ -40459,6 +48855,8 @@ app.post("/webhook", async (req, res) => {
       await sendWhatsAppMessage(from, localizedReplyText, incomingPhoneNumberId);
       addInboxMessage(from, "bot", localizedReplyText, conversationStatus[from] || "Bot", incomingPhoneNumberId, { customerName: profileName, messageType: "Bot Reply" });
     }
+
+    rememberNaturalConversationReply(from, naturalConversationReply, profileName);
 
     if (sendReminderOptInPrompt) {
       const reminderOptInBody = cleanLocalizedReplyBody(buildReminderOptInBody(), replyLanguage);
