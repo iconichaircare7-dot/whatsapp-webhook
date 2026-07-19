@@ -83,7 +83,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-303-ai-isolated-v1";
+const BOT_VERSION = "iconic-team-inbox-303-ai-isolated-v2-shared-sheet-filtered";
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -705,6 +705,28 @@ function isInboxBranchAllowed(access = {}, branch = "", phoneNumberId = "") {
 
 function isInboxRequestAllowedForLine(req, phoneNumberId = "", branch = "") {
   return isInboxBranchAllowed(req?.inboxAccess || {}, branch, normalizePhoneNumberId(phoneNumberId || ""));
+}
+
+// 303 isolated service may intentionally share the same Google Sheet used by
+// Dubai and Abu Dhabi. Only expose rows that genuinely belong to the 303 line.
+// This prevents old 02/04 conversations from being returned by the 303 API and
+// then appearing under the "303 AI" filter in the unified Team Inbox.
+function isAi303InboxRecord(record = {}) {
+  const phoneNumberId = normalizePhoneNumberId(record?.phoneNumberId || "");
+  const branch = normalizeInboxBranchName(record?.branch || "");
+
+  return (
+    phoneNumberId === normalizePhoneNumberId(AI_303_PHONE_NUMBER_ID) ||
+    branch === AI_303_BRANCH_NAME
+  );
+}
+
+function filterAi303InboxPayload(messages = [], conversationStates = [], bookingRequests = []) {
+  return {
+    messages: (messages || []).filter(isAi303InboxRecord),
+    conversationStates: (conversationStates || []).filter(isAi303InboxRecord),
+    bookingRequests: (bookingRequests || []).filter(isAi303InboxRecord)
+  };
 }
 
 function filterInboxPayloadByBranchAccess(messages = [], conversationStates = [], bookingRequests = [], access = {}) {
@@ -9833,11 +9855,21 @@ function filterArchivedInboxPayload(messages = [], conversationStates = [], book
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
   const sheetData = await loadMessagesFromGoogleSheetForMessagesApi();
-  const sheetMessages = sheetData.messages || [];
-  const memoryMessages = inboxMessages || [];
-  const conversationStates = sheetData.conversationStates || [];
-  const bookingRequests = sheetData.bookingRequests || [];
-  const mergedMessages = mergeInboxHistory(sheetMessages, memoryMessages);
+  const rawSheetMessages = sheetData.messages || [];
+  const rawMemoryMessages = inboxMessages || [];
+  const rawConversationStates = sheetData.conversationStates || [];
+  const rawBookingRequests = sheetData.bookingRequests || [];
+  const rawMergedMessages = mergeInboxHistory(rawSheetMessages, rawMemoryMessages);
+  const ai303OnlyPayload = filterAi303InboxPayload(
+    rawMergedMessages,
+    rawConversationStates,
+    rawBookingRequests
+  );
+  const sheetMessages = rawSheetMessages.filter(isAi303InboxRecord);
+  const memoryMessages = rawMemoryMessages.filter(isAi303InboxRecord);
+  const mergedMessages = ai303OnlyPayload.messages;
+  const conversationStates = ai303OnlyPayload.conversationStates;
+  const bookingRequests = ai303OnlyPayload.bookingRequests;
   const branchFilteredPayload = filterInboxPayloadByBranchAccess(
     mergedMessages,
     conversationStates,
@@ -9869,7 +9901,10 @@ function filterArchivedInboxPayload(messages = [], conversationStates = [], book
     bookingRequests: archiveFilteredPayload.bookingRequests,
     debug: {
       botVersion: BOT_VERSION,
+      rawSheetMessagesCount: rawSheetMessages.length,
+      filteredOutNon303SheetMessagesCount: Math.max(0, rawSheetMessages.length - sheetMessages.length),
       sheetMessagesCount: sheetMessages.length,
+      rawMemoryMessagesCount: rawMemoryMessages.length,
       memoryMessagesCount: memoryMessages.length,
       returnedMessagesCount: archiveFilteredPayload.messages.length,
       unfilteredMessagesCount: mergedMessages.length,
