@@ -119,8 +119,8 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-303-ai-real-customer-routing-v15";
-const REAL_CUSTOMER_ROUTER_VERSION = "real-customer-routing-priority-v15";
+const BOT_VERSION = "iconic-team-inbox-303-ai-reply-logic-v15-3";
+const REAL_CUSTOMER_ROUTER_VERSION = "real-customer-reply-logic-v15-3";
 const REAL_CUSTOMER_ROUTER_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.REAL_CUSTOMER_ROUTER_ENABLED || "true").toString().trim().toLowerCase()
 );
@@ -12268,23 +12268,81 @@ function isAppointmentRescheduleIntentV15(text = "") {
   ]);
 }
 
+function isExplicitPriceRejectionV15(text = "") {
+  const value = compactText(text);
+  if (!value) return false;
+
+  return hasAnyIntentPhrase(value, [
+    "too expensive no thanks", "too expensive for me", "i cannot afford", "i can't afford",
+    "not interested because of price", "no thank you too expensive", "i will not continue",
+    "غالي ما بدي", "غالي ما بدي أكمل", "غالي ما بدي اكمل", "ما بناسبني السعر",
+    "السعر ما بناسبني", "ما بقدر ادفع", "ما بقدر أدفع", "ما معي ميزانية",
+    "مو مهتم بسبب السعر", "مش مهتم بسبب السعر", "خلاص ما بدي"
+  ]);
+}
+
+function isInstallationProcessIntentV15(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "how is it installed", "how do you install", "installation process", "fitting process",
+    "how is the patch fitted", "how do you fit it", "replacement process", "change process",
+    "كيف التركيب", "كيف يتم التركيب", "كيف بتركب", "كيف يتركب", "طريقة التركيب",
+    "عملية التركيب", "كيف عملية التغيير", "كيف التغيير", "كيف تثبتوه", "كيف تثبيته"
+  ]);
+}
+
+function isLocationQuestionV15(text = "") {
+  return isLocationIntentText(text) || hasAnyIntentPhrase(text, [
+    "send location", "send me location", "office location", "ur office location",
+    "wer is", "wher is", "where's your office", "where is your office",
+    "فين العنوان", "وين العنوان", "ارسل الموقع", "أرسل الموقع", "ابعث اللوكيشن"
+  ]);
+}
+
+function isVisitAppointmentRequestV15(text = "", memory = {}) {
+  const value = compactText(text);
+  if (!value) return false;
+
+  const visitLanguage = hasAnyIntentPhrase(value, [
+    "can i come", "can i visit", "may i come", "i will come", "i'll come",
+    "visit today", "visit tomorrow", "come today", "come tomorrow", "before 7 i'll come",
+    "ممكن اجي", "ممكن أجي", "بقدر اجي", "بقدر أجي", "ابغى اجي", "أبغى أجي",
+    "بدي اجي", "بدي أجي", "رح اجي", "رح أجي", "بجي اليوم", "بجي بكرا"
+  ]);
+  if (visitLanguage) return true;
+
+  const hasDay = Boolean(detectSmartBookingExplicitWeekday(value) || detectSmartBookingDay(value));
+  const hasTime = Boolean(getSmartBookingTimeFromText(value)?.ok);
+  const hasStaff = Boolean(detectSmartBookingStaff(value));
+  const inBookingContext = ["booking", "booking_choice", "reschedule_appointment"].includes(
+    (memory?.topic || memory?.lastIntent || "").toString()
+  );
+
+  return Boolean((hasDay || hasTime) && (hasStaff || inBookingContext));
+}
+
 function getCurrentTurnCoreIntentV15(text = "", analysis = {}, memory = {}) {
   const value = compactText(text);
   if (!value) return "";
-
-  if (isAppointmentCancelIntentV15(value)) return "cancel_appointment";
-  if (isAppointmentRescheduleIntentV15(value)) return "reschedule_appointment";
-  if (isConsultationFeeQuestionV15(value, memory)) return "consultation_fee";
-  if (isExpensiveObjectionIntentText(value)) return "price_objection";
-  if (isPriceIntentText(value)) return "price";
 
   const directConsultationBooking = isDirectConsultationChatBookingText(value);
   const consultationVisitRequest = isConsultationIntentText(value) && hasAnyIntentPhrase(value, [
     "can i visit", "can i come", "visit today", "come today", "visit tomorrow",
     "موعد استشارة", "ممكن اجي", "ممكن أجي", "بقدر اجي", "بقدر أجي"
   ]);
-  if (directConsultationBooking || consultationVisitRequest || isBookingIntentText(value)) return "booking";
-  if (isLocationIntentText(value)) return "location";
+  const bookingSignal = directConsultationBooking || consultationVisitRequest ||
+    isVisitAppointmentRequestV15(value, memory) || isBookingIntentText(value);
+
+  if (isAppointmentCancelIntentV15(value)) return "cancel_appointment";
+  if (isAppointmentRescheduleIntentV15(value)) return "reschedule_appointment";
+  if (isConsultationFeeQuestionV15(value, memory) && bookingSignal) return "booking";
+  if (isConsultationFeeQuestionV15(value, memory)) return "consultation_fee";
+  if (isExplicitPriceRejectionV15(value)) return "price_rejection";
+  if (isExpensiveObjectionIntentText(value)) return "price_objection";
+  if (isPriceIntentText(value)) return "price";
+
+  if (bookingSignal) return "booking";
+  if (isLocationQuestionV15(value)) return "location";
+  if (isInstallationProcessIntentV15(value)) return "installation_process";
   if (isHairTypeIntentText(value)) return "hair_type";
   if (isDurationMaintenanceIntentText(value)) return "duration_maintenance";
   if (isWarrantyIntentText(value)) return "warranty";
@@ -12293,6 +12351,15 @@ function getCurrentTurnCoreIntentV15(text = "", analysis = {}, memory = {}) {
 
   return (analysis?.primaryIntent || "").toString();
 }
+
+/* V15.3 draft prefix: used for combined messages such as
+   "Book consultation — is it free?" without sending two separate bot replies. */
+function consumeV15DraftReplyPrefix(draft = {}, body = "") {
+  const prefix = (draft.replyPrefix || "").toString().trim();
+  if (prefix) delete draft.replyPrefix;
+  return prefix ? `${prefix}\n\n${body}` : body;
+}
+
 
 function isRecentPriceShownV15(memory = {}) {
   const shownAt = Number(memory?.priceShownAt || 0);
@@ -12350,7 +12417,9 @@ async function markPostPriceLeadPriorityV15({ phone = "", phoneNumberId = "", li
 
   if (intent === "price" || !intent) return { changed: false, memory: previous };
 
-  if (intent === "price_objection") {
+  // A clear rejection is low priority. A question or concern about value is still
+  // active interest and must remain high priority after the customer saw AED 2300.
+  if (intent === "price_rejection") {
     const next = rememberSmartMemoryObject(phone, {
       ...previous,
       priceAccepted: "no",
@@ -12360,7 +12429,8 @@ async function markPostPriceLeadPriorityV15({ phone = "", phoneNumberId = "", li
       leadGrade: "cold",
       qualificationStatus: "partial",
       handoffMode: "continue_bot",
-      handoffReason: "price_objection_after_price_shown",
+      handoffReason: "explicit_price_rejection_after_price_shown",
+      objection: "price_rejection",
       updatedAt: Date.now()
     });
     scheduleSmartMemoryPersistence(phone);
@@ -12368,13 +12438,15 @@ async function markPostPriceLeadPriorityV15({ phone = "", phoneNumberId = "", li
   }
 
   const highIntent = new Set([
-    "booking", "location", "consultation_fee", "hair_type", "duration_maintenance",
-    "warranty", "natural", "density", "services", "call", "working_hours"
+    "price_objection", "booking", "location", "consultation_fee", "installation_process",
+    "hair_type", "duration_maintenance", "warranty", "natural", "density", "services",
+    "call", "working_hours"
   ]);
   if (!highIntent.has(intent)) return { changed: false, memory: previous };
 
   const firstPromotion = previous.leadPriority !== "high" || previous.priceAccepted !== "yes";
   const now = Date.now();
+  const hasPriceConcern = intent === "price_objection";
   const next = rememberSmartMemoryObject(phone, {
     ...previous,
     priceAccepted: "yes",
@@ -12384,7 +12456,10 @@ async function markPostPriceLeadPriorityV15({ phone = "", phoneNumberId = "", li
     leadGrade: "priority",
     qualificationStatus: "qualified",
     handoffMode: "priority_queue",
-    handoffReason: "continued_with_clear_interest_after_price_shown",
+    handoffReason: hasPriceConcern
+      ? "continued_with_price_concern_after_price_shown"
+      : "continued_with_clear_interest_after_price_shown",
+    objection: hasPriceConcern ? "price_concern" : (previous.objection || ""),
     leadQualifiedAt: Number(previous.leadQualifiedAt || now),
     leadUpdatedAt: now,
     updatedAt: now
@@ -12393,7 +12468,12 @@ async function markPostPriceLeadPriorityV15({ phone = "", phoneNumberId = "", li
 
   if (firstPromotion) {
     const desiredBranch = normalizeInboxBranchName(next.branch || "");
-    const tags = ["Price Shown", "Price Accepted", "High Priority Lead", desiredBranch].filter(Boolean);
+    const tags = [
+      "Price Shown",
+      hasPriceConcern ? "Price Concern" : "Price Accepted",
+      "High Priority Lead",
+      desiredBranch
+    ].filter(Boolean);
     await saveConversationStateToGoogleSheetFromServer({
       phone,
       phoneNumberId,
@@ -12404,20 +12484,7 @@ async function markPostPriceLeadPriorityV15({ phone = "", phoneNumberId = "", li
       updatedBy: REAL_CUSTOMER_ROUTER_VERSION
     });
 
-    addInboxMessage(
-      phone,
-      "system",
-      [
-        "POST-PRICE PRIORITY V15",
-        `Customer continued after seeing AED ${ICONIC_STARTING_PRICE_AED}.`,
-        `Current intent: ${intent}`,
-        desiredBranch ? `Preferred branch: ${desiredBranch}` : "Preferred branch: Not confirmed",
-        "Recommended action: reply with high priority."
-      ].join("\n"),
-      "High Priority Lead",
-      phoneNumberId,
-      { customerName, messageType: "Post-Price Priority V15" }
-    );
+    // Keep qualification internal. Never insert an internal scoring card into chat.
   }
 
   return { changed: firstPromotion, memory: next };
@@ -12444,14 +12511,56 @@ function buildLocationTextV15(branch = "", language = "en") {
 
 function buildConsultationFeeBodyV15(language = "en") {
   return language === "ar"
-    ? "الاستشارة الأولية مجانية ✅\n\nخلالها يحدد الفريق الخيار الأنسب لحالتك ويشرح لك التفاصيل بوضوح."
-    : "The initial consultation is free ✅\n\nDuring it, the team will identify the most suitable option for your case and explain the details clearly.";
+    ? "الاستشارة الأولية مجانية ✅\n\nخلالها يقيّم الفريق حالتك ويشرح لك الخيار المناسب والتكلفة النهائية بوضوح."
+    : "The initial consultation is free ✅\n\nDuring it, the team assesses your case and explains the suitable option and final cost clearly.";
+}
+
+function buildStartingPriceBodyV15(language = "en") {
+  return language === "ar"
+    ? [
+        `الأسعار تبدأ من ${ICONIC_STARTING_PRICE_AED} درهم.`,
+        "",
+        "السعر يشمل نظام الشعر مع القص والتنسيق الأولي، وقد يختلف السعر النهائي حسب نوع النظام ومساحة التغطية."
+      ].join("\n")
+    : [
+        `Prices start from AED ${ICONIC_STARTING_PRICE_AED}.`,
+        "",
+        "The price includes the hair system with the initial cut and styling. The final price may vary by system type and coverage area."
+      ].join("\n");
+}
+
+function buildPriceAndHairTypeBodyV15(language = "en") {
+  return language === "ar"
+    ? [
+        `الأسعار تبدأ من ${ICONIC_STARTING_PRICE_AED} درهم، ونستخدم شعرًا طبيعيًا.`,
+        "",
+        "السعر يشمل نظام الشعر مع القص والتنسيق الأولي، ويختلف السعر النهائي حسب النوع ومساحة التغطية."
+      ].join("\n")
+    : [
+        `Prices start from AED ${ICONIC_STARTING_PRICE_AED}, and we use natural human hair.`,
+        "",
+        "The price includes the hair system with the initial cut and styling. The final price varies by system type and coverage area."
+      ].join("\n");
 }
 
 function buildPriceObjectionBodyV15(language = "en") {
   return language === "ar"
-    ? `أتفهمك. الأسعار تبدأ من ${ICONIC_STARTING_PRICE_AED} درهم، والسعر النهائي يعتمد على نوع النظام والحالة والخدمة المطلوبة. ما رح أضغط عليك؛ خذ وقتك، وإذا حبيت نوضح لك الخيارات المناسبة لحالتك.`
-    : `I understand. Prices start from AED ${ICONIC_STARTING_PRICE_AED}, and the final price depends on the system type, the case, and the required service. There is no pressure; take your time, and we can explain the suitable options whenever you are ready.`;
+    ? [
+        `لأن السعر يبدأ من ${ICONIC_STARTING_PRICE_AED} درهم لنظام شعر مخصص، وليس قطعة جاهزة موحّدة.`,
+        "",
+        "يتم اختيار اللون والكثافة والمقاس حسب حالتك، ويشمل النظام القص والتنسيق الأولي حتى تكون النتيجة طبيعية ومناسبة لك."
+      ].join("\n")
+    : [
+        `The price starts from AED ${ICONIC_STARTING_PRICE_AED} because it is a customized hair system, not a one-size-fits-all ready piece.`,
+        "",
+        "The color, density, and size are selected for your case, and the system includes the initial cut and styling for a natural result."
+      ].join("\n");
+}
+
+function buildExplicitPriceRejectionBodyV15(language = "en") {
+  return language === "ar"
+    ? "تمام، أتفهمك. تم تسجيل أن السعر غير مناسب حاليًا، وإذا تغيّر قرارك نحن موجودون لخدمتك."
+    : "Understood. We have noted that the price is not suitable for you at the moment. We will be here if you change your mind.";
 }
 
 function buildAppointmentCancelBodyV15(language = "en") {
@@ -12468,14 +12577,57 @@ function buildAppointmentRescheduleBodyV15(language = "en") {
 
 function buildHairTypeBodyV15(language = "en") {
   return language === "ar"
-    ? "نعم، أنظمة الشعر متوفرة بشعر طبيعي. النوع المناسب، اللون، والكثافة يحددهم المختص حسب حالتك والنتيجة التي تريدها."
-    : "Yes, the hair systems are available with natural human hair. The suitable type, color, and density are selected by the specialist based on your case and the result you want.";
+    ? "نعم، نستخدم شعرًا طبيعيًا. يتم اختيار اللون والكثافة ونوع النظام بما يناسب شعرك وشكل الوجه حتى تكون النتيجة طبيعية."
+    : "Yes, we use natural human hair. The color, density, and system type are selected to match your hair and face shape for a natural result.";
+}
+
+function buildInstallationProcessBodyV15(language = "en") {
+  return language === "ar"
+    ? [
+        "تبدأ العملية بتقييم مساحة التغطية واختيار اللون والكثافة المناسبة.",
+        "",
+        "بعدها يتم تجهيز النظام وتثبيته بطريقة مناسبة للحالة، ثم قصّه وتنسيقه ليظهر بشكل طبيعي. العملية غير جراحية."
+      ].join("\n")
+    : [
+        "The process starts by assessing the coverage area and selecting the suitable color and density.",
+        "",
+        "The system is then prepared, fitted using the appropriate method, cut, and styled for a natural result. The procedure is non-surgical."
+      ].join("\n");
 }
 
 function buildDurationBodyV15(language = "en") {
   return language === "ar"
-    ? "مدة الاستخدام والصيانة تختلف حسب نوع النظام، طريقة العناية، التعرّق، ونمط الاستخدام. الفريق يحدد لك الجدول المناسب حسب النظام الذي تختاره."
-    : "Usage duration and maintenance vary by system type, care routine, sweating, and daily use. The team will explain the suitable schedule for the system you choose.";
+    ? "مدة الاستخدام ومواعيد الصيانة تختلف حسب نوع النظام، العناية، التعرّق، ونمط الاستخدام. بعد اختيار النظام يشرح لك الفريق المدة وجدول الصيانة المناسبين بدقة."
+    : "Usage duration and maintenance timing vary by system type, care routine, sweating, and daily use. Once the system is selected, the team will explain the suitable duration and maintenance schedule clearly.";
+}
+
+function buildNaturalBodyV15(language = "en") {
+  return language === "ar"
+    ? "نعم، الهدف أن تكون النتيجة طبيعية وغير واضحة. يتم ضبط خط الشعر واللون والكثافة بما يناسب شكل الوجه والشعر الموجود."
+    : "Yes. The goal is a natural, undetectable result. The hairline, color, and density are adjusted to suit your face shape and existing hair.";
+}
+
+function buildDensityBodyV15(language = "en") {
+  return language === "ar"
+    ? "الكثافة تُختار حسب مساحة التغطية، شكل الوجه، والشعر الموجود حتى لا تبدو النتيجة ثقيلة أو غير طبيعية."
+    : "Density is selected based on the coverage area, face shape, and existing hair so the result does not look too heavy or unnatural.";
+}
+
+function buildWarrantyBodyV15(language = "en") {
+  return language === "ar"
+    ? "تفاصيل الضمان تختلف حسب نوع النظام وطريقة الاستخدام والعناية. يوضح لك الفريق الشروط المعتمدة بوضوح قبل الشراء."
+    : "Warranty details vary by system type, use, and care. The team will clearly explain the applicable terms before purchase.";
+}
+
+function buildConsultationAndLocationBodyV15(branch = "", language = "en") {
+  const cleanBranch = normalizeInboxBranchName(branch || "");
+  if (cleanBranch === "Dubai" || cleanBranch === "Abu Dhabi") {
+    return [buildConsultationFeeBodyV15(language), "", buildLocationTextV15(cleanBranch, language)].join("\n");
+  }
+
+  return language === "ar"
+    ? "الاستشارة الأولية مجانية ✅\n\nعندنا فرعان في دبي وأبوظبي. أي فرع يناسبك؟"
+    : "The initial consultation is free ✅\n\nWe have branches in Dubai and Abu Dhabi. Which branch suits you?";
 }
 
 async function sendRealCustomerCoreReplyV15({
@@ -12533,9 +12685,15 @@ async function continueV15ConsultationBooking({ from = "", draft = {}, input = "
       from, message, input, profileName, phoneNumberId,
       status: "Smart Booking - Choose Branch",
       messageType: "V15 Consultation Branch Choice",
-      body: replyLanguage === "ar"
-        ? "أكيد. أي فرع يناسبك للاستشارة: دبي أو أبوظبي؟"
-        : "Sure. Which branch suits you for the consultation: Dubai or Abu Dhabi?",
+      body: consumeV15DraftReplyPrefix(draft,
+        draft.requestType === "Service Appointment"
+          ? (replyLanguage === "ar"
+              ? "أكيد. أي فرع يناسبك لموعد الصيانة: دبي أو أبوظبي؟"
+              : "Sure. Which branch suits you for the service appointment: Dubai or Abu Dhabi?")
+          : (replyLanguage === "ar"
+              ? "أكيد. أي فرع يناسبك للاستشارة: دبي أو أبوظبي؟"
+              : "Sure. Which branch suits you for the consultation: Dubai or Abu Dhabi?")
+      ),
       buttons: getBookingBranchChoiceButtonsV15(replyLanguage),
       replyLanguage
     });
@@ -12549,7 +12707,7 @@ async function continueV15ConsultationBooking({ from = "", draft = {}, input = "
   });
 
   if (!draft.preferredDay) {
-    const body = buildSmartBookingAskDayBody(draft, profileName, replyLanguage);
+    const body = consumeV15DraftReplyPrefix(draft, buildSmartBookingAskDayBody(draft, profileName, replyLanguage));
     const buttons = getSmartBookingWeekdayButtons(replyLanguage);
     return sendRealCustomerCoreReplyV15({
       from, message, input, profileName, phoneNumberId,
@@ -12565,7 +12723,7 @@ async function continueV15ConsultationBooking({ from = "", draft = {}, input = "
       from, message, input, profileName, phoneNumberId,
       status: "Smart Booking - Choose Weekday",
       messageType: "V15 Consultation Weekday Choice",
-      body: buildSmartBookingAskWeekdayBody(draft, profileName, replyLanguage),
+      body: consumeV15DraftReplyPrefix(draft, buildSmartBookingAskWeekdayBody(draft, profileName, replyLanguage)),
       replyLanguage
     });
   }
@@ -12576,7 +12734,7 @@ async function continueV15ConsultationBooking({ from = "", draft = {}, input = "
       from, message, input, profileName, phoneNumberId,
       status: "Smart Booking - Choose Time",
       messageType: "V15 Consultation Time Choice",
-      body: buildSmartBookingAskTimeBody(draft, profileName, replyLanguage),
+      body: consumeV15DraftReplyPrefix(draft, buildSmartBookingAskTimeBody(draft, profileName, replyLanguage)),
       replyLanguage
     });
   }
@@ -12586,7 +12744,7 @@ async function continueV15ConsultationBooking({ from = "", draft = {}, input = "
     from, message, input, profileName, phoneNumberId,
     status: "Availability Question",
     messageType: "V15 Consultation Request Review",
-    body: buildSmartAvailabilityConfirmBody(draft, profileName, replyLanguage),
+    body: consumeV15DraftReplyPrefix(draft, buildSmartAvailabilityConfirmBody(draft, profileName, replyLanguage)),
     buttons: getAvailabilityConfirmButtons(replyLanguage),
     replyLanguage
   });
@@ -12605,29 +12763,110 @@ async function handleRealCustomerCoreIntentV15({
   const selectedBranch = getExplicitBranchFromTextV15(input);
   const existingDraft = smartBookingDrafts[from] || null;
 
-  // Continue the V15 consultation branch choice before interpreting "Dubai" or
-  // "Abu Dhabi" as a standalone location request.
-  if (existingDraft?.waitingForBranch) {
-    if (!selectedBranch) {
-      return sendRealCustomerCoreReplyV15({
-        from, message, input, profileName, phoneNumberId: incomingPhoneNumberId,
-        status: "Smart Booking - Choose Branch",
-        messageType: "V15 Consultation Branch Retry",
-        body: replyLanguage === "ar" ? "اختر دبي أو أبوظبي لإكمال طلب الاستشارة." : "Choose Dubai or Abu Dhabi to continue the consultation request.",
-        buttons: getBookingBranchChoiceButtonsV15(replyLanguage),
-        replyLanguage
-      });
-    }
+  // A pending booking must not hijack a new clear customer question. Continue the
+  // draft only for a valid answer to the pending booking step. Otherwise suspend it
+  // and answer the customer's current topic.
+  if (existingDraft) {
+    const clearNonBookingTopic =
+      isPriceIntentText(input) ||
+      isExpensiveObjectionIntentText(input) ||
+      isExplicitPriceRejectionV15(input) ||
+      isLocationQuestionV15(input) ||
+      isConsultationFeeQuestionV15(input, previousMemory) ||
+      isInstallationProcessIntentV15(input) ||
+      isHairTypeIntentText(input) ||
+      isDurationMaintenanceIntentText(input) ||
+      isWarrantyIntentText(input) ||
+      isNaturalLookIntentText(input) ||
+      isDensityIntentText(input) ||
+      isAppointmentCancelIntentV15(input) ||
+      isAppointmentRescheduleIntentV15(input);
 
-    existingDraft.branch = selectedBranch;
-    existingDraft.waitingForBranch = false;
-    return continueV15ConsultationBooking({
-      from,
-      draft: existingDraft,
-      input,
-      message,
-      profileName,
+    if (existingDraft.waitingForBranch) {
+      if (selectedBranch) {
+        existingDraft.branch = selectedBranch;
+        existingDraft.waitingForBranch = false;
+        return continueV15ConsultationBooking({
+          from,
+          draft: existingDraft,
+          input,
+          message,
+          profileName,
+          phoneNumberId: incomingPhoneNumberId,
+          replyLanguage
+        });
+      }
+
+      if (!clearNonBookingTopic) {
+        return sendRealCustomerCoreReplyV15({
+          from, message, input, profileName, phoneNumberId: incomingPhoneNumberId,
+          status: "Smart Booking - Choose Branch",
+          messageType: "V15 Consultation Branch Retry",
+          body: existingDraft.requestType === "Service Appointment"
+            ? (replyLanguage === "ar" ? "اختر دبي أو أبوظبي لإكمال طلب الصيانة." : "Choose Dubai or Abu Dhabi to continue the service request.")
+            : (replyLanguage === "ar" ? "اختر دبي أو أبوظبي لإكمال طلب الاستشارة." : "Choose Dubai or Abu Dhabi to continue the consultation request."),
+          buttons: getBookingBranchChoiceButtonsV15(replyLanguage),
+          replyLanguage
+        });
+      }
+
+      delete smartBookingDrafts[from];
+    } else if (clearNonBookingTopic) {
+      delete smartBookingDrafts[from];
+    } else {
+      // Let the stable booking router handle time/day/confirmation replies for the
+      // existing draft rather than creating a second competing draft.
+      return false;
+    }
+  }
+
+  const asksLocationV15 = isLocationQuestionV15(input);
+  const asksConsultationFeeV15 = isConsultationFeeQuestionV15(input, previousMemory);
+  const asksPriceV15 = isPriceIntentText(input);
+  const asksHairTypeV15 = isHairTypeIntentText(input);
+
+  // Handle common real multi-question messages in one reply, without creating two
+  // bot messages or losing the second question.
+  if (asksConsultationFeeV15 && asksLocationV15) {
+    const branch = selectedBranch || "";
+    await markPostPriceLeadPriorityV15({
+      phone: from,
       phoneNumberId: incomingPhoneNumberId,
+      lineConfig,
+      intent: "location",
+      customerName: profileName
+    });
+    rememberCurrentTopicV15(from, "location", input, replyLanguage, {
+      branch,
+      pendingQuestion: branch ? "" : "branch",
+      priceAsked: false,
+      bookingReadiness: ""
+    });
+    return sendRealCustomerCoreReplyV15({
+      from, message, input, profileName, phoneNumberId: incomingPhoneNumberId,
+      status: "Consultation and Location Information",
+      messageType: "V15 Consultation Fee + Location",
+      body: buildConsultationAndLocationBodyV15(branch, replyLanguage),
+      buttons: branch ? null : getBranchChoiceButtons(replyLanguage),
+      replyLanguage
+    });
+  }
+
+  if (asksPriceV15 && asksHairTypeV15) {
+    rememberCurrentTopicV15(from, "price", input, replyLanguage, {
+      priceAsked: true,
+      priceShownAt: Date.now(),
+      priceAccepted: "unknown",
+      postPriceEngaged: false,
+      leadPriority: "medium",
+      pendingQuestion: "",
+      bookingReadiness: ""
+    });
+    return sendRealCustomerCoreReplyV15({
+      from, message, input, profileName, phoneNumberId: incomingPhoneNumberId,
+      status: "Price Shown",
+      messageType: "V15 Price + Hair Type",
+      body: buildPriceAndHairTypeBodyV15(replyLanguage),
       replyLanguage
     });
   }
@@ -12642,9 +12881,10 @@ async function handleRealCustomerCoreIntentV15({
   });
 
   if (intent === "booking") {
-    const directConsultation = isDirectConsultationChatBookingText(input) || compactText(input) === "consult_menu";
-    if (!directConsultation) return false;
-
+    const isServiceAppointment = isCurrentClientServiceIntentText(input) || hasAnyIntentPhrase(input, [
+      "for service", "service appointment", "maintenance appointment", "for maintenance",
+      "موعد صيانة", "موعد سيرفس", "بدي سيرفس", "للصيانة", "للسيرفس"
+    ]);
     const detectedDay = detectSmartBookingExplicitWeekday(input) || getSmartBookingDayFromButton(input) || detectSmartBookingDay(input);
     const inputTime = getSmartBookingTimeFromText(input);
     const memoryBranch = normalizeInboxBranchName(getSmartConversationMemory(from)?.branch || "");
@@ -12653,10 +12893,13 @@ async function handleRealCustomerCoreIntentV15({
       branch,
       preferredDay: detectedDay || "",
       preferredTime: inputTime.ok ? inputTime.time : "",
-      teamMember: "",
-      serviceType: "",
-      requestType: "Consultation Booking",
-      directConsultationChatBooking: true,
+      teamMember: detectSmartBookingStaff(input)?.name || "",
+      serviceType: isServiceAppointment ? "Service" : "Consultation",
+      requestType: isServiceAppointment ? "Service Appointment" : "Consultation Booking",
+      replyPrefix: isConsultationFeeQuestionV15(input, previousMemory)
+        ? (replyLanguage === "ar" ? "الاستشارة الأولية مجانية ✅" : "The initial consultation is free ✅")
+        : "",
+      directConsultationChatBooking: !isServiceAppointment,
       skipStaffQuestion: true,
       urgent: isSmartBookingUrgentText(input),
       rawRequest: input,
@@ -12731,23 +12974,42 @@ async function handleRealCustomerCoreIntentV15({
       from, message, input, profileName, phoneNumberId: incomingPhoneNumberId,
       status: "Price Shown",
       messageType: "V15 Approved Starting Price",
-      body: buildPriceIntentBody(profileName, replyLanguage),
+      body: buildStartingPriceBodyV15(replyLanguage),
       replyLanguage
     });
   }
 
   if (intent === "price_objection") {
+    const isPostPriceConcern = isRecentPriceShownV15(previousMemory);
     rememberCurrentTopicV15(from, "price_objection", input, replyLanguage, {
-      priceAccepted: "no",
-      postPriceEngaged: false,
-      leadPriority: "low",
+      priceAccepted: isPostPriceConcern ? "yes" : "unknown",
+      postPriceEngaged: isPostPriceConcern,
+      leadPriority: isPostPriceConcern ? "high" : "medium",
+      objection: "price_concern",
       pendingQuestion: ""
     });
     return sendRealCustomerCoreReplyV15({
       from, message, input, profileName, phoneNumberId: incomingPhoneNumberId,
-      status: "Price Objection",
-      messageType: "V15 Price Objection",
+      status: isPostPriceConcern ? "High Priority Lead" : "Price Question",
+      messageType: "V15 Price Value Explanation",
       body: buildPriceObjectionBodyV15(replyLanguage),
+      replyLanguage
+    });
+  }
+
+  if (intent === "price_rejection") {
+    rememberCurrentTopicV15(from, "price_rejection", input, replyLanguage, {
+      priceAccepted: "no",
+      postPriceEngaged: false,
+      leadPriority: "low",
+      objection: "price_rejection",
+      pendingQuestion: ""
+    });
+    return sendRealCustomerCoreReplyV15({
+      from, message, input, profileName, phoneNumberId: incomingPhoneNumberId,
+      status: "Price Rejected",
+      messageType: "V15 Explicit Price Rejection",
+      body: buildExplicitPriceRejectionBodyV15(replyLanguage),
       replyLanguage
     });
   }
@@ -12814,11 +13076,12 @@ async function handleRealCustomerCoreIntentV15({
   }
 
   const informationalReplies = {
+    installation_process: buildInstallationProcessBodyV15(replyLanguage),
     hair_type: buildHairTypeBodyV15(replyLanguage),
     duration_maintenance: buildDurationBodyV15(replyLanguage),
-    warranty: buildWarrantyIntentBody(profileName, replyLanguage),
-    natural: buildNaturalIntentBody(profileName, replyLanguage),
-    density: buildDensityIntentBody(profileName, replyLanguage)
+    warranty: buildWarrantyBodyV15(replyLanguage),
+    natural: buildNaturalBodyV15(replyLanguage),
+    density: buildDensityBodyV15(replyLanguage)
   };
 
   if (informationalReplies[intent]) {
