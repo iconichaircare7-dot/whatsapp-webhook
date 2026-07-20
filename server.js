@@ -122,8 +122,8 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-303-ai-test-mode-v15-5";
-const REAL_CUSTOMER_ROUTER_VERSION = "real-customer-test-mode-v15-5";
+const BOT_VERSION = "iconic-team-inbox-303-ai-arabic-logic-v15-6";
+const REAL_CUSTOMER_ROUTER_VERSION = "real-customer-arabic-logic-v15-6";
 const REAL_CUSTOMER_ROUTER_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.REAL_CUSTOMER_ROUTER_ENABLED || "true").toString().trim().toLowerCase()
 );
@@ -2231,7 +2231,8 @@ function isPriceIntentText(text = "") {
       "price list", "send price", "tell me price", "need price", "i need price", "i want price",
       "pricing", "prices", "price", "cost", "costs", "charge", "charges", "fees", "fee", "rate", "rates",
       "quotation", "quote", "estimate", "offer", "offers", "discount", "package", "packages",
-      "كم السعر", "كم سعر", "شو السعر", "ما هو السعر", "بكم", "قديش", "كام", "كم يكلف", "التكلفة", "تكلفة",
+      "كم السعر", "كم سعر", "شو السعر", "ما هو السعر", "بكم", "قديش السعر", "قديش حقه", "قديش حقها",
+      "كام السعر", "كام يكلف", "كم يكلف", "التكلفة", "تكلفة",
       "كم سعر الشبكية", "كم سعر الشبكيه", "تقريباً يبدأ بكم", "تقريبا يبدأ بكم", "يبدأ بكم",
       "price for this patch", "including service or only patch", "only patch",
       "سعر", "السعر", "اسعار", "الاسعار", "الأسعار", "عرض", "عروض", "باكدج", "باقة", "خصم"
@@ -12367,7 +12368,9 @@ function isExplicitPriceRejectionV15(text = "") {
   return hasAnyIntentPhrase(value, [
     "too expensive no thanks", "too expensive for me", "i cannot afford", "i can't afford",
     "not interested because of price", "no thank you too expensive", "i will not continue",
-    "غالي ما بدي", "غالي ما بدي أكمل", "غالي ما بدي اكمل", "ما بناسبني السعر",
+    "غالي ما بدي", "غالي وما بدي", "غالي ما بدي أكمل", "غالي ما بدي اكمل",
+    "غالي وما بدي أكمل", "غالي وما بدي اكمل", "غالي ومش مهتم", "غالي ومو مهتم",
+    "ما بناسبني السعر",
     "السعر ما بناسبني", "ما بقدر ادفع", "ما بقدر أدفع", "ما معي ميزانية",
     "مو مهتم بسبب السعر", "مش مهتم بسبب السعر", "خلاص ما بدي"
   ]);
@@ -12379,6 +12382,34 @@ function isInstallationProcessIntentV15(text = "") {
     "how is the patch fitted", "how do you fit it", "replacement process", "change process",
     "كيف التركيب", "كيف يتم التركيب", "كيف بتركب", "كيف يتركب", "طريقة التركيب",
     "عملية التركيب", "كيف عملية التغيير", "كيف التغيير", "كيف تثبتوه", "كيف تثبيته"
+  ]);
+}
+
+function isPriceIncludesQuestionV15(text = "") {
+  const value = compactText(text);
+  if (!value) return false;
+
+  const hasPriceCue = hasAnyIntentPhrase(value, [
+    "price", "cost", "السعر", "سعر", "الأسعار", "الاسعار"
+  ]);
+  const hasIncludesCue = hasAnyIntentPhrase(value, [
+    "include", "included", "includes", "including", "شامل", "تشمل", "يشمل", "متضمن", "ضمن السعر"
+  ]);
+  const hasServiceCue = hasAnyIntentPhrase(value, [
+    "fitting", "installation", "haircut", "cut", "styling", "system",
+    "التركيب", "تركيب", "القص", "قص", "التنسيق", "النظام", "نظام الشعر"
+  ]);
+
+  return Boolean(hasPriceCue && hasIncludesCue && hasServiceCue);
+}
+
+function isExplicitBookingCommitmentV15(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "i want to book", "i need to book", "please book", "book me", "go ahead and book",
+    "the price is fine i want to book", "price is fine i want to book",
+    "بدي احجز", "بدي أحجز", "اريد احجز", "أريد أحجز", "ابغى احجز", "أبغى أحجز",
+    "احجز لي", "أحجز لي", "السعر مناسب بدي احجز", "السعر مناسب بدي أحجز",
+    "مناسب بدي احجز", "مناسب بدي أحجز"
   ]);
 }
 
@@ -12423,23 +12454,31 @@ function getCurrentTurnCoreIntentV15(text = "", analysis = {}, memory = {}) {
   ]);
   const bookingSignal = directConsultationBooking || consultationVisitRequest ||
     isVisitAppointmentRequestV15(value, memory) || isBookingIntentText(value);
+  const explicitBookingCommitment = isExplicitBookingCommitmentV15(value);
 
+  // V15.6 Arabic intent precedence: the customer's current explicit request wins.
+  // Specific information and booking intents must be resolved before generic price
+  // detection so words such as مكانكم or قديش بيعيش cannot be misread as price.
   if (isAppointmentCancelIntentV15(value)) return "cancel_appointment";
   if (isAppointmentRescheduleIntentV15(value)) return "reschedule_appointment";
   if (isConsultationFeeQuestionV15(value, memory) && bookingSignal) return "booking";
   if (isConsultationFeeQuestionV15(value, memory)) return "consultation_fee";
   if (isExplicitPriceRejectionV15(value)) return "price_rejection";
   if (isExpensiveObjectionIntentText(value)) return "price_objection";
-  if (isPriceIntentText(value)) return "price";
 
-  if (bookingSignal) return "booking";
+  if (explicitBookingCommitment) return "booking";
+  if (isPriceIncludesQuestionV15(value)) return "price_includes";
+  if (isLocationQuestionV15(value) && bookingSignal) return "booking";
   if (isLocationQuestionV15(value)) return "location";
   if (isInstallationProcessIntentV15(value)) return "installation_process";
-  if (isHairTypeIntentText(value)) return "hair_type";
   if (isDurationMaintenanceIntentText(value)) return "duration_maintenance";
+  if (isHairTypeIntentText(value)) return "hair_type";
   if (isWarrantyIntentText(value)) return "warranty";
   if (isNaturalLookIntentText(value)) return "natural";
   if (isDensityIntentText(value)) return "density";
+
+  if (bookingSignal) return "booking";
+  if (isPriceIntentText(value)) return "price";
 
   return (analysis?.primaryIntent || "").toString();
 }
@@ -12530,7 +12569,7 @@ async function markPostPriceLeadPriorityV15({ phone = "", phoneNumberId = "", li
   }
 
   const highIntent = new Set([
-    "price_objection", "booking", "location", "consultation_fee", "installation_process",
+    "price_objection", "price_includes", "booking", "location", "consultation_fee", "installation_process",
     "hair_type", "duration_maintenance", "warranty", "natural", "density", "services",
     "call", "working_hours"
   ]);
@@ -12621,6 +12660,20 @@ function buildStartingPriceBodyV15(language = "en") {
       ].join("\n");
 }
 
+function buildPriceIncludesBodyV15(language = "en") {
+  return language === "ar"
+    ? [
+        "نعم، السعر المبدئي يشمل نظام الشعر مع التركيب والقص والتنسيق الأولي.",
+        "",
+        "قد يختلف السعر النهائي فقط حسب نوع النظام ومساحة التغطية والخدمة المطلوبة."
+      ].join("\n")
+    : [
+        "Yes. The starting price includes the hair system, fitting, haircut, and initial styling.",
+        "",
+        "The final price may vary only by system type, coverage area, and the required service."
+      ].join("\n");
+}
+
 function buildPriceAndHairTypeBodyV15(language = "en") {
   return language === "ar"
     ? [
@@ -12651,7 +12704,7 @@ function buildPriceObjectionBodyV15(language = "en") {
 
 function buildExplicitPriceRejectionBodyV15(language = "en") {
   return language === "ar"
-    ? "تمام، أتفهمك. تم تسجيل أن السعر غير مناسب حاليًا، وإذا تغيّر قرارك نحن موجودون لخدمتك."
+    ? "أكيد، أتفهمك. ما رح نضغط عليك، ونحن موجودون بأي وقت تحتاج فيه مساعدة."
     : "Understood. We have noted that the price is not suitable for you at the moment. We will be here if you change your mind.";
 }
 
@@ -13166,6 +13219,24 @@ async function handleRealCustomerCoreIntentV15({
       status: "Location Requested",
       messageType: "V15 Location Text Link",
       body: buildLocationTextV15(branch, replyLanguage),
+      replyLanguage
+    });
+  }
+
+  if (intent === "price_includes") {
+    rememberCurrentTopicV15(from, "price_includes", input, replyLanguage, {
+      priceAsked: true,
+      priceShownAt: Number(previousMemory.priceShownAt || Date.now()),
+      priceAccepted: previousMemory.priceAccepted || "unknown",
+      postPriceEngaged: Boolean(previousMemory.postPriceEngaged),
+      pendingQuestion: "",
+      bookingReadiness: ""
+    });
+    return sendRealCustomerCoreReplyV15({
+      from, message, input, profileName, phoneNumberId: incomingPhoneNumberId,
+      status: "Price Inclusion Information",
+      messageType: "V15 Price Includes",
+      body: buildPriceIncludesBodyV15(replyLanguage),
       replyLanguage
     });
   }
@@ -48470,8 +48541,19 @@ app.post("/webhook", async (req, res) => {
         !isLocationIntentText(iconicServicesText) &&
         !isCallIntentText(iconicServicesText) &&
         (isAutoVideoRequestText(iconicServicesText) || iconicServicesText === "results" || iconicServicesText.includes("result") || iconicServicesText.includes("نتائج"));
-      const iconicIsHowItWorksRoute = iconicServicesText === "how_it_works" || iconicServicesText === "howitworks" ||
-        hasAnyIntentPhrase(iconicServicesText, ["details", "how it works", "how does it work", "process", "steps", "تفاصيل", "كيف", "كيف يعمل", "طريقة", "الطريقة"]);
+      const iconicIsHowItWorksRoute = (
+        iconicServicesText === "how_it_works" ||
+        iconicServicesText === "howitworks" ||
+        hasAnyIntentPhrase(iconicServicesText, [
+          "details", "how it works", "how does it work", "general process", "steps",
+          "تفاصيل", "كيف يعمل النظام", "خطوات عامة"
+        ])
+      ) &&
+        !isInstallationProcessIntentV15(iconicServicesText) &&
+        !isDurationMaintenanceIntentText(iconicServicesText) &&
+        !isPriceIntentText(iconicServicesText) &&
+        !isBookingIntentText(iconicServicesText) &&
+        !isLocationQuestionV15(iconicServicesText);
 
       if (iconicIsServicesRoute) {
         logCustomerActionForInbox({
