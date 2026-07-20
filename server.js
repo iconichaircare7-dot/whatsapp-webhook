@@ -122,7 +122,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-303-ai-safe-cleanup-v15-8";
+const BOT_VERSION = "iconic-team-inbox-303-ai-learning-review-ui-v15-9";
 const REAL_CUSTOMER_ROUTER_VERSION = "real-customer-safe-cleanup-v15-8";
 const REAL_CUSTOMER_ROUTER_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.REAL_CUSTOMER_ROUTER_ENABLED || "true").toString().trim().toLowerCase()
@@ -19465,7 +19465,7 @@ app.get("/learning-review", redirectLegacyInboxHost, protectInbox, (req, res) =>
         var priority=create('input',''); priority.id='priority'; priority.type='number'; priority.min='1'; priority.max='120'; priority.value=String(item.priority || 70);
         addField(form,'Priority',priority);
 
-        var negatives=create('textarea',''); negatives.id='negativeExamples'; negatives.value=(item.negativeExamples || []).join('\n'); negatives.placeholder='One do-not-match example per line';
+        var negatives=create('textarea',''); negatives.id='negativeExamples'; negatives.value=(item.negativeExamples || []).join('\\n'); negatives.placeholder='One do-not-match example per line';
         var negativeWrap=addField(form,'Negative examples / conflict protection',negatives); negativeWrap.classList.add('full');
 
         var note=create('textarea',''); note.id='reviewNote'; note.value=item.reviewNote || ''; note.placeholder='Why this mapping is correct';
