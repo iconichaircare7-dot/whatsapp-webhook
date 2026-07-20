@@ -122,8 +122,8 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-303-ai-arabic-logic-v15-6";
-const REAL_CUSTOMER_ROUTER_VERSION = "real-customer-arabic-logic-v15-6";
+const BOT_VERSION = "iconic-team-inbox-303-ai-safe-cleanup-v15-8";
+const REAL_CUSTOMER_ROUTER_VERSION = "real-customer-safe-cleanup-v15-8";
 const REAL_CUSTOMER_ROUTER_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.REAL_CUSTOMER_ROUTER_ENABLED || "true").toString().trim().toLowerCase()
 );
@@ -1854,22 +1854,6 @@ function detectIncomingLanguage(value = "", fallback = "en") {
   return fallback === "ar" ? "ar" : "en";
 }
 
-function rememberConversationLanguage(phone, incomingText = "") {
-  const cleanPhone = normalizePhoneDigits(phone);
-  const currentLanguage = conversationLanguage[cleanPhone] || conversationLanguage[phone] || "en";
-  const detectedLanguage = detectIncomingLanguage(incomingText, currentLanguage);
-
-  if (cleanPhone) {
-    conversationLanguage[cleanPhone] = detectedLanguage;
-  }
-
-  if (phone) {
-    conversationLanguage[phone] = detectedLanguage;
-  }
-
-  return detectedLanguage;
-}
-
 function getConversationLanguage(phone, fallbackText = "") {
   const cleanPhone = normalizePhoneDigits(phone);
   const savedLanguage = conversationLanguage[cleanPhone] || conversationLanguage[phone] || "";
@@ -2041,12 +2025,6 @@ function localizeReplyButtons(buttons = [], language = "en") {
   }));
 }
 
-function localizeBotBodyForPhone(phone, body = "", fallbackText = "") {
-  const language = getConversationLanguage(phone, fallbackText);
-  return cleanLocalizedReplyBody(body, language);
-}
-
-
 function cleanCustomerName(value) {
   const name = (value || "")
     .toString()
@@ -2060,16 +2038,6 @@ function cleanCustomerName(value) {
 
 function getWhatsAppCustomerName(contact = {}) {
   return cleanCustomerName(contact?.profile?.name || "");
-}
-
-function buildPersonalGreeting(customerName = "") {
-  const cleanName = cleanCustomerName(customerName);
-
-  if (!cleanName) {
-    return "Hello 👋";
-  }
-
-  return `Hello ${cleanName} 👋`;
 }
 
 function buildMainMenuBody(customerName = "", language = "en") {
@@ -2204,22 +2172,6 @@ function hasAnyIntentPhrase(text = "", phrases = []) {
   return phrases.some((phrase) => {
     const cleanPhrase = compactText(phrase);
     return cleanPhrase && value.includes(cleanPhrase);
-  });
-}
-
-function hasAnyIntentWord(text = "", words = []) {
-  const { value } = getIntentTextParts(text);
-  if (!value) return false;
-  return words.some((word) => {
-    const cleanWord = compactText(word);
-    if (!cleanWord) return false;
-
-    if (/^[a-z0-9 ]+$/.test(cleanWord)) {
-      const escaped = cleanWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
-      return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i").test(value);
-    }
-
-    return value.includes(cleanWord);
   });
 }
 
@@ -2482,34 +2434,6 @@ function isUnclearHelpIntentText(text = "") {
   ]);
 }
 
-function buildExpensiveObjectionBody(customerName = "", language = "en") {
-  const cleanName = namePhrase(customerName);
-
-  if (language === "ar") {
-    const intro = cleanName ? `أفهم عليك ${cleanName}، السعر مهم أكيد.` : "أفهم عليك، السعر مهم أكيد.";
-    return [
-      intro,
-      "",
-      "Hair Replacement مو قطعة جاهزة فقط؛ السعر يعتمد على المساحة، الكثافة، نوع الشعر، وطريقة التركيب حتى تطلع النتيجة طبيعية وغير واضحة.",
-      "",
-      "حتى ما نعطيك رقم عشوائي، الأفضل نحجز لك استشارة قصيرة ويشرح لك الفريق الخيار المناسب حسب حالتك.",
-      "",
-      "تحب نحجز لك استشارة؟"
-    ].join("\n");
-  }
-
-  const intro = cleanName ? `I understand ${cleanName}, price matters.` : "I understand, price matters.";
-  return [
-    intro,
-    "",
-    "Hair Replacement is not just a ready-made piece. The price depends on the area, density, hair type, and fitting method so the result looks natural and private.",
-    "",
-    "To avoid giving you a random number, the best step is a short consultation where our team can guide you based on your case.",
-    "",
-    "Would you like to book a consultation?"
-  ].join("\n");
-}
-
 function buildDensityIntentBody(customerName = "", language = "en") {
   const cleanName = namePhrase(customerName);
 
@@ -2535,58 +2459,6 @@ function buildDensityIntentBody(customerName = "", language = "en") {
     "Our team decides it after checking the coverage area and the look you want.",
     "",
     "You can book a consultation or send more details to the team."
-  ].join("\n");
-}
-
-function buildHairTypeIntentBody(customerName = "", language = "en") {
-  const cleanName = namePhrase(customerName);
-
-  if (language === "ar") {
-    const intro = cleanName ? `أكيد ${cleanName}، النوع يختلف حسب الحالة.` : "أكيد، النوع يختلف حسب الحالة.";
-    return [
-      intro,
-      "",
-      "نختار نوع الشعر والنظام حسب اللون، الكثافة، شكل التسريحة، وطريقة الاستخدام اليومية.",
-      "",
-      "الهدف أن يكون الشكل طبيعي ومريح ومناسب لك، لذلك الأفضل يحدده المختص بعد استشارة قصيرة.",
-      "",
-      "تحب نحجز لك استشارة أو تتواصل مع الفريق؟"
-    ].join("\n");
-  }
-
-  const intro = cleanName ? `Sure ${cleanName}, the type depends on your case.` : "Sure, the type depends on your case.";
-  return [
-    intro,
-    "",
-    "The hair system type is chosen based on color, density, hairstyle, and daily use.",
-    "",
-    "The goal is a natural and comfortable result, so the specialist should recommend the best option after a short consultation.",
-    "",
-    "Would you like to book a consultation or talk to the team?"
-  ].join("\n");
-}
-
-function buildDurationMaintenanceIntentBody(customerName = "", language = "en") {
-  const cleanName = namePhrase(customerName);
-
-  if (language === "ar") {
-    const intro = cleanName ? `تمام ${cleanName}، المدة تعتمد على الاستخدام والعناية.` : "تمام، المدة تعتمد على الاستخدام والعناية.";
-    return [
-      intro,
-      "",
-      "عادةً يحتاج Hair Replacement متابعة وسيرفس حسب الاستخدام، التعرّق، ونمط الحياة. الفريق يشرح لك الجدول المناسب بعد ما يعرف حالتك.",
-      "",
-      "إذا أنت عميل حالي وتحتاج سيرفس، اختر Book Service. وإذا جديد، الأفضل استشارة أولاً."
-    ].join("\n");
-  }
-
-  const intro = cleanName ? `Sure ${cleanName}, duration depends on use and care.` : "Sure, duration depends on use and care.";
-  return [
-    intro,
-    "",
-    "Hair Replacement needs follow-up/service depending on usage, sweating, and lifestyle. Our team can explain the right service schedule after checking your case.",
-    "",
-    "If you are an existing client, choose Book Service. If you are new, consultation is the best first step."
   ].join("\n");
 }
 
@@ -10567,66 +10439,6 @@ async function sendWhatsAppVideoHeaderButtonMessage(to, body, buttons, videoUrl,
 }
 
 
-async function sendWhatsAppCtaUrlMessage(to, body, displayText, targetUrl, phoneNumberId = DEFAULT_PHONE_NUMBER_ID, options = {}) {
-  if (DISABLE_REAL_SEND) {
-    return buildRealSendDisabledResult("send CTA URL message", phoneNumberId, to);
-  }
-  const finalPhoneNumberId = normalizePhoneNumberId(phoneNumberId || DEFAULT_PHONE_NUMBER_ID);
-  const lineConfig = getLineConfig(finalPhoneNumberId);
-  const url = `https://graph.facebook.com/v18.0/${finalPhoneNumberId}/messages`;
-
-  const replyLanguage = options.replyLanguage || getConversationLanguage(to);
-  const finalBody = options.skipAutoLanguage ? body : cleanLocalizedReplyBody(body, replyLanguage);
-  const finalDisplayText = replyLanguage === "ar" && displayText === "Open Location"
-    ? "افتح الموقع"
-    : displayText;
-
-  const payload = {
-    messaging_product: "whatsapp",
-    recipient_type: "individual",
-    to,
-    type: "interactive",
-    interactive: {
-      type: "cta_url",
-      body: { text: finalBody },
-      action: {
-        name: "cta_url",
-        parameters: {
-          display_text: finalDisplayText,
-          url: targetUrl
-        }
-      }
-    }
-  };
-
-  console.log(`Sending WhatsApp CTA URL message from ${lineConfig.branch} (${finalPhoneNumberId}) to ${to}`);
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${ACCESS_TOKEN}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    console.log("WhatsApp API CTA URL send failed:");
-    console.log(JSON.stringify(result, null, 2));
-  } else {
-    console.log("WhatsApp CTA URL message sent successfully:");
-    console.log(JSON.stringify(result, null, 2));
-  }
-
-  return {
-    ok: response.ok,
-    status: response.status,
-    result
-  };
-}
-
 async function sendWhatsAppFlowMessage(to, phoneNumberId = DEFAULT_PHONE_NUMBER_ID, options = {}) {
   if (DISABLE_REAL_SEND) {
     return buildRealSendDisabledResult("send Flow message", phoneNumberId, to);
@@ -10811,24 +10623,6 @@ async function sendWhatsAppFlowMessage(to, phoneNumberId = DEFAULT_PHONE_NUMBER_
     status: response.status,
     result
   };
-}
-
-function getLocationBodyForLog(phoneNumberId = DEFAULT_PHONE_NUMBER_ID) {
-  const lineConfig = getLineConfig(phoneNumberId);
-  return `Location CTA sent: ${lineConfig.branch} (${lineConfig.locationUrl})`;
-}
-
-function buildLocationMessageBody(phoneNumberId = DEFAULT_PHONE_NUMBER_ID) {
-  const lineConfig = getLineConfig(phoneNumberId);
-  const branchNameAr = getArabicBranchName(lineConfig.branch);
-
-  return `${BUSINESS_NAME_SPACED} ✨\n\n` +
-    `هذا هو موقع فرع ${branchNameAr} المناسب لك.\n\n` +
-    "اضغط الزر بالأسفل لفتح Google Maps والوصول مباشرة.\n\n" +
-    "------------------------------\n\n" +
-    `${BUSINESS_NAME_SPACED} ✨\n\n` +
-    `This is the correct ${lineConfig.branch} branch location for you.\n\n` +
-    "Tap the button below to open Google Maps directly.";
 }
 
 function getMainMenuButtons() {
@@ -11383,20 +11177,6 @@ function buildWhatsAppFlowConfirmationBody(flowData = {}, language = "en") {
     "Your appointment is currently pending team confirmation.",
     "After the appointment is confirmed, you will receive the official confirmation from Iconic Hair Care."
   ].filter((line) => line !== "").join(String.fromCharCode(10));
-}
-
-function getAppointmentReminderOptInButtons(language = "en") {
-  if (language === "ar") {
-    return [
-      { id: "appointment_reminder_yes", title: "ذكرني" },
-      { id: "appointment_reminder_no", title: "لا" }
-    ];
-  }
-
-  return [
-    { id: "appointment_reminder_yes", title: "Remind Me" },
-    { id: "appointment_reminder_no", title: "No Reminder" }
-  ];
 }
 
 function isAppointmentReminderYesText(text) {
@@ -12368,6 +12148,9 @@ function isExplicitPriceRejectionV15(text = "") {
   return hasAnyIntentPhrase(value, [
     "too expensive no thanks", "too expensive for me", "i cannot afford", "i can't afford",
     "not interested because of price", "no thank you too expensive", "i will not continue",
+    "it is too expensive i am not interested", "it's too expensive i am not interested",
+    "too expensive and i am not interested", "too expensive not interested",
+    "price is too high i am not interested", "not interested too expensive",
     "غالي ما بدي", "غالي وما بدي", "غالي ما بدي أكمل", "غالي ما بدي اكمل",
     "غالي وما بدي أكمل", "غالي وما بدي اكمل", "غالي ومش مهتم", "غالي ومو مهتم",
     "ما بناسبني السعر",
@@ -12467,6 +12250,9 @@ function getCurrentTurnCoreIntentV15(text = "", analysis = {}, memory = {}) {
   if (isExpensiveObjectionIntentText(value)) return "price_objection";
 
   if (explicitBookingCommitment) return "booking";
+  // Explicit service / maintenance appointment wording must beat the broad
+  // informational word "service" used by duration and maintenance questions.
+  if (isServiceAppointmentChoiceV15(value)) return "booking";
   if (isPriceIncludesQuestionV15(value)) return "price_includes";
   if (isLocationQuestionV15(value) && bookingSignal) return "booking";
   if (isLocationQuestionV15(value)) return "location";
@@ -13739,36 +13525,6 @@ function isPendingBookingStatusValue(status = "") {
     !value.includes("team will call");
 }
 
-async function findLatestPendingBookingForStaffAction(branch = "Dubai") {
-  const result = await loadBookingRequestsFromGoogleSheetFromServer();
-  const bookings = Array.isArray(result.bookingRequests) ? result.bookingRequests : [];
-  const branchValue = compactText(branch);
-  const branchBookings = bookings.filter((booking) => {
-    const bookingBranch = compactText(booking.branch || getBookingRequestDetails(booking).branch || "");
-    const customerPhone = normalizePhoneDigits(booking.phone || "");
-    const isSameBranch = branchValue.includes("abu")
-      ? bookingBranch.includes("abu")
-      : (!bookingBranch.includes("abu"));
-
-    return isSameBranch &&
-      customerPhone &&
-      !isSuppressedCustomerNotificationNumber(customerPhone) &&
-      isPendingBookingStatusValue(booking.status || "Pending");
-  });
-
-  branchBookings.sort((a, b) => {
-    const rowA = Number(a.rowNumber || 0);
-    const rowB = Number(b.rowNumber || 0);
-    if (rowA !== rowB) return rowB - rowA;
-
-    const dateA = parseSheetDate(a.lastUpdated || a.date || "")?.getTime() || 0;
-    const dateB = parseSheetDate(b.lastUpdated || b.date || "")?.getTime() || 0;
-    return dateB - dateA;
-  });
-
-  return branchBookings[0] || null;
-}
-
 async function getCustomerLanguageFromHistory(customerPhone = "", fallback = "en") {
   const cleanPhone = normalizePhoneDigits(customerPhone);
   const savedLanguage = conversationLanguage[cleanPhone] || conversationLanguage[customerPhone] || "";
@@ -14011,33 +13767,6 @@ function buildSuggestedTimeConfirmedNotesForCustomer(booking = {}, suggestedTime
   if (details.serviceType) lines.push(`${isArabic ? "الخدمة" : "Service"}: ${details.serviceType}`);
 
   return lines.join("\n");
-}
-
-function buildSuggestedTimeCustomerAckBody(suggestedTime = "", customerName = "", language = "en") {
-  const cleanName = cleanCustomerName(customerName || "");
-  const isArabic = language === "ar";
-
-  if (isArabic) {
-    return [
-      `${BUSINESS_NAME_SPACED} ✨`,
-      "",
-      cleanName ? `تمام ${cleanName} ✅` : "تمام ✅",
-      "تم تسجيل موافقتك على الوقت المقترح.",
-      suggestedTime ? `الوقت المقترح: ${suggestedTime}` : "",
-      "",
-      "تم إبلاغ الفريق، وسيتم متابعة تأكيد الموعد لك."
-    ].filter(Boolean).join("\n");
-  }
-
-  return [
-    `${BUSINESS_NAME_SPACED} ✨`,
-    "",
-    cleanName ? `Done ${cleanName} ✅` : "Done ✅",
-    "Your approval for the suggested time has been recorded.",
-    suggestedTime ? `Suggested time: ${suggestedTime}` : "",
-    "",
-    "The team has been notified and will follow up to confirm the appointment."
-  ].filter(Boolean).join("\n");
 }
 
 function buildSuggestedTimeCustomerDeclineBody(suggestedTime = "", customerName = "", language = "en") {
@@ -15562,10 +15291,6 @@ function buildReminderOptInBody() {
 function formatButtonLog(body, buttons) {
   const buttonText = buttons.map((button) => `• ${button.title}`).join("\n");
   return `${body}\n\nButtons:\n${buttonText}`;
-}
-
-function formatCtaLog(body, displayText) {
-  return `${body}\n\nCTA Button:\n• ${displayText}`;
 }
 
 function getFollowUpTemplateName(phoneNumberId) {
@@ -19419,100 +19144,6 @@ function escapeInboxServerHtml(value = "") {
     .replace(/'/g, "&#39;");
 }
 
-function getInboxServerTimeValue(value = "") {
-  const time = new Date(value || 0).getTime();
-  return Number.isFinite(time) ? time : 0;
-}
-
-function buildInboxServerConversationKey(message = {}) {
-  return [
-    (message.phone || "").toString().trim(),
-    normalizePhoneNumberId(message.phoneNumberId || ""),
-    (message.branch || "").toString().trim()
-  ].join("|");
-}
-
-function getInboxServerConversationName(conversation = {}) {
-  const latest = conversation.latest || {};
-  return cleanCustomerName(latest.customerName || conversation.customerName || "") || conversation.phone || "Customer";
-}
-
-function getInboxServerBranchClass(branch = "") {
-  const normalizedBranch = normalizeInboxBranchName(branch || "");
-  if (normalizedBranch === AI_303_BRANCH_NAME) return "branch-pill branch-303";
-  return normalizedBranch === "Abu Dhabi" ? "branch-pill branch-abu" : "branch-pill branch-dubai";
-}
-
-function buildInboxBootstrapConversations(messages = []) {
-  const conversations = new Map();
-
-  (messages || []).forEach((message) => {
-    const key = buildInboxServerConversationKey(message);
-    if (!key.trim()) return;
-
-    const current = conversations.get(key) || {
-      key,
-      phone: (message.phone || "").toString().trim(),
-      phoneNumberId: normalizePhoneNumberId(message.phoneNumberId || ""),
-      branch: (message.branch || getLineConfig(message.phoneNumberId || DEFAULT_PHONE_NUMBER_ID).branch || "Dubai").toString().trim(),
-      customerName: cleanCustomerName(message.customerName || ""),
-      status: (message.status || "Open").toString().trim(),
-      latest: null,
-      messages: []
-    };
-
-    current.messages.push(message);
-    if (message.customerName && !current.customerName) current.customerName = cleanCustomerName(message.customerName);
-    if (message.status) current.status = message.status;
-
-    const currentLatestTime = getInboxServerTimeValue(current.latest?.time || "");
-    const messageTime = getInboxServerTimeValue(message.time || "");
-    if (!current.latest || messageTime >= currentLatestTime) current.latest = message;
-
-    conversations.set(key, current);
-  });
-
-  return Array.from(conversations.values()).sort((a, b) => {
-    return getInboxServerTimeValue(b.latest?.time || "") - getInboxServerTimeValue(a.latest?.time || "");
-  });
-}
-
-function renderInboxBootstrapConversationListHtml(conversations = []) {
-  if (!Array.isArray(conversations) || conversations.length === 0) {
-    return '<div class="empty inbox-empty-state actual-empty-state"><div class="empty-state-icon empty-state-icon-search" aria-hidden="true"></div><h3>No conversations found</h3><p>Try another name, phone number, or keyword.</p></div>';
-  }
-
-  return conversations.map((conversation) => {
-    const latest = conversation.latest || {};
-    const name = getInboxServerConversationName(conversation);
-    const initials = (name || "IC").split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("") || "IC";
-    const sender = (latest.sender || "").toString().trim() || "message";
-    const body = (latest.body || latest.messageType || "").toString().replace(/\s+/g, " ").trim();
-    const preview = `${sender}: ${body}`.slice(0, 95);
-    const branch = conversation.branch || getLineConfig(DEFAULT_PHONE_NUMBER_ID).branch;
-    const status = conversation.status || "Open";
-
-    return [
-      `<button type="button" class="conversation-card" data-key="${escapeInboxServerHtml(conversation.key)}">`,
-      `<div class="avatar">${escapeInboxServerHtml(initials)}</div>`,
-      '<div class="conversation-main">',
-      '<div class="conv-top">',
-      '<div class="conv-identity">',
-      `<div class="conv-name">${escapeInboxServerHtml(name)}</div>`,
-      `<div class="conv-preview">${escapeInboxServerHtml(preview)}</div>`,
-      '</div>',
-      `<div class="conv-time">${escapeInboxServerHtml(latest.time || "")}</div>`,
-      '</div>',
-      '<div class="conv-footer">',
-      `<div class="badges"><span class="${getInboxServerBranchClass(branch)}">${escapeInboxServerHtml(branch)}</span><span class="status status-open">${escapeInboxServerHtml(status)}</span></div>`,
-      `<span class="message-count-badge">${escapeInboxServerHtml(String((conversation.messages || []).length))}</span>`,
-      '</div>',
-      '</div>',
-      '</button>'
-    ].join("");
-  }).join("");
-}
-
 function buildInboxQuickReplyLocationAttribute(branchScope = "") {
   const branch = normalizeInboxBranchName(branchScope || "");
 
@@ -19572,68 +19203,6 @@ function buildInboxReferenceBranchTabs(branchScope = "") {
 
   if (!buttons) return "";
   return '<div class="reference-branch-tabs" aria-label="Branch filters">\n' + buttons + '\n</div>';
-}
-
-function safeInboxBootstrapJson(value = {}) {
-  return JSON.stringify(value || {})
-    .replace(/</g, "\\u003c")
-    .replace(/>/g, "\\u003e")
-    .replace(/&/g, "\\u0026")
-    .replace(/\u2028/g, "\\u2028")
-    .replace(/\u2029/g, "\\u2029");
-}
-
-async function getInboxBootstrapDataForServerRender() {
-  try {
-    const sheetData = await loadMessagesFromGoogleSheetForMessagesApi();
-    const sheetMessages = sheetData.messages || [];
-    const memoryMessages = inboxMessages || [];
-    const mergedMessages = mergeInboxHistory(sheetMessages, memoryMessages);
-    const conversationStates = sheetData.conversationStates || [];
-    const bookingRequests = sheetData.bookingRequests || [];
-    const archiveFilteredPayload = filterArchivedInboxPayload(
-      mergedMessages,
-      conversationStates,
-      bookingRequests,
-      false
-    );
-    const messages = archiveFilteredPayload.messages;
-    const conversations = buildInboxBootstrapConversations(messages);
-
-    return {
-      ok: true,
-      source: sheetMessages.length > 0 && memoryMessages.length > 0
-        ? "google_sheet_plus_memory"
-        : (sheetMessages.length > 0 ? "google_sheet" : "memory"),
-      messages,
-      conversationStates: archiveFilteredPayload.conversationStates,
-      bookingRequests: archiveFilteredPayload.bookingRequests,
-      conversations,
-      debug: {
-        sheetMessagesCount: sheetMessages.length,
-        memoryMessagesCount: memoryMessages.length,
-        returnedMessagesCount: messages.length,
-        unfilteredMessagesCount: mergedMessages.length,
-        conversationsCount: conversations.length,
-        includeArchived: false,
-        archivedConversationCount: archiveFilteredPayload.archivedConversationCount,
-        hiddenMessagesCount: archiveFilteredPayload.hiddenMessagesCount,
-        hiddenBookingRequestsCount: archiveFilteredPayload.hiddenBookingRequestsCount
-      }
-    };
-  } catch (error) {
-    console.log("Inbox bootstrap server render failed:");
-    console.log(error);
-    return {
-      ok: false,
-      source: "bootstrap_error",
-      messages: [],
-      conversationStates: [],
-      bookingRequests: [],
-      conversations: [],
-      debug: { error: error?.message || String(error) }
-    };
-  }
 }
 
 app.get("/learning-analytics", redirectLegacyInboxHost, protectInbox, (req, res) => {
