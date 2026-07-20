@@ -35,6 +35,9 @@ app.get("/api/303-health", (req, res) => {
     dedicated303Only: DEDICATED_303_ONLY,
     disableRealSend: DISABLE_REAL_SEND,
     automationPaused303: WHATSAPP_AUTOMATION_PAUSED_303,
+    testMode: AI_303_TEST_MODE,
+    testNumberConfigured: AI_303_TEST_NUMBERS.length > 0,
+    testAllowedLast4: getAi303TestNumberLast4List(),
     smartSalesVersion: SMART_SALES_VERSION,
     smartSalesEnabled: SMART_SALES_ENABLED,
     smartGoalVersion: SMART_GOAL_VERSION,
@@ -119,8 +122,8 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-303-ai-reply-logic-v15-3";
-const REAL_CUSTOMER_ROUTER_VERSION = "real-customer-reply-logic-v15-3";
+const BOT_VERSION = "iconic-team-inbox-303-ai-test-mode-v15-5";
+const REAL_CUSTOMER_ROUTER_VERSION = "real-customer-test-mode-v15-5";
 const REAL_CUSTOMER_ROUTER_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.REAL_CUSTOMER_ROUTER_ENABLED || "true").toString().trim().toLowerCase()
 );
@@ -136,6 +139,41 @@ const SMART_UNDERSTANDING_ENABLED = !["false", "0", "no", "off"].includes(
 const SMART_MULTI_INTENT_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.SMART_MULTI_INTENT_ENABLED || "true").toString().trim().toLowerCase()
 );
+
+// V15.4 — prevent duplicate replies when Meta retries the same inbound webhook.
+// The key is the WhatsApp message id, not the text, so customers may repeat a
+// question later without being blocked.
+const REAL_CUSTOMER_REPLY_DEDUPE_TTL_MS = Math.max(
+  60 * 1000,
+  Number(process.env.REAL_CUSTOMER_REPLY_DEDUPE_TTL_MS || (15 * 60 * 1000))
+);
+const processedRealCustomerMessageIdsV15 = new Map();
+
+function getRealCustomerInboundMessageKeyV15(from = "", message = {}, phoneNumberId = "") {
+  const messageId = (message?.id || "").toString().trim();
+  if (!messageId) return "";
+  return `${normalizePhoneNumberId(phoneNumberId)}:${normalizePhoneDigits(from)}:${messageId}`;
+}
+
+function claimRealCustomerInboundMessageV15(from = "", message = {}, phoneNumberId = "") {
+  const key = getRealCustomerInboundMessageKeyV15(from, message, phoneNumberId);
+  if (!key) return true;
+
+  const now = Date.now();
+  for (const [savedKey, savedAt] of processedRealCustomerMessageIdsV15.entries()) {
+    if ((now - Number(savedAt || 0)) > REAL_CUSTOMER_REPLY_DEDUPE_TTL_MS) {
+      processedRealCustomerMessageIdsV15.delete(savedKey);
+    }
+  }
+
+  if (processedRealCustomerMessageIdsV15.has(key)) {
+    console.log("[V15.4] Duplicate inbound WhatsApp message suppressed:", key);
+    return false;
+  }
+
+  processedRealCustomerMessageIdsV15.set(key, now);
+  return true;
+}
 
 // SMART CONVERSATION MEMORY V2 — deterministic, local, and API-free.
 // It remembers customer context, restores it from the existing Google Sheet log,
@@ -538,6 +576,27 @@ const WHATSAPP_AUTOMATION_PAUSED_ABU_DHABI = ["true", "1", "yes", "on"].includes
 const WHATSAPP_AUTOMATION_PAUSED_303 = !["false", "0", "no", "off"].includes(
   (process.env.WHATSAPP_AUTOMATION_PAUSED_303 || "true").toString().trim().toLowerCase()
 );
+
+// V15.5 — safe private testing mode for the 303 AI line.
+// When enabled, inbound customer messages still appear in Team Inbox and Google Sheet,
+// but automatic bot replies run only for the configured owner/test number.
+// Manual Team Inbox replies remain available because this guard applies only to the
+// inbound bot webhook workflow.
+const AI_303_TEST_MODE = ["true", "1", "yes", "on"].includes(
+  (process.env.AI_303_TEST_MODE || "false").toString().trim().toLowerCase()
+);
+const AI_303_TEST_NUMBER_RAW = (
+  process.env.AI_303_TEST_NUMBERS ||
+  process.env.AI_303_TEST_NUMBER ||
+  ""
+).toString().trim();
+const AI_303_TEST_NUMBERS = Array.from(new Set(
+  AI_303_TEST_NUMBER_RAW
+    .split(/[\s,;]+/)
+    .map((value) => normalizeAi303TestPhoneNumber(value))
+    .filter(Boolean)
+));
+
 const STAFF_NUMBER = process.env.STAFF_NUMBER;
 // Smart Booking staff notification fallbacks.
 // Render ENV still has priority, but these keep branch notifications working if an ENV is accidentally missing.
@@ -960,6 +1019,39 @@ function shouldPauseWhatsAppAutomationForLine(phoneNumberId, displayPhoneNumber 
   }
 
   return WHATSAPP_AUTOMATION_PAUSED_DUBAI;
+}
+
+function normalizeAi303TestPhoneNumber(value = "") {
+  let digits = normalizePhoneDigits(value);
+  if (!digits) return "";
+
+  // Accept +97150..., 0097150..., 050..., or 50... and compare them safely.
+  if (digits.startsWith("00")) {
+    digits = digits.slice(2);
+  }
+
+  if (digits.startsWith("0") && digits.length === 10) {
+    return `971${digits.slice(1)}`;
+  }
+
+  if (digits.startsWith("5") && digits.length === 9) {
+    return `971${digits}`;
+  }
+
+  return digits;
+}
+
+function isAi303TestNumberAllowed(value = "") {
+  if (!AI_303_TEST_MODE) return true;
+
+  const normalized = normalizeAi303TestPhoneNumber(value);
+  if (!normalized || AI_303_TEST_NUMBERS.length === 0) return false;
+
+  return AI_303_TEST_NUMBERS.includes(normalized);
+}
+
+function getAi303TestNumberLast4List() {
+  return AI_303_TEST_NUMBERS.map((number) => number.slice(-4));
 }
 
 function buildPausedAutomationInboxBody(message = {}, profileName = "", originalText = "") {
@@ -12630,11 +12722,62 @@ function buildConsultationAndLocationBodyV15(branch = "", language = "en") {
     : "The initial consultation is free ✅\n\nWe have branches in Dubai and Abu Dhabi. Which branch suits you?";
 }
 
+function isConsultationDeclineOrCorrectionV15(text = "") {
+  return hasAnyIntentPhrase(text, [
+    "i don't want consultation", "i dont want consultation", "do not want consultation",
+    "not consultation", "not a consultation", "no consultation", "without consultation",
+    "ما بدي استشارة", "مابدي استشارة", "ما بدي استشاره", "مابدي استشاره",
+    "مو استشارة", "مش استشارة", "مو استشاره", "مش استشاره",
+    "ما اريد استشارة", "لا اريد استشارة", "ما أبغى استشارة", "ما ابغى استشارة"
+  ]);
+}
+
+function isServiceAppointmentChoiceV15(text = "") {
+  return isCurrentClientServiceIntentText(text) || hasAnyIntentPhrase(text, [
+    "book_service_flow", "book service", "service booking", "service appointment",
+    "maintenance appointment", "maintenance booking", "for service", "for maintenance",
+    "حجز سيرفس", "احجز سيرفس", "حجز صيانة", "احجز صيانة",
+    "موعد سيرفس", "موعد صيانة", "بدي سيرفس", "اريد سيرفس",
+    "أريد سيرفس", "ابغى سيرفس", "أبغى سيرفس", "للصيانة", "للسيرفس"
+  ]);
+}
+
+function buildCapturedBookingPrefixV15(draft = {}, language = "en") {
+  const parts = [];
+  if (draft.preferredDay) parts.push(getSmartBookingDayLabel(draft.preferredDay, language));
+  if (draft.preferredTime) {
+    parts.push(language === "ar" ? `الساعة ${draft.preferredTime}` : `at ${draft.preferredTime}`);
+  }
+  if (!parts.length) return "";
+
+  return language === "ar"
+    ? `تمام، حفظت الموعد: ${parts.join(" ")}.`
+    : `Got it. I saved the appointment: ${parts.join(" ")}.`;
+}
+
+function buildBookingTypeCorrectionBodyV15(language = "en") {
+  return language === "ar"
+    ? [
+        "تمام، ألغيت مسار الاستشارة.",
+        "",
+        "شو نوع الموعد المطلوب؟"
+      ].join("\n")
+    : [
+        "No problem. I cancelled the consultation path.",
+        "",
+        "Which appointment type do you need?"
+      ].join("\n");
+}
+
 async function sendRealCustomerCoreReplyV15({
   from = "", message = {}, input = "", profileName = "", phoneNumberId = "",
   status = "Bot", messageType = "Real Customer Router V15", body = "", buttons = null,
   replyLanguage = "en"
 } = {}) {
+  if (!claimRealCustomerInboundMessageV15(from, message, phoneNumberId)) {
+    return true;
+  }
+
   logCustomerActionForInbox({
     from,
     message,
@@ -12763,9 +12906,9 @@ async function handleRealCustomerCoreIntentV15({
   const selectedBranch = getExplicitBranchFromTextV15(input);
   const existingDraft = smartBookingDrafts[from] || null;
 
-  // A pending booking must not hijack a new clear customer question. Continue the
-  // draft only for a valid answer to the pending booking step. Otherwise suspend it
-  // and answer the customer's current topic.
+  // A pending booking must not hijack a new clear customer question. V15.4 also
+  // captures day/time corrections while waiting for the branch and understands a
+  // direct switch from consultation to service.
   if (existingDraft) {
     const clearNonBookingTopic =
       isPriceIntentText(input) ||
@@ -12782,10 +12925,78 @@ async function handleRealCustomerCoreIntentV15({
       isAppointmentCancelIntentV15(input) ||
       isAppointmentRescheduleIntentV15(input);
 
+    const consultationCorrection = isConsultationDeclineOrCorrectionV15(input);
+    const serviceChoice = isServiceAppointmentChoiceV15(input);
+    const detectedPendingDay =
+      detectSmartBookingExplicitWeekday(input) ||
+      getSmartBookingDayFromButton(input) ||
+      detectSmartBookingDay(input);
+    const detectedPendingTime = getSmartBookingTimeFromText(input);
+    const hasPendingBookingDetails = Boolean(detectedPendingDay || detectedPendingTime.ok);
+    const hasPendingBookingSignal = isBookingIntentText(input) || isVisitAppointmentRequestV15(input, previousMemory);
+
+    if (consultationCorrection) {
+      if (serviceChoice) {
+        existingDraft.requestType = "Service Appointment";
+        existingDraft.serviceType = "Service";
+        existingDraft.directConsultationChatBooking = false;
+        if (detectedPendingDay) existingDraft.preferredDay = detectedPendingDay;
+        if (detectedPendingTime.ok) existingDraft.preferredTime = detectedPendingTime.time;
+        existingDraft.replyPrefix = buildCapturedBookingPrefixV15(existingDraft, replyLanguage);
+        return continueV15ConsultationBooking({
+          from,
+          draft: existingDraft,
+          input,
+          message,
+          profileName,
+          phoneNumberId: incomingPhoneNumberId,
+          replyLanguage
+        });
+      }
+
+      delete smartBookingDrafts[from];
+      rememberCurrentTopicV15(from, "booking_choice", input, replyLanguage, {
+        pendingQuestion: "booking_type",
+        bookingReadiness: "ready"
+      });
+      return sendRealCustomerCoreReplyV15({
+        from, message, input, profileName, phoneNumberId: incomingPhoneNumberId,
+        status: "Booking Menu",
+        messageType: "V15 Booking Type Correction",
+        body: buildBookingTypeCorrectionBodyV15(replyLanguage),
+        buttons: getDirectBookingChoiceButtons(),
+        replyLanguage
+      });
+    }
+
     if (existingDraft.waitingForBranch) {
+      if (serviceChoice && existingDraft.requestType !== "Service Appointment") {
+        existingDraft.requestType = "Service Appointment";
+        existingDraft.serviceType = "Service";
+        existingDraft.directConsultationChatBooking = false;
+      }
+
+      if (detectedPendingDay) existingDraft.preferredDay = detectedPendingDay;
+      if (detectedPendingTime.ok) existingDraft.preferredTime = detectedPendingTime.time;
+
       if (selectedBranch) {
         existingDraft.branch = selectedBranch;
         existingDraft.waitingForBranch = false;
+        return continueV15ConsultationBooking({
+          from,
+          draft: existingDraft,
+          input,
+          message,
+          profileName,
+          phoneNumberId: incomingPhoneNumberId,
+          replyLanguage
+        });
+      }
+
+      if (serviceChoice || hasPendingBookingDetails || hasPendingBookingSignal) {
+        existingDraft.replyPrefix = hasPendingBookingDetails
+          ? buildCapturedBookingPrefixV15(existingDraft, replyLanguage)
+          : "";
         return continueV15ConsultationBooking({
           from,
           draft: existingDraft,
@@ -12801,7 +13012,9 @@ async function handleRealCustomerCoreIntentV15({
         return sendRealCustomerCoreReplyV15({
           from, message, input, profileName, phoneNumberId: incomingPhoneNumberId,
           status: "Smart Booking - Choose Branch",
-          messageType: "V15 Consultation Branch Retry",
+          messageType: existingDraft.requestType === "Service Appointment"
+            ? "V15 Service Branch Retry"
+            : "V15 Consultation Branch Retry",
           body: existingDraft.requestType === "Service Appointment"
             ? (replyLanguage === "ar" ? "اختر دبي أو أبوظبي لإكمال طلب الصيانة." : "Choose Dubai or Abu Dhabi to continue the service request.")
             : (replyLanguage === "ar" ? "اختر دبي أو أبوظبي لإكمال طلب الاستشارة." : "Choose Dubai or Abu Dhabi to continue the consultation request."),
@@ -12881,10 +13094,7 @@ async function handleRealCustomerCoreIntentV15({
   });
 
   if (intent === "booking") {
-    const isServiceAppointment = isCurrentClientServiceIntentText(input) || hasAnyIntentPhrase(input, [
-      "for service", "service appointment", "maintenance appointment", "for maintenance",
-      "موعد صيانة", "موعد سيرفس", "بدي سيرفس", "للصيانة", "للسيرفس"
-    ]);
+    const isServiceAppointment = isServiceAppointmentChoiceV15(input);
     const detectedDay = detectSmartBookingExplicitWeekday(input) || getSmartBookingDayFromButton(input) || detectSmartBookingDay(input);
     const inputTime = getSmartBookingTimeFromText(input);
     const memoryBranch = normalizeInboxBranchName(getSmartConversationMemory(from)?.branch || "");
@@ -48173,6 +48383,36 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+    // V15.5 private test mode: keep every customer message visible for staff,
+    // but permit automatic bot replies only for the configured test number.
+    if (AI_303_TEST_MODE && !isAi303TestNumberAllowed(from)) {
+      conversationPhoneNumberId[from] = incomingPhoneNumberId;
+
+      console.log("[303 AI Test Mode] inbound customer message saved without auto reply", {
+        from,
+        branch: lineConfig.branch,
+        phoneNumberId: incomingPhoneNumberId,
+        configuredTestNumbers: AI_303_TEST_NUMBERS.length,
+        messageType: message?.type || "",
+        text: suppressedInternalText || ""
+      });
+
+      addInboxMessage(
+        from,
+        "customer",
+        buildPausedAutomationInboxBody(message, profileName, suppressedInternalText),
+        "Test Mode",
+        incomingPhoneNumberId,
+        {
+          customerName: profileName,
+          messageType: "Customer Message - Test Mode (No Auto Reply)",
+          statusOverride: "Test Mode"
+        }
+      );
+
+      return res.sendStatus(200);
+    }
+
     // V31.5.8.60.3.7.11:
     // Internal staff/test numbers must be suppressed from Team Inbox live notifications,
     // but they must NOT be skipped from the bot workflow. This lets the owner test
@@ -49923,6 +50163,14 @@ app.get("/api/flow-config", (req, res) => {
   return res.status(200).json({
     ok: true,
     version: BOT_VERSION,
+    testMode: {
+      enabled: AI_303_TEST_MODE,
+      testNumberConfigured: AI_303_TEST_NUMBERS.length > 0,
+      allowedLast4: getAi303TestNumberLast4List(),
+      behavior: AI_303_TEST_MODE
+        ? "Bot auto-replies only to configured test number; all other inbound messages stay in Team Inbox without bot reply."
+        : "Normal bot auto-replies enabled for customers."
+    },
     whatsappFlow: {
       enabled: ICONIC_BOOKING_FLOW_ENABLED,
       dubai: {
