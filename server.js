@@ -122,7 +122,7 @@ app.get("/assets/:filename", (req, res) => {
   }
 });
 
-const BOT_VERSION = "iconic-team-inbox-303-ai-learning-review-ui-v15-9";
+const BOT_VERSION = "iconic-team-inbox-303-ai-learning-state-sync-v15-10";
 const REAL_CUSTOMER_ROUTER_VERSION = "real-customer-safe-cleanup-v15-8";
 const REAL_CUSTOMER_ROUTER_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.REAL_CUSTOMER_ROUTER_ENABLED || "true").toString().trim().toLowerCase()
@@ -5326,6 +5326,19 @@ function decodeSmartUnknownLearningEvent(body = "") {
   }
 }
 
+function getSmartUnknownEventStateTimestamp(event = {}) {
+  return Math.max(
+    Number(event.snapshotSavedAt || 0),
+    Number(event.stateUpdatedAt || 0),
+    Number(event.integratedAt || 0),
+    Number(event.candidateRule?.integratedAt || 0),
+    Number(event.candidateRule?.promotedAt || 0),
+    Number(event.reviewedAt || 0),
+    Number(event.lastSeenAt || 0),
+    Number(event.firstSeenAt || 0)
+  );
+}
+
 function restoreSmartUnknownLearningQueueFromMessages(messages = []) {
   if (!SMART_UNKNOWN_ENABLED) return 0;
   const latest = new Map();
@@ -5334,7 +5347,9 @@ function restoreSmartUnknownLearningQueueFromMessages(messages = []) {
     const event = decodeSmartUnknownLearningEvent(message.body || "");
     if (!event) return;
     const current = latest.get(event.id);
-    if (!current || Number(event.lastSeenAt || 0) >= Number(current.lastSeenAt || 0)) {
+    const eventStateAt = getSmartUnknownEventStateTimestamp(event);
+    const currentStateAt = getSmartUnknownEventStateTimestamp(current || {});
+    if (!current || eventStateAt >= currentStateAt) {
       latest.set(event.id, event);
     }
   });
@@ -5506,6 +5521,7 @@ function captureSmartUnknownEvent({
     branch: normalizeInboxBranchName(branch || "") || AI_303_BRANCH_NAME
   };
   const event = {
+    ...previous,
     version: SMART_UNKNOWN_VERSION,
     id,
     fingerprint,
@@ -5524,6 +5540,7 @@ function captureSmartUnknownEvent({
     count: Number(previous.count || 0) + 1,
     firstSeenAt: Number(previous.firstSeenAt || now),
     lastSeenAt: now,
+    stateUpdatedAt: now,
     status: SMART_UNKNOWN_ALLOWED_STATUSES.has(previous.status) ? previous.status : "new",
     reviewNote: previous.reviewNote || "",
     promotedIntent: previous.promotedIntent || "",
@@ -5542,13 +5559,15 @@ async function persistSmartUnknownLearningEvent(id = "") {
   if (!SMART_UNKNOWN_ENABLED || !SMART_UNKNOWN_PERSIST_ENABLED) return { ok: false, skipped: true };
   const event = smartUnknownLearningQueue.get(id);
   if (!event) return { ok: false, skipped: true };
+  const persistedEvent = { ...event, snapshotSavedAt: Date.now() };
+  smartUnknownLearningQueue.set(id, persistedEvent);
   const item = {
     time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }),
     phone: "unknown-learning-queue",
     customerName: "",
     branch: event.branch || AI_303_BRANCH_NAME,
     sender: "system",
-    body: encodeSmartUnknownLearningEvent(event),
+    body: encodeSmartUnknownLearningEvent(persistedEvent),
     status: "System",
     messageType: "Unknown Learning Queue V14",
     phoneNumberId: event.phoneNumberId || DEFAULT_PHONE_NUMBER_ID
@@ -6033,6 +6052,7 @@ async function saveSmartLearningReview({ id = "", payload = {}, reviewer = "Team
     };
   }
 
+  const stateUpdatedAt = Date.now();
   const next = {
     ...item,
     status: promote ? "promoted" : "reviewed",
@@ -6043,7 +6063,8 @@ async function saveSmartLearningReview({ id = "", payload = {}, reviewer = "Team
     priority: Math.min(120, Math.max(1, Number(payload.priority || item.priority || 70))),
     negativeExamples: mergedPayload.negativeExamples,
     reviewNote: redactSmartUnknownText(payload.reviewNote || item.reviewNote || "").slice(0, 500),
-    reviewedAt: Date.now(),
+    reviewedAt: stateUpdatedAt,
+    stateUpdatedAt,
     reviewedBy: reviewer || "Team Inbox",
     promotedIntent: promote ? targetIntent : (item.promotedIntent || ""),
     promotionValidation: validation,
@@ -6057,11 +6078,13 @@ async function saveSmartLearningReview({ id = "", payload = {}, reviewer = "Team
 async function ignoreSmartLearningItem({ id = "", reviewNote = "", reviewer = "Team Inbox" } = {}) {
   const item = smartUnknownLearningQueue.get(id);
   if (!item) return { ok: false, status: 404, error: "queue_item_not_found" };
+  const stateUpdatedAt = Date.now();
   const next = {
     ...item,
     status: "ignored",
     reviewNote: redactSmartUnknownText(reviewNote || item.reviewNote || "").slice(0, 500),
-    reviewedAt: Date.now(),
+    reviewedAt: stateUpdatedAt,
+    stateUpdatedAt,
     reviewedBy: reviewer || "Team Inbox",
     candidateRule: null,
     promotionValidation: null
@@ -6570,12 +6593,25 @@ function runSmartRuleIntegrationGate({
   };
 }
 
+async function refreshSmartLearningItemFromPersistence(id = "") {
+  try {
+    await loadMessagesFromGoogleSheet();
+  } catch (error) {
+    console.log("[Learning Integration V13] persistence refresh failed", error?.message || error);
+  }
+  return smartUnknownLearningQueue.get(id) || null;
+}
+
 async function activateSmartLearningCandidateRule({
   id = "",
   reviewer = "Team Inbox",
   integrationConfirmed = false
 } = {}) {
-  const item = smartUnknownLearningQueue.get(id);
+  let item = smartUnknownLearningQueue.get(id);
+  const candidateMissingOrStale = !item || item.status !== "promoted" || !item.candidateRule?.id || !item.candidateRule?.safeToPromote;
+  if (candidateMissingOrStale) {
+    item = await refreshSmartLearningItemFromPersistence(id);
+  }
   if (!item) return { ok: false, status: 404, error: "queue_item_not_found" };
   const candidate = normalizeSmartIntegratedRule(item.candidateRule || {});
   const gate = runSmartRuleIntegrationGate({
@@ -6611,6 +6647,7 @@ async function activateSmartLearningCandidateRule({
     ...item,
     status: "promoted",
     candidateRule: activeRule,
+    stateUpdatedAt: now,
     integrationStatus: "active",
     integrationGate: gate,
     integratedAt: now,
@@ -17129,12 +17166,14 @@ app.post("/api/smart-unknown/queue/:id/status", protectInbox, async (req, res) =
   if (!SMART_UNKNOWN_ALLOWED_STATUSES.has(status)) {
     return res.status(400).json({ ok: false, error: "invalid_status", allowed: [...SMART_UNKNOWN_ALLOWED_STATUSES] });
   }
+  const stateUpdatedAt = Date.now();
   const next = {
     ...item,
     status,
+    stateUpdatedAt,
     reviewNote: redactSmartUnknownText(req.body?.reviewNote || item.reviewNote || "").slice(0, 300),
     promotedIntent: status === "promoted" ? (req.body?.promotedIntent || item.promotedIntent || "").toString().trim().slice(0, 80) : (item.promotedIntent || ""),
-    reviewedAt: Date.now(),
+    reviewedAt: stateUpdatedAt,
     reviewedBy: req.inboxUser || "Team Inbox"
   };
   smartUnknownLearningQueue.set(id, next);
@@ -17250,9 +17289,12 @@ app.get("/api/smart-learning/integration", protectInbox, (req, res) => {
   });
 });
 
-app.post("/api/smart-learning/integration/:id/gate", protectInbox, (req, res) => {
+app.post("/api/smart-learning/integration/:id/gate", protectInbox, async (req, res) => {
   const id = (req.params?.id || "").toString().trim();
-  const item = smartUnknownLearningQueue.get(id);
+  let item = smartUnknownLearningQueue.get(id);
+  if (!item || item.status !== "promoted" || !item.candidateRule?.id || !item.candidateRule?.safeToPromote) {
+    item = await refreshSmartLearningItemFromPersistence(id);
+  }
   if (!item) return res.status(404).json({ ok: false, error: "queue_item_not_found" });
   const gate = runSmartRuleIntegrationGate({
     item,
