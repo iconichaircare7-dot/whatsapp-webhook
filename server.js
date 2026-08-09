@@ -605,7 +605,7 @@ const PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 = Math.min(
   Math.max(5000, Number(process.env.PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 || 15000))
 );
 
-// V17.3 — keeps V17.2 intact and adds deterministic translation-intent routing for colloquial / typo-heavy requests so clear translation tasks are answered directly instead of being bounced back for clarification.
+// V17.4 — keeps V17.3 intact and fixes translation priority: clear translation/meaning requests bypass Tavily unless the user explicitly asks for web search, and quoted foreign phrases no longer switch the conversation language.
 // Existing-image requests use Tavily image search; create/edit requests use Gemini Image then Cloudflare FLUX.2 fallback.
 // The last image context is persisted as a lightweight Google Sheet snapshot (media id / source URL / prompt),
 // so follow-up commands like "اعمل منها بوستر" can continue the same visual context when possible.
@@ -772,7 +772,11 @@ function getResponseLanguageLabel303(code = "") {
 
 function build303ResponseLanguageInstruction(phone = "", currentUserText = "") {
   const key = normalizePhoneDigits(phone);
-  const explicit = detectExplicitResponseLanguage303(currentUserText);
+  // V17.4: a phrase such as "Can you speak English with me?" may be the TEXT BEING
+  // translated (for example: "شو معنى هالجملة؟ Can you speak English with me?").
+  // In that case it must not silently switch the session language.
+  const translationLike = looksLikeTranslationRequest303(currentUserText);
+  const explicit = translationLike ? "" : detectExplicitResponseLanguage303(currentUserText);
 
   if (key && explicit === "__auto__") {
     responseLanguageOverride303ByPhone.delete(key);
@@ -842,7 +846,7 @@ function looksLikeTranslationRequest303(value = "") {
   const text = (value || "").toString().trim();
   if (!text) return false;
 
-  const explicitTranslation = /(?:\btranslate\b|\btranslation\b|ترجم(?:لي|ها|هالي|لي)?|ترجمة|ترجمه|شو\s+معن(?:ى|ا)|ما\s+معن(?:ى|ا)|what\s+does\s+.+\s+mean)/i.test(text);
+  const explicitTranslation = /(?:\btranslate\b|\btranslation\b|ترجم(?:لي|ها|هالي|لي)?|ترجمة|ترجمه|شو\s+معن(?:ى|ا)|ما\s+معن(?:ى|ا)|ماذا\s+تعني|what\s+does\s+.+\s+mean|what\s+.+\s+mean|que\s+veut\s+dire|qu['’]est[-\s]?ce\s+que[\s\S]{0,80}veut\s+dire|qué\s+significa|que\s+significa)/i.test(text);
   const howDoISay = /(?:كيف\s+(?:بقول|بكتب|بنحكي|بحكي)|شو\s+(?:بقول|بحكي)|how\s+do\s+i\s+say|how\s+can\s+i\s+say)/i.test(text);
   const giveMeInLanguage = /(?:عطيني|اعطيني|أعطيني|اكتبلي|اكتب\s+لي|قلي|قوللي|قول\s+لي|بدي)[\s\S]{0,28}(?:بال?\s*(?:ا|إ|أ)?نكليزي|بال?\s*(?:ا|إ|أ)?نجليزي|بالعربي|بالعربية|بالفرنسي|بالفرنسية|بالاسباني|بالإسباني|in\s+english|in\s+arabic|in\s+french|in\s+spanish)/i.test(text);
   const target = detect303TranslationTarget(text);
@@ -850,15 +854,52 @@ function looksLikeTranslationRequest303(value = "") {
   return Boolean(explicitTranslation || howDoISay || (giveMeInLanguage && target.code));
 }
 
+function infer303TranslationTarget303(value = "") {
+  const explicit = detect303TranslationTarget(value);
+  if (explicit.code) return explicit;
+
+  const text = (value || "").toString().trim();
+  if (!text) return { code: "", label: "" };
+
+  const hasArabic = /[\u0600-\u06FF]/.test(text);
+  const hasLatin = /[A-Za-zÀ-ÖØ-öø-ÿ]/.test(text);
+
+  // Meaning questions normally want the answer in the language of the instruction.
+  // This also handles mixed messages such as:
+  //   شو معنى هالجملة؟ Can you speak English with me?
+  if (/(?:شو\s+معن(?:ى|ا)|ما\s+معن(?:ى|ا)|ماذا\s+تعني)/i.test(text) && hasLatin) {
+    return { code: "ar", label: "Arabic" };
+  }
+  if (/(?:\bwhat\s+does\b[\s\S]{0,120}\bmean\b|\bwhat\b[\s\S]{0,120}\bmean\b)/i.test(text) && hasArabic) {
+    return { code: "en", label: "English" };
+  }
+  if (/(?:que\s+veut\s+dire|qu['’]est[-\s]?ce\s+que[\s\S]{0,80}veut\s+dire)/i.test(text)) {
+    return { code: "fr", label: "French" };
+  }
+  if (/(?:qué\s+significa|que\s+significa)/i.test(text)) {
+    return { code: "es", label: "Spanish" };
+  }
+
+  return { code: "", label: "" };
+}
+
+function hasExplicitWebSearchRequest303(value = "") {
+  const text = normalizeSearchIntentText303(value);
+  return /(?:ابحث(?:لي)?|دور(?:لي|\s+لي)?|فتش(?:لي|\s+لي)?|بحث\s+(?:بالنت|بالويب|على\s+النت|على\s+الويب)|search\s+(?:the\s+)?(?:web|internet)|look\s+it\s+up|google\s+it)/i.test(text);
+}
+
 function build303TranslationTaskPrompt(originalText = "") {
   const source = (originalText || "").toString().trim();
   if (!looksLikeTranslationRequest303(source)) return source;
 
-  const target = detect303TranslationTarget(source);
+  const target = infer303TranslationTarget303(source);
   return [
     "TRANSLATION TASK — answer the user's translation request directly.",
     target.label ? `Target language: ${target.label}.` : "Target language: infer it from the user's request; if truly absent, ask only for the target language.",
     "The user's wording may be colloquial Arabic, code-switched, typo-heavy, or missing punctuation. Identify the actual sentence/phrase they want translated from the message and translate that content instead of asking them to restate it.",
+    "Treat quoted or embedded foreign text as the translation SOURCE, not as a command to switch the conversation language. Do not translate the surrounding instruction itself.",
+    "If the user asks in Arabic what an embedded foreign phrase means and does not name a target language, translate that phrase into Arabic. If the user asks in English what embedded Arabic means and gives no target, translate it into English.",
+    "For patterns such as 'عطيني ترجمة بالإنكليزي لجملة ...' or 'عطيني بالإنكليزي: ...', the content after 'جملة', 'عبارة', or ':' is the source text whenever present.",
     "If a meaningful source phrase or sentence is present, do not ask a clarification merely because the surrounding request is informal or imperfectly written.",
     "Return the translation first and keep the answer concise. Do not add pronunciation audio unless the original user message explicitly asks for pronunciation/read-aloud.",
     "Preserve names, technical abbreviations, numbers, URLs, and proper nouns exactly when practical.",
@@ -4181,10 +4222,18 @@ async function sendPronunciationVoice303({ to = "", phoneNumberId = "", userText
 async function generate303ReplyWithFailover(task = {}) {
   const hasMedia = Boolean(task.mediaInput?.data && task.mediaInput?.mimeType);
   const textOnly = !hasMedia;
+  const originalInputText = (task.inputText || "").toString().trim();
 
-  // Tavily search remains text-only. Media turns use the multimodal provider chain below.
+  // V17.4: translation has routing priority over freshness/link heuristics.
+  // Example: "عطيني ترجمة بالإنكليزي لجملة أنا في اجتماع اليوم" contains "اليوم",
+  // but "اليوم" is SOURCE TEXT to translate, not a request for live web data.
+  const translationIntent = textOnly && looksLikeTranslationRequest303(originalInputText);
+  const translationExplicitWebSearch = translationIntent && hasExplicitWebSearchRequest303(originalInputText);
+
+  // Tavily search remains text-only. Clear translation tasks bypass Tavily unless the
+  // user explicitly asked to search the web as part of the same request.
   let tavilySearch = null;
-  if (textOnly) {
+  if (textOnly && (!translationIntent || translationExplicitWebSearch)) {
     tavilySearch = await prepareTavilySearchFor303Task(task);
 
     if (task.tavilyIntent?.shouldSearch && task.tavilyError) {
@@ -4202,16 +4251,17 @@ async function generate303ReplyWithFailover(task = {}) {
         model: "web-search"
       };
     }
+  } else if (translationIntent) {
+    task.tavilyIntent = { shouldSearch: false, reason: "translation_priority", topic: "general" };
+    task.tavilyError = null;
+    console.log("[303 Translation] web search suppressed for translation task", { phone: task.phone });
   }
-
-  const originalInputText = (task.inputText || "").toString().trim();
-  const translationIntent = textOnly && !tavilySearch && looksLikeTranslationRequest303(originalInputText);
   const providerInputText = tavilySearch
     ? buildTavilyGroundedPrompt303(originalInputText, tavilySearch)
     : (translationIntent ? build303TranslationTaskPrompt(originalInputText) : originalInputText);
 
   if (translationIntent) {
-    const target = detect303TranslationTarget(originalInputText);
+    const target = infer303TranslationTarget303(originalInputText);
     console.log("[303 Translation] deterministic translation intent detected", {
       phone: task.phone,
       target: target.code || "unspecified",
