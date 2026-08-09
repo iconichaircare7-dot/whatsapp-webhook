@@ -586,7 +586,10 @@ const TAVILY_303_NEWS_MIN_SCORE = Math.min(1, Math.max(0, Number(process.env.TAV
 const TAVILY_303_GENERAL_MIN_SCORE = Math.min(1, Math.max(0, Number(process.env.TAVILY_303_GENERAL_MIN_SCORE || 0.3)));
 const TAVILY_303_NEWS_EXCLUDE_DOMAINS = [
   "instagram.com", "facebook.com", "tiktok.com", "x.com", "twitter.com",
-  "youtube.com", "youtu.be", "threads.net"
+  "youtube.com", "youtu.be", "threads.net",
+  // Community / aggregation pages are poor final citations for news. Prefer the
+  // original publisher or official source that they point to instead.
+  "news.ycombinator.com", "reddit.com", "old.reddit.com"
 ];
 const TAVILY_303_TIMEOUT_MS = Math.min(
   20000,
@@ -1736,6 +1739,9 @@ function buildTavilyGroundedPrompt303(originalText = "", search = null) {
     "- Treat relevance as mandatory: if the supplied sources are not actually about the entity/topic asked, say the search did not find a relevant verified result.",
     search?.freshness?.freshnessLabel ? `- The server applied a freshness filter: ${search.freshness.freshnessLabel}${search.freshness.startDate ? ` starting ${search.freshness.startDate}` : ""}. Do not describe older material as current.` : "",
     "- If the sources do not verify a claim, say that the search did not verify it; do not guess.",
+    "- Prefer direct reporting or official sources over forums, discussion pages, or aggregators.",
+    "- Separate fact from interpretation: do not turn a source's prediction, allegation, or speculation into a confirmed fact.",
+    "- Do not invent consequences (for example policy changes, motives, causation, or links between events) unless a supplied source explicitly supports them.",
     "- Never invent, alter, shorten, or manufacture a URL.",
     "- Do not add a separate sources list or URLs in your answer; the server appends the exact source URLs.",
     "- Reply naturally and concisely in Arabic, matching Osama's dialect when practical.",
