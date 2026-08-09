@@ -605,7 +605,7 @@ const PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 = Math.min(
   Math.max(5000, Number(process.env.PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 || 15000))
 );
 
-// V16.1 IMAGE ROUTER — separates real-image search from AI generation/editing and ranks real-photo results.
+// V16.2 IMAGE ROUTER — keeps V16.1 photo ranking and cleans user-facing search captions.
 // Existing-image requests use Tavily image search; explicit create/design requests use Gemini Image.
 // The last image context is persisted as a lightweight Google Sheet snapshot (media id / source URL / prompt),
 // so follow-up commands like "اعمل منها بوستر" can continue the same visual context when possible.
@@ -2438,6 +2438,19 @@ function buildImageSearchQuery303(value = "") {
   return (query || original).slice(0, 320);
 }
 
+function buildImageSearchCaption303(value = "") {
+  const original = (value || "").toString().trim();
+  let subject = original
+    .replace(/(?:جيب(?:لي)?|هات(?:لي)?|ورجيني|فرجيني|بدي|اريد|أريد|ابعت(?:لي)?|بعث(?:لي)?)/giu, " ")
+    .replace(/(?:send\s+me|show\s+me|find\s+(?:me\s+)?|get\s+(?:me\s+)?|i\s+want)/giu, " ")
+    .replace(/(?:صورة|صوره|صور|image|photo|picture)/giu, " ")
+    .replace(/\b(?:of|for|please)\b/giu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!subject) subject = original;
+  return `🔎 ${subject}`.slice(0, 900);
+}
+
 function normalizeImageRankingText303(value = "") {
   return (value || "")
     .toString()
@@ -2802,7 +2815,7 @@ async function maybeHandle303ImageRouter(task = {}) {
       const found = await getUsableImageFromTavily303(query);
       const dataUrl = `data:${found.media.mimeType};base64,${found.media.data}`;
       const filename = `search-image-${Date.now()}.${found.media.mimeType === "image/png" ? "png" : found.media.mimeType === "image/webp" ? "webp" : "jpg"}`;
-      const caption = `🔎 ${query}`.slice(0, 900);
+      const caption = buildImageSearchCaption303(userText);
       const sendResult = await sendWhatsAppImageMessage(task.phone, dataUrl, caption, filename, phoneNumberId);
       if (!sendResult?.ok) {
         const error = new Error(`WhatsApp image send failed (${sendResult?.status || "unknown"})`);
