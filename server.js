@@ -605,8 +605,8 @@ const PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 = Math.min(
   Math.max(5000, Number(process.env.PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 || 15000))
 );
 
-// V16.2 IMAGE ROUTER — keeps V16.1 photo ranking and cleans user-facing search captions.
-// Existing-image requests use Tavily image search; explicit create/design requests use Gemini Image.
+// V16.3 IMAGE ROUTER — keeps V16.2 search quality/captions and adds Cloudflare image fallback.
+// Existing-image requests use Tavily image search; create/edit requests use Gemini Image then Cloudflare FLUX.2 fallback.
 // The last image context is persisted as a lightweight Google Sheet snapshot (media id / source URL / prompt),
 // so follow-up commands like "اعمل منها بوستر" can continue the same visual context when possible.
 const IMAGE_ROUTER_303_ENABLED = !["false", "0", "no", "off"].includes(
@@ -624,6 +624,26 @@ const IMAGE_GENERATION_MODEL_303 = (
 const IMAGE_GENERATION_SIZE_303 = (
   process.env.IMAGE_GENERATION_SIZE_303 || "1K"
 ).toString().trim().toUpperCase();
+// V16.3 image fallback: Gemini Image remains primary. If it is unavailable/quota-limited,
+// Cloudflare Workers AI FLUX.2 [klein] 4B generates/edits the image using the existing
+// CLOUDFLARE_AI_API_TOKEN + CLOUDFLARE_ACCOUNT_ID credentials. No new key is required.
+const IMAGE_CLOUDFLARE_FALLBACK_303_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.IMAGE_CLOUDFLARE_FALLBACK_303_ENABLED || "true").toString().trim().toLowerCase()
+);
+const IMAGE_CLOUDFLARE_MODEL_303 = (
+  process.env.IMAGE_CLOUDFLARE_MODEL_303 || "@cf/black-forest-labs/flux-2-klein-4b"
+).toString().trim();
+const IMAGE_CLOUDFLARE_TIMEOUT_MS_303 = Math.min(
+  120000,
+  Math.max(15000, Number(process.env.IMAGE_CLOUDFLARE_TIMEOUT_MS_303 || 60000))
+);
+const IMAGE_FFMPEG_BIN_303 = (
+  process.env.IMAGE_FFMPEG_BIN_303 || process.env.PRONUNCIATION_FFMPEG_BIN_303 || "ffmpeg"
+).toString().trim();
+const IMAGE_FFMPEG_TIMEOUT_MS_303 = Math.min(
+  30000,
+  Math.max(5000, Number(process.env.IMAGE_FFMPEG_TIMEOUT_MS_303 || 15000))
+);
 const IMAGE_SEARCH_303_MAX_CANDIDATES = Math.min(
   12,
   Math.max(3, Number(process.env.IMAGE_SEARCH_303_MAX_CANDIDATES || 8))
@@ -2759,6 +2779,205 @@ async function generateGeminiImage303(prompt = "", referenceMedia = null) {
   return { kind: "image", mimeType, data: buffer.toString("base64"), bytes: buffer.length, model: IMAGE_GENERATION_MODEL_303 };
 }
 
+function getCloudflareImageDimensions303(text = "", hasReference = false) {
+  const ratio = getImageGenerationAspectRatio303(text, hasReference);
+  if (ratio === "4:5") return { width: 1024, height: 1280 };
+  if (ratio === "16:9") return { width: 1344, height: 768 };
+  return { width: 1024, height: 1024 };
+}
+
+function getImageExtensionFromMime303(mimeType = "image/jpeg") {
+  const mime = (mimeType || "").toString().toLowerCase();
+  if (mime.includes("png")) return "png";
+  if (mime.includes("webp")) return "webp";
+  return "jpg";
+}
+
+async function prepareCloudflareImageReference303(referenceMedia = null) {
+  if (!referenceMedia?.data) return null;
+  const sourceBuffer = Buffer.from(referenceMedia.data, "base64");
+  if (!sourceBuffer.length) return null;
+
+  const id = crypto.randomBytes(8).toString("hex");
+  const inputExt = getImageExtensionFromMime303(referenceMedia.mimeType || "image/jpeg");
+  const inputPath = path.join("/tmp", `303-image-ref-${id}.${inputExt}`);
+  const outputPath = path.join("/tmp", `303-image-ref-${id}-small.jpg`);
+  await fs.promises.writeFile(inputPath, sourceBuffer);
+
+  try {
+    await new Promise((resolve, reject) => {
+      const args = [
+        "-y",
+        "-i", inputPath,
+        "-vf", "scale=500:500:force_original_aspect_ratio=decrease",
+        "-frames:v", "1",
+        "-q:v", "3",
+        outputPath
+      ];
+      const child = spawn(IMAGE_FFMPEG_BIN_303, args, { stdio: ["ignore", "ignore", "pipe"] });
+      let stderr = "";
+      const timer = setTimeout(() => {
+        try { child.kill("SIGKILL"); } catch (_) {}
+      }, IMAGE_FFMPEG_TIMEOUT_MS_303);
+      child.stderr.on("data", (chunk) => {
+        stderr += chunk.toString();
+        if (stderr.length > 5000) stderr = stderr.slice(-5000);
+      });
+      child.once("error", (error) => {
+        clearTimeout(timer);
+        reject(new Error(`Cloudflare image reference ffmpeg could not start: ${error?.message || error}`));
+      });
+      child.once("close", (code, signal) => {
+        clearTimeout(timer);
+        if (code === 0) return resolve();
+        reject(new Error(`Cloudflare image reference resize failed (code=${code}, signal=${signal || "none"}): ${stderr.trim() || "no stderr"}`));
+      });
+    });
+    const resized = await fs.promises.readFile(outputPath);
+    if (!resized.length) throw new Error("Cloudflare image reference resize returned empty image");
+    return { buffer: resized, mimeType: "image/jpeg", filename: "reference.jpg" };
+  } finally {
+    await Promise.allSettled([
+      fs.promises.unlink(inputPath),
+      fs.promises.unlink(outputPath)
+    ]);
+  }
+}
+
+function extractCloudflareGeneratedImage303(payload = {}) {
+  const candidates = [
+    payload?.result?.image,
+    payload?.image,
+    payload?.result?.output?.image,
+    payload?.result?.output_image,
+    payload?.output?.image
+  ];
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+async function generateCloudflareImage303(prompt = "", referenceMedia = null) {
+  if (!IMAGE_CLOUDFLARE_FALLBACK_303_ENABLED) throw new Error("303 Cloudflare image fallback is disabled");
+  if (!CLOUDFLARE_AI_API_TOKEN || !CLOUDFLARE_ACCOUNT_ID) {
+    throw new Error("Cloudflare image fallback credentials are missing");
+  }
+  if (typeof globalThis.FormData !== "function" || typeof globalThis.Blob !== "function") {
+    throw new Error("Cloudflare image fallback requires Node 18+ FormData/Blob support");
+  }
+
+  const cleanPrompt = (prompt || "").toString().trim();
+  if (!cleanPrompt) throw new Error("Cloudflare image generation received empty prompt");
+  const hasReference = Boolean(referenceMedia?.data);
+  const dimensions = getCloudflareImageDimensions303(cleanPrompt, hasReference);
+  const form = new globalThis.FormData();
+  form.append("prompt", hasReference
+    ? `${cleanPrompt}\nUse input_image_0 as the reference image. Preserve the main subject and recognizable details unless the user explicitly asks to change them.`
+    : cleanPrompt
+  );
+  form.append("width", String(dimensions.width));
+  form.append("height", String(dimensions.height));
+
+  if (hasReference) {
+    const prepared = await prepareCloudflareImageReference303(referenceMedia);
+    if (prepared?.buffer?.length) {
+      form.append(
+        "input_image_0",
+        new globalThis.Blob([prepared.buffer], { type: prepared.mimeType }),
+        prepared.filename
+      );
+    }
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), IMAGE_CLOUDFLARE_TIMEOUT_MS_303);
+  let response;
+  try {
+    response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(CLOUDFLARE_ACCOUNT_ID)}/ai/run/${IMAGE_CLOUDFLARE_MODEL_303}`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${CLOUDFLARE_AI_API_TOKEN}` },
+        body: form,
+        signal: controller.signal
+      }
+    );
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      const timeoutError = new Error("Cloudflare image generation timed out");
+      timeoutError.status = 408;
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const contentType = (response.headers.get("content-type") || "").toLowerCase();
+  if (contentType.startsWith("image/")) {
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (!response.ok) {
+      const error = new Error(`Cloudflare image generation failed: HTTP ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
+    if (!buffer.length) throw new Error("Cloudflare image generation returned empty image");
+    if (buffer.length > 5 * 1024 * 1024) throw new Error("Cloudflare generated image exceeds WhatsApp 5MB limit");
+    return { kind: "image", mimeType: contentType.split(";")[0] || "image/jpeg", data: buffer.toString("base64"), bytes: buffer.length, model: IMAGE_CLOUDFLARE_MODEL_303, provider: "cloudflare" };
+  }
+
+  const raw = await response.text();
+  let payload = {};
+  try { payload = raw ? JSON.parse(raw) : {}; } catch (_) { payload = {}; }
+  if (!response.ok || payload?.success === false) {
+    const apiErrors = Array.isArray(payload?.errors)
+      ? payload.errors.map((item) => item?.message || item?.code || "").filter(Boolean).join("; ")
+      : "";
+    const message = apiErrors || payload?.error?.message || raw || `HTTP ${response.status}`;
+    const error = new Error(`Cloudflare image generation failed: ${message}`);
+    error.status = response.status;
+    throw error;
+  }
+  const base64 = extractCloudflareGeneratedImage303(payload);
+  if (!base64) throw new Error("Cloudflare image generation returned no image");
+  const buffer = Buffer.from(base64, "base64");
+  if (!buffer.length) throw new Error("Cloudflare image generation returned empty image data");
+  if (buffer.length > 5 * 1024 * 1024) throw new Error("Cloudflare generated image exceeds WhatsApp 5MB limit");
+  return { kind: "image", mimeType: "image/jpeg", data: buffer.toString("base64"), bytes: buffer.length, model: IMAGE_CLOUDFLARE_MODEL_303, provider: "cloudflare" };
+}
+
+async function generate303ImageWithFailover(prompt = "", referenceMedia = null) {
+  let geminiError = null;
+  try {
+    const generated = await generateGeminiImage303(prompt, referenceMedia);
+    return { ...generated, provider: "gemini" };
+  } catch (error) {
+    geminiError = error;
+    console.warn("[303 Image] Gemini image unavailable; trying Cloudflare image fallback", {
+      status: Number(error?.status || 0) || null,
+      message: error?.message || String(error),
+      fallbackModel: IMAGE_CLOUDFLARE_MODEL_303
+    });
+  }
+
+  try {
+    const generated = await generateCloudflareImage303(prompt, referenceMedia);
+    console.log("[303 Image] Cloudflare image fallback succeeded", {
+      model: generated.model,
+      hasReference: Boolean(referenceMedia),
+      bytes: generated.bytes
+    });
+    return generated;
+  } catch (cloudflareError) {
+    const combined = new Error(
+      `Image generation failed on Gemini and Cloudflare. Gemini: ${geminiError?.message || geminiError}; Cloudflare: ${cloudflareError?.message || cloudflareError}`
+    );
+    combined.status = Number(cloudflareError?.status || geminiError?.status || 0) || null;
+    throw combined;
+  }
+}
+
 async function loadImage303ReferenceFromContext(phone = "") {
   const context = getLastImage303Context(phone);
   if (!context) return null;
@@ -2861,13 +3080,14 @@ async function maybeHandle303ImageRouter(task = {}) {
       return { handled: true, ok: false, route: "edit_no_reference" };
     }
 
-    console.log("[303 Image] Gemini image generation started", {
+    console.log("[303 Image] image generation failover started", {
       phone: task.phone,
       route: route.route,
-      model: IMAGE_GENERATION_MODEL_303,
+      primaryModel: IMAGE_GENERATION_MODEL_303,
+      fallbackModel: IMAGE_CLOUDFLARE_MODEL_303,
       hasReference: Boolean(referenceMedia)
     });
-    const generated = await generateGeminiImage303(userText, referenceMedia);
+    const generated = await generate303ImageWithFailover(userText, referenceMedia);
     const dataUrl = `data:${generated.mimeType};base64,${generated.data}`;
     const filename = `303-generated-${Date.now()}.jpg`;
     const sendResult = await sendWhatsAppImageMessage(task.phone, dataUrl, "", filename, phoneNumberId);
@@ -2893,9 +3113,10 @@ async function maybeHandle303ImageRouter(task = {}) {
       userText,
       referenceMedia ? "[تم تعديل الصورة وإرسال النسخة الجديدة]" : "[تم توليد الصورة وإرسالها]"
     );
-    console.log("[303 Image] Gemini image sent", {
+    console.log("[303 Image] generated image sent", {
       phone: task.phone,
       route: route.route,
+      provider: generated.provider || "unknown",
       model: generated.model,
       sendOk: true,
       bytes: generated.bytes
