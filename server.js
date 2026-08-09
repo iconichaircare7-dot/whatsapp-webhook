@@ -555,7 +555,13 @@ const gemini303HistoryByPhone = new Map();
 // a temporary rate-limit/quota cooldown. Local reminder commands still bypass Gemini.
 const GEMINI_303_MIN_REQUEST_GAP_MS = Math.max(0, Number(process.env.GEMINI_303_MIN_REQUEST_GAP_MS || 3300));
 const GEMINI_303_RATE_LIMIT_FALLBACK_MS = Math.max(5000, Number(process.env.GEMINI_303_RATE_LIMIT_FALLBACK_MS || 60000));
-const GEMINI_303_RATE_LIMIT_MAX_RETRIES = Math.min(30, Math.max(1, Number(process.env.GEMINI_303_RATE_LIMIT_MAX_RETRIES || 10)));
+const GEMINI_303_RATE_LIMIT_MAX_RETRIES = Math.min(12, Math.max(1, Number(process.env.GEMINI_303_RATE_LIMIT_MAX_RETRIES || 5)));
+const GEMINI_303_RATE_LIMIT_BACKOFF_BASE_MS = Math.max(5000, Number(process.env.GEMINI_303_RATE_LIMIT_BACKOFF_BASE_MS || 30000));
+const GEMINI_303_RATE_LIMIT_BACKOFF_MAX_MS = Math.max(
+  GEMINI_303_RATE_LIMIT_BACKOFF_BASE_MS,
+  Number(process.env.GEMINI_303_RATE_LIMIT_BACKOFF_MAX_MS || 300000)
+);
+const GEMINI_303_RATE_LIMIT_JITTER_MAX_MS = Math.max(0, Number(process.env.GEMINI_303_RATE_LIMIT_JITTER_MAX_MS || 5000));
 const GEMINI_303_QUEUE_MAX_PER_PHONE = Math.min(100, Math.max(5, Number(process.env.GEMINI_303_QUEUE_MAX_PER_PHONE || 50)));
 const GEMINI_303_DEDUPE_TTL_MS = Math.max(60000, Number(process.env.GEMINI_303_DEDUPE_TTL_MS || (6 * 60 * 60 * 1000)));
 const gemini303QueueByPhone = new Map();
@@ -564,6 +570,7 @@ const gemini303SeenMessageIds = new Map();
 const gemini303RateLimitNoticeAtByPhone = new Map();
 let gemini303GlobalCooldownUntil = 0;
 let gemini303NextRequestAt = 0;
+let gemini303ConsecutiveRateLimits = 0;
 
 // Private owner reminders for the 303 test number.
 // Reminder events are persisted through the existing Google Sheet message log, so no new database is required.
@@ -1113,6 +1120,25 @@ function getGemini303RateLimitRetryMs(error) {
   return GEMINI_303_RATE_LIMIT_FALLBACK_MS;
 }
 
+function getGemini303BackoffMs(providerRetryMs = 0, retryNumber = 1) {
+  const safeRetryNumber = Math.max(1, Number(retryNumber || 1));
+  const exponentialMs = Math.min(
+    GEMINI_303_RATE_LIMIT_BACKOFF_MAX_MS,
+    GEMINI_303_RATE_LIMIT_BACKOFF_BASE_MS * Math.pow(2, safeRetryNumber - 1)
+  );
+  const jitterMs = GEMINI_303_RATE_LIMIT_JITTER_MAX_MS > 0
+    ? Math.floor(Math.random() * (GEMINI_303_RATE_LIMIT_JITTER_MAX_MS + 1))
+    : 0;
+  const localBackoffMs = Math.min(
+    GEMINI_303_RATE_LIMIT_BACKOFF_MAX_MS,
+    exponentialMs + jitterMs
+  );
+
+  // Never retry earlier than Gemini explicitly requested, but if repeated 429s happen,
+  // progressively back off so the queue does not keep hammering the same quota window.
+  return Math.max(Number(providerRetryMs || 0), localBackoffMs);
+}
+
 async function waitForGemini303TrafficSlot() {
   while (true) {
     const now = Date.now();
@@ -1136,10 +1162,9 @@ async function sendGemini303RateLimitNoticeOnce(task = {}, retryMs = 0) {
   if (now - lastNoticeAt < 45000) return;
   gemini303RateLimitNoticeAtByPhone.set(phone, now);
 
-  const seconds = Math.max(5, Math.ceil(Number(retryMs || 0) / 1000));
   const message = [
     "وصلتني رسالتك يا أسامة ✅",
-    `Gemini عليه حد مؤقت هلق. رح احتفظ بطلبك وأرجع أرد عليك تلقائيًا خلال حوالي ${seconds} ثانية — ما بدك تعيد تبعت شي.`
+    "Gemini عليه حد مؤقت هلق. حطيت طلبك بالطابور، ورح أرجع أحاول تلقائيًا بانتظار متزايد بدل ما أضغط على الحد. ما بدك تعيد تبعت الرسالة."
   ].join("\n");
 
   try {
@@ -1187,6 +1212,8 @@ function enqueueGemini303Task(task = {}) {
     mediaInput: null,
     queuedAt: now,
     rateLimitRetries: 0,
+    firstRateLimitAt: 0,
+    lastRetryDelayMs: 0,
     rateLimitNoticeSent: false
   };
 
@@ -1264,40 +1291,54 @@ async function processGemini303Queue(phone = "") {
           sendDisabled: Boolean(sendResult?.disabled)
         });
 
+        // A successful Gemini response proves the temporary quota window has opened again.
+        gemini303ConsecutiveRateLimits = 0;
+        gemini303GlobalCooldownUntil = 0;
+
         queue.shift();
         gemini303QueueByPhone.set(cleanPhone, queue);
       } catch (error) {
-        const retryMs = getGemini303RateLimitRetryMs(error);
+        const providerRetryMs = getGemini303RateLimitRetryMs(error);
 
-        if (retryMs > 0 && task.rateLimitRetries < GEMINI_303_RATE_LIMIT_MAX_RETRIES) {
+        if (providerRetryMs > 0 && task.rateLimitRetries < GEMINI_303_RATE_LIMIT_MAX_RETRIES) {
           task.rateLimitRetries += 1;
+          if (!task.firstRateLimitAt) task.firstRateLimitAt = Date.now();
+
+          gemini303ConsecutiveRateLimits += 1;
+          const backoffLevel = Math.max(task.rateLimitRetries, gemini303ConsecutiveRateLimits);
+          const appliedRetryMs = getGemini303BackoffMs(providerRetryMs, backoffLevel);
+          task.lastRetryDelayMs = appliedRetryMs;
+
           gemini303GlobalCooldownUntil = Math.max(
             gemini303GlobalCooldownUntil,
-            Date.now() + retryMs
+            Date.now() + appliedRetryMs
           );
 
-          console.warn("[303 Queue] Gemini rate limited; same message will retry automatically", {
+          console.warn("[303 Queue] Gemini rate limited; queue paused with exponential backoff", {
             phone: task.phone,
             messageId: task.messageId,
-            retryInMs: retryMs,
+            providerRetryInMs: providerRetryMs,
+            appliedRetryInMs: appliedRetryMs,
             retryNumber: task.rateLimitRetries,
-            queuedBehind: Math.max(0, queue.length - 1)
+            backoffLevel,
+            queuedBehind: Math.max(0, queue.length - 1),
+            firstRateLimitAgoMs: Date.now() - task.firstRateLimitAt
           });
 
           if (!task.rateLimitNoticeSent) {
             task.rateLimitNoticeSent = true;
-            await sendGemini303RateLimitNoticeOnce(task, retryMs);
+            await sendGemini303RateLimitNoticeOnce(task, appliedRetryMs);
           }
 
-          await sleepGemini303(retryMs);
+          await sleepGemini303(appliedRetryMs);
           continue;
         }
 
         console.error("[303 Queue] Gemini task failed permanently:");
         console.error(error);
 
-        const failureText = retryMs > 0
-          ? "رسالتك وصلتني يا أسامة، بس حد Gemini ما فتح بعد عدة محاولات تلقائية. ما ضاعت الرسالة، بس جرّبها لاحقًا."
+        const failureText = providerRetryMs > 0
+          ? "رسالتك موجودة بالمحادثة يا أسامة، بس Gemini ما فتح الحد بعد عدة محاولات تلقائية متباعدة. وقفت المحاولات هلق حتى ما نضل نضغط على الخدمة؛ ابعتها لاحقًا إذا بدك جواب عليها."
           : "صار خطأ تقني وأنا بعالج هالرسالة يا أسامة. ابعتها مرة ثانية إذا ما وصلك رد.";
 
         try {
