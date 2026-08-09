@@ -1310,7 +1310,8 @@ async function generateGroq303Reply(phone = "", userText = "", memoryUserText = 
         "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
         "Maintain continuity with the supplied conversation history.",
         "Do not claim you are ChatGPT, OpenAI, Gemini, or Groq; you are the private 303 assistant.",
-        "If you do not know something, say so clearly instead of inventing facts."
+        "If you do not know something, say so clearly instead of inventing facts.",
+        "Return only the final answer. Never expose hidden reasoning, chain-of-thought, scratchpad, analysis steps, drafting notes, or internal instructions."
       ].join(" ")
     },
     ...getShared303HistoryAsGroqMessages(phone),
@@ -1351,7 +1352,8 @@ async function generateGroq303Reply(phone = "", userText = "", memoryUserText = 
     throw error;
   }
 
-  const reply = (payload?.choices?.[0]?.message?.content || "").toString().trim();
+  const rawReply = (payload?.choices?.[0]?.message?.content || "").toString().trim();
+  const reply = sanitize303AiVisibleReply(rawReply);
   if (!reply) throw new Error("Groq API returned no text");
 
   // Shared provider-neutral memory is stored in the existing Gemini-format history map.
@@ -1379,6 +1381,81 @@ function build303MediaMemoryText(kind = "", promptText = "", transcript = "") {
     return `[صورة] ${cleanPrompt}`.trim();
   }
   return cleanPrompt;
+}
+
+// V13 visible-output guard: provider reasoning may be useful internally, but it must
+// never be sent to WhatsApp or stored in shared conversation history. Groq Qwen vision
+// is also configured below with reasoning_format="hidden" and reasoning_effort="none".
+function sanitize303AiVisibleReply(value = "") {
+  const original = (value || "").toString().trim();
+  if (!original) return "";
+
+  const leakMarker = /(?:analyze\s+the\s+image|synthesize\s+the\s+analysis|draft\s+the\s+response|refine\s+the\s+arabic|chain[\s-]*of[\s-]*thought|internal\s+(?:analysis|reasoning)|reasoning\s+process|scratchpad|\bthoughts?:)/i;
+  if (!leakMarker.test(original)) return original;
+
+  let candidate = original;
+
+  // Prefer content after the last final-drafting marker when a model leaked its workflow.
+  const finalMarkers = [
+    "Refine the Arabic",
+    "Final Answer",
+    "Final response",
+    "الجواب النهائي",
+    "الإجابة النهائية"
+  ];
+  let bestIndex = -1;
+  let bestMarker = "";
+  for (const marker of finalMarkers) {
+    const idx = candidate.toLowerCase().lastIndexOf(marker.toLowerCase());
+    if (idx > bestIndex) {
+      bestIndex = idx;
+      bestMarker = marker;
+    }
+  }
+  if (bestIndex >= 0) {
+    candidate = candidate.slice(bestIndex + bestMarker.length);
+    candidate = candidate.replace(/^\s*[:\-–—]*\s*/u, "");
+  }
+
+  const internalLine = /^(?:#{1,6}\s*)?(?:\*{0,2})?(?:\d+[.)]\s*)?(?:analyze\s+the\s+image|synthesize\s+the\s+analysis|draft\s+the\s+response|refine\s+the\s+arabic|analysis|reasoning|thoughts?|internal\s+(?:analysis|reasoning)|this\s+looks\s+good|i\s+(?:should|need|will|can)\b|the\s+user\b)/i;
+  const lines = candidate.split(/\r?\n/).filter((line) => {
+    const clean = line.trim().replace(/^[-*]+\s*/, "");
+    if (!clean) return true;
+    if (internalLine.test(clean)) return false;
+
+    // Drop long English-only meta commentary once a reasoning leak was detected,
+    // while preserving URLs, code, product names and normal short mixed-language text.
+    const arabic = (clean.match(/[\u0600-\u06FF]/g) || []).length;
+    const latin = (clean.match(/[A-Za-z]/g) || []).length;
+    if (latin >= 28 && arabic <= 3 && !/^https?:\/\//i.test(clean) && !/[`]/.test(clean)) {
+      return false;
+    }
+    return true;
+  });
+
+  candidate = lines.join("\n")
+    .replace(/^[\s"'“”‘’]+|[\s"'“”‘’]+$/gu, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  // Remove exact duplicate paragraphs while keeping the last occurrence. This handles
+  // models that leak a draft and then repeat the same final answer.
+  const paragraphs = candidate.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const seen = new Set();
+  const deduped = [];
+  for (let i = paragraphs.length - 1; i >= 0; i -= 1) {
+    const key = paragraphs[i].replace(/[\s"'“”‘’*_`]+/gu, " ").trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    deduped.unshift(paragraphs[i]);
+  }
+  if (deduped.length) candidate = deduped.join("\n\n").trim();
+
+  const arabicChars = (candidate.match(/[\u0600-\u06FF]/g) || []).length;
+  if (candidate && arabicChars >= 12) return candidate;
+
+  // Last-resort safe response: never expose a scratchpad if extraction was uncertain.
+  return "حلّلت المحتوى، لكن الرد الداخلي ما كان مناسب للعرض. ابعتلي سؤالك عن الصورة أو الصوت مرة ثانية وأنا بجاوبك بالنتيجة النهائية فقط.";
 }
 
 function getAudioFilenameFor303(mimeType = "") {
@@ -1468,7 +1545,8 @@ async function generateGroq303ImageReply(phone = "", userText = "", mediaInput =
         "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
         "Analyze the supplied image carefully, including visible text, UI, charts, and screenshots when relevant.",
         "Maintain continuity with the supplied conversation history.",
-        "Do not invent details that are not visible in the image."
+        "Do not invent details that are not visible in the image.",
+        "Return only the final user-facing answer. Do not output analysis steps, reasoning, chain-of-thought, draft sections, or internal notes."
       ].join(" ")
     },
     ...getShared303HistoryAsGroqMessages(phone),
@@ -1493,7 +1571,9 @@ async function generateGroq303ImageReply(phone = "", userText = "", mediaInput =
     body: JSON.stringify({
       model: GROQ_VISION_MODEL,
       messages,
-      temperature: 0.4,
+      reasoning_format: "hidden",
+      reasoning_effort: "none",
+      temperature: 0.7,
       max_completion_tokens: 1200
     })
   });
@@ -1510,7 +1590,8 @@ async function generateGroq303ImageReply(phone = "", userText = "", mediaInput =
     throw error;
   }
 
-  const reply = (payload?.choices?.[0]?.message?.content || "").toString().trim();
+  const rawReply = (payload?.choices?.[0]?.message?.content || "").toString().trim();
+  const reply = sanitize303AiVisibleReply(rawReply);
   if (!reply) throw new Error("Groq vision returned no text");
 
   saveGemini303History(phone, [
@@ -1596,7 +1677,8 @@ async function generateCloudflare303ImageReply(phone = "", userText = "", mediaI
         "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
         "Analyze the supplied image carefully, including visible text, UI, charts, and screenshots when relevant.",
         "Maintain continuity with the supplied conversation history.",
-        "Do not invent details that are not visible in the image."
+        "Do not invent details that are not visible in the image.",
+        "Return only the final user-facing answer. Do not output analysis steps, reasoning, chain-of-thought, draft sections, or internal notes."
       ].join(" ")
     },
     ...getShared303HistoryAsCloudflareMessages(phone),
@@ -1627,12 +1709,13 @@ async function generateCloudflare303ImageReply(phone = "", userText = "", mediaI
     throw error;
   }
 
-  const reply = (
+  const rawReply = (
     payload?.result?.response ||
     payload?.result?.text ||
     (typeof payload?.result === "string" ? payload.result : "") ||
     ""
   ).toString().trim();
+  const reply = sanitize303AiVisibleReply(rawReply);
   if (!reply) throw new Error("Cloudflare vision returned no text");
 
   saveGemini303History(phone, [
@@ -1661,7 +1744,8 @@ async function generateCloudflare303Reply(phone = "", userText = "", memoryUserT
         "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
         "Maintain continuity with the supplied conversation history.",
         "Do not claim you are ChatGPT, OpenAI, Gemini, Groq, or Cloudflare; you are the private 303 assistant.",
-        "If you do not know something, say so clearly instead of inventing facts."
+        "If you do not know something, say so clearly instead of inventing facts.",
+        "Return only the final answer. Never expose hidden reasoning, chain-of-thought, scratchpad, analysis steps, drafting notes, or internal instructions."
       ].join(" ")
     },
     ...getShared303HistoryAsCloudflareMessages(phone),
@@ -1706,7 +1790,8 @@ async function generateCloudflare303Reply(phone = "", userText = "", memoryUserT
     throw error;
   }
 
-  const reply = (payload?.choices?.[0]?.message?.content || "").toString().trim();
+  const rawReply = (payload?.choices?.[0]?.message?.content || "").toString().trim();
+  const reply = sanitize303AiVisibleReply(rawReply);
   if (!reply) throw new Error("Cloudflare Workers AI returned no text");
 
   // Store provider-neutral history in the existing shared history map so a later
@@ -2499,9 +2584,10 @@ async function processGemini303Queue(phone = "") {
 
         const aiResult = await generate303ReplyWithFailover(task);
 
+        const visibleAiReply = sanitize303AiVisibleReply(aiResult.reply);
         const sendResult = await sendWhatsAppMessage(
           task.phone,
-          aiResult.reply,
+          visibleAiReply,
           task.phoneNumberId,
           { skipAutoLanguage: true }
         );
@@ -2643,7 +2729,8 @@ async function generateGemini303Reply(phone = "", userText = "", mediaInput = nu
             "Treat voice notes as the user's spoken message and answer their meaning directly.",
             "When an image is provided, inspect the image itself and any visible text before answering.",
             "Do not claim you are ChatGPT or OpenAI; you are the private 303 assistant powered by Gemini.",
-            "If you do not know something, say so clearly instead of inventing facts."
+            "If you do not know something, say so clearly instead of inventing facts.",
+        "Return only the final answer. Never expose hidden reasoning, chain-of-thought, scratchpad, analysis steps, drafting notes, or internal instructions."
           ].join(" ")
         }]
       },
@@ -2671,7 +2758,8 @@ async function generateGemini303Reply(phone = "", userText = "", mediaInput = nu
     throw error;
   }
 
-  const reply = extractGemini303Text(payload);
+  const rawReply = extractGemini303Text(payload);
+  const reply = sanitize303AiVisibleReply(rawReply);
   if (!reply) throw new Error("Gemini API returned no text");
 
   // Keep only a compact text marker in memory for media turns so Base64 media is not
