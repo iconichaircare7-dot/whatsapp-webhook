@@ -575,7 +575,7 @@ const CLOUDFLARE_AI_MODEL = (process.env.CLOUDFLARE_AI_MODEL || "@cf/zai-org/glm
 const CLOUDFLARE_VISION_MODEL = (process.env.CLOUDFLARE_VISION_MODEL || "@cf/google/gemma-4-26b-a4b-it").toString().trim();
 const CLOUDFLARE_AUDIO_TRANSCRIPTION_MODEL = (process.env.CLOUDFLARE_AUDIO_TRANSCRIPTION_MODEL || "@cf/openai/whisper-large-v3-turbo").toString().trim();
 
-// V15 pronunciation voice: short word/phrase pronunciation only.
+// V15 pronunciation voice remains unchanged under V16 image router.
 // Groq Orpheus generates WAV; Render's native ffmpeg converts it locally to WhatsApp-supported M4A/AAC.
 // Normal 303 replies remain text-only unless the user explicitly asks how a word/phrase is said or pronounced.
 const PRONUNCIATION_VOICE_303_ENABLED = !["false", "0", "no", "off"].includes(
@@ -604,6 +604,41 @@ const PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 = Math.min(
   30000,
   Math.max(5000, Number(process.env.PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 || 15000))
 );
+
+// V16 IMAGE ROUTER — separates real-image search from AI generation/editing.
+// Existing-image requests use Tavily image search; explicit create/design requests use Gemini Image.
+// The last image context is persisted as a lightweight Google Sheet snapshot (media id / source URL / prompt),
+// so follow-up commands like "اعمل منها بوستر" can continue the same visual context when possible.
+const IMAGE_ROUTER_303_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.IMAGE_ROUTER_303_ENABLED || "true").toString().trim().toLowerCase()
+);
+const IMAGE_SEARCH_303_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.IMAGE_SEARCH_303_ENABLED || "true").toString().trim().toLowerCase()
+);
+const IMAGE_GENERATION_303_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.IMAGE_GENERATION_303_ENABLED || "true").toString().trim().toLowerCase()
+);
+const IMAGE_GENERATION_MODEL_303 = (
+  process.env.IMAGE_GENERATION_MODEL_303 || "gemini-3.1-flash-image"
+).toString().trim();
+const IMAGE_GENERATION_SIZE_303 = (
+  process.env.IMAGE_GENERATION_SIZE_303 || "1K"
+).toString().trim().toUpperCase();
+const IMAGE_SEARCH_303_MAX_CANDIDATES = Math.min(
+  12,
+  Math.max(3, Number(process.env.IMAGE_SEARCH_303_MAX_CANDIDATES || 8))
+);
+const IMAGE_REMOTE_FETCH_TIMEOUT_MS_303 = Math.min(
+  20000,
+  Math.max(4000, Number(process.env.IMAGE_REMOTE_FETCH_TIMEOUT_MS_303 || 10000))
+);
+const IMAGE_CONTEXT_303_MAX_AGE_MS = Math.min(
+  30 * 24 * 60 * 60 * 1000,
+  Math.max(60 * 60 * 1000, Number(process.env.IMAGE_CONTEXT_303_MAX_AGE_MS || (7 * 24 * 60 * 60 * 1000)))
+);
+const IMAGE_CONTEXT_SNAPSHOT_MARKER_303 = "[[303_IMAGE_CONTEXT_V16]] ";
+const image303ContextByPhone = new Map();
+
 const CLOUDFLARE_AI_303_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.CLOUDFLARE_AI_303_ENABLED || "true").toString().trim().toLowerCase()
 );
@@ -2234,6 +2269,553 @@ async function prepareTavilySearchFor303Task(task = {}) {
 }
 
 
+
+// -------------------- V16 IMAGE ROUTER --------------------
+function getImage303PhoneKey(phone = "") {
+  return normalizePhoneDigits(phone);
+}
+
+function isImageContextSnapshotMessage303(message = {}) {
+  return (message?.messageType || "").toString() === "303 Image Context V16" ||
+    (message?.body || "").toString().startsWith(IMAGE_CONTEXT_SNAPSHOT_MARKER_303);
+}
+
+function encodeImageContextSnapshot303(context = {}) {
+  const payload = {
+    phone: getImage303PhoneKey(context.phone || ""),
+    phoneNumberId: normalizePhoneNumberId(context.phoneNumberId || AI_303_PHONE_NUMBER_ID),
+    kind: (context.kind || "").toString().trim(),
+    mediaId: (context.mediaId || "").toString().trim(),
+    mimeType: (context.mimeType || "image/jpeg").toString().trim(),
+    sourceUrl: (context.sourceUrl || "").toString().trim().slice(0, 1800),
+    sourceTitle: (context.sourceTitle || "").toString().trim().slice(0, 300),
+    query: (context.query || "").toString().trim().slice(0, 500),
+    prompt: (context.prompt || "").toString().trim().slice(0, 1600),
+    updatedAt: Number(context.updatedAt || Date.now())
+  };
+  return IMAGE_CONTEXT_SNAPSHOT_MARKER_303 + JSON.stringify(payload);
+}
+
+function decodeImageContextSnapshot303(body = "") {
+  const raw = (body || "").toString().trim();
+  if (!raw.startsWith(IMAGE_CONTEXT_SNAPSHOT_MARKER_303)) return null;
+  try {
+    const parsed = JSON.parse(raw.slice(IMAGE_CONTEXT_SNAPSHOT_MARKER_303.length));
+    if (!parsed || typeof parsed !== "object") return null;
+    const phone = getImage303PhoneKey(parsed.phone || "");
+    if (!phone) return null;
+    return {
+      ...parsed,
+      phone,
+      updatedAt: Number(parsed.updatedAt || 0)
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+function rememberImage303Context(phone = "", context = {}) {
+  const key = getImage303PhoneKey(phone || context.phone || "");
+  if (!key) return null;
+  const current = image303ContextByPhone.get(key) || {};
+  const next = {
+    ...current,
+    ...context,
+    phone: key,
+    phoneNumberId: normalizePhoneNumberId(context.phoneNumberId || current.phoneNumberId || AI_303_PHONE_NUMBER_ID),
+    updatedAt: Date.now()
+  };
+  image303ContextByPhone.set(key, next);
+  return next;
+}
+
+function getLastImage303Context(phone = "") {
+  const key = getImage303PhoneKey(phone);
+  if (!key) return null;
+  const context = image303ContextByPhone.get(key) || null;
+  if (!context) return null;
+  if (Date.now() - Number(context.updatedAt || 0) > IMAGE_CONTEXT_303_MAX_AGE_MS) {
+    image303ContextByPhone.delete(key);
+    return null;
+  }
+  return context;
+}
+
+function restoreImage303ContextFromMessages(messages = []) {
+  const latest = new Map();
+  (messages || []).forEach((message) => {
+    if (!isImageContextSnapshotMessage303(message)) return;
+    const context = decodeImageContextSnapshot303(message.body || "");
+    if (!context?.phone) return;
+    if (Date.now() - Number(context.updatedAt || 0) > IMAGE_CONTEXT_303_MAX_AGE_MS) return;
+    const current = latest.get(context.phone);
+    if (!current || Number(context.updatedAt || 0) >= Number(current.updatedAt || 0)) {
+      latest.set(context.phone, context);
+    }
+  });
+  latest.forEach((context, phone) => image303ContextByPhone.set(phone, context));
+  return latest.size;
+}
+
+async function persistImage303Context(phone = "", context = {}) {
+  const cleanPhone = getImage303PhoneKey(phone || context.phone || "");
+  if (!cleanPhone) return { ok: false, skipped: true };
+  const remembered = rememberImage303Context(cleanPhone, context);
+  if (!remembered) return { ok: false, skipped: true };
+
+  const phoneNumberId = normalizePhoneNumberId(remembered.phoneNumberId || AI_303_PHONE_NUMBER_ID);
+  const lineConfig = getLineConfig(phoneNumberId);
+  const item = {
+    time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }),
+    phone: cleanPhone,
+    customerName: "",
+    branch: lineConfig.branch,
+    sender: "system",
+    body: encodeImageContextSnapshot303(remembered),
+    status: "System",
+    messageType: "303 Image Context V16",
+    phoneNumberId
+  };
+  try {
+    await saveMessageToGoogleSheet(item);
+    return { ok: true };
+  } catch (error) {
+    console.warn("[303 Image] context persistence failed", error?.message || error);
+    return { ok: false, error: error?.message || "image_context_persistence_failed" };
+  }
+}
+
+function looksLikeExplicitImageGeneration303(value = "") {
+  const text = (value || "").toString().trim();
+  if (!text) return false;
+  return /(?:اعمل(?:لي)?|اعملي|صم[مم](?:لي)?|ول[ّد]?|انش[ئأ]|أنش[ئأ]|حو[ّل]|create|generate|design|make\s+(?:me\s+)?(?:an?\s+)?(?:image|photo|picture|poster)|turn\s+(?:this|it)\s+into)/iu.test(text) &&
+    /(?:صورة|صوره|بوستر|تصميم|ملصق|image|photo|picture|poster|visual)/iu.test(text);
+}
+
+function looksLikeImageEditFollowUp303(value = "", hasImageContext = false) {
+  if (!hasImageContext) return false;
+  const text = (value || "").toString().trim();
+  if (!text) return false;
+  return /(?:عدل(?:ها|ه)?|عدّل|غي[ّر]|بد[ّل]|خليها|خليه|كبر|كبّر|صغر|صغّر|حط|حطّي|اكتب|شيل|احذف|زبط|رتب|اعمل\s+منها|حو[ّل]ها|edit\s+(?:it|this)|change\s+(?:it|the)|make\s+it|remove\s+|add\s+|turn\s+it\s+into)/iu.test(text);
+}
+
+function looksLikeExistingImageSearchRequest303(value = "") {
+  const text = (value || "").toString().trim();
+  if (!text || looksLikeExplicitImageGeneration303(text)) return false;
+  const hasImageNoun = /(?:صورة|صوره|صور|بوستر|ملصق|image|photo|picture|poster)/iu.test(text);
+  if (!hasImageNoun) return false;
+  if (/(?:جيب(?:لي)?|هات(?:لي)?|ورجيني|فرجيني|بدي|اريد|أريد|ابعت(?:لي)?|بعث(?:لي)?|send\s+me|show\s+me|find\s+(?:me\s+)?|get\s+(?:me\s+)?|i\s+want)/iu.test(text)) return true;
+  // A short noun phrase such as "صورة ميسي" defaults to finding a real existing image,
+  // not silently generating a synthetic one.
+  return text.length <= 140;
+}
+
+function buildImageSearchQuery303(value = "") {
+  let query = (value || "").toString().trim();
+  query = query
+    .replace(/(?:جيب(?:لي)?|هات(?:لي)?|ورجيني|فرجيني|بدي|اريد|أريد|ابعت(?:لي)?|بعث(?:لي)?)/giu, " ")
+    .replace(/(?:send\s+me|show\s+me|find\s+(?:me\s+)?|get\s+(?:me\s+)?|i\s+want)/giu, " ")
+    .replace(/(?:صورة|صوره|صور)/giu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (/\bposter\b/i.test(value || "") || /بوستر|ملصق/iu.test(value || "")) {
+    query = `${query.replace(/(?:بوستر|ملصق)/giu, " ").trim()} poster`.trim();
+  }
+  return (query || (value || "").toString().trim()).slice(0, 320);
+}
+
+function detectImage303Route(task = {}) {
+  if (!IMAGE_ROUTER_303_ENABLED) return { route: "none" };
+  const text = (task.inputText || "").toString().trim();
+  const hasLast = Boolean(getLastImage303Context(task.phone));
+  const incomingImage = (task.mediaInput?.kind || task.mediaKind || "").toString().toLowerCase() === "image";
+
+  if (incomingImage && looksLikeImageEditFollowUp303(text, true)) {
+    return { route: "edit", reason: "incoming_image_edit" };
+  }
+  if (hasLast && looksLikeImageEditFollowUp303(text, true)) {
+    return { route: "edit", reason: "last_image_followup" };
+  }
+  if (looksLikeExplicitImageGeneration303(text)) {
+    return { route: hasLast ? "generate_or_edit" : "generate", reason: "explicit_creation" };
+  }
+  if (!incomingImage && looksLikeExistingImageSearchRequest303(text)) {
+    return { route: "search", reason: "existing_image_request" };
+  }
+  return { route: "none" };
+}
+
+function inferImageMimeFromUrl303(url = "") {
+  const clean = (url || "").toString().split("?")[0].toLowerCase();
+  if (/\.png$/.test(clean)) return "image/png";
+  if (/\.webp$/.test(clean)) return "image/webp";
+  if (/\.jpe?g$/.test(clean)) return "image/jpeg";
+  return "";
+}
+
+async function downloadRemoteImage303(url = "") {
+  const cleanUrl = (url || "").toString().trim();
+  if (!/^https?:\/\//i.test(cleanUrl)) throw new Error("Invalid remote image URL");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), IMAGE_REMOTE_FETCH_TIMEOUT_MS_303);
+  try {
+    const response = await fetch(cleanUrl, {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        "Accept": "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8,*/*;q=0.2",
+        "User-Agent": "Mozilla/5.0 (compatible; Iconic303ImageFetcher/1.0)"
+      }
+    });
+    if (!response.ok) throw new Error(`Remote image HTTP ${response.status}`);
+    const declared = Number(response.headers.get("content-length") || 0);
+    if (declared > 5 * 1024 * 1024) throw new Error("Remote image exceeds WhatsApp 5MB limit");
+    const contentType = normalizeGemini303MimeType(response.headers.get("content-type") || inferImageMimeFromUrl303(cleanUrl), "image");
+    if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
+      throw new Error(`Unsupported remote image type: ${contentType}`);
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (!buffer.length) throw new Error("Remote image is empty");
+    if (buffer.length > 5 * 1024 * 1024) throw new Error("Remote image exceeds WhatsApp 5MB limit");
+    return { kind: "image", mimeType: contentType, data: buffer.toString("base64"), bytes: buffer.length, sourceUrl: cleanUrl };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function collectTavilyImageCandidates303(payload = {}) {
+  const candidates = [];
+  const add = (item, fallbackTitle = "") => {
+    if (!item) return;
+    const url = typeof item === "string" ? item : (item.url || item.image_url || "");
+    const description = typeof item === "string" ? "" : (item.description || item.alt || fallbackTitle || "");
+    if (!/^https?:\/\//i.test((url || "").toString())) return;
+    if (candidates.some((existing) => existing.url === url)) return;
+    candidates.push({ url: url.toString().trim(), description: (description || "").toString().trim() });
+  };
+  (Array.isArray(payload?.images) ? payload.images : []).forEach((item) => add(item));
+  (Array.isArray(payload?.results) ? payload.results : []).forEach((result) => {
+    (Array.isArray(result?.images) ? result.images : []).forEach((item) => add(item, result?.title || ""));
+  });
+  return candidates.slice(0, IMAGE_SEARCH_303_MAX_CANDIDATES);
+}
+
+async function runTavily303ImageSearch(query = "") {
+  if (!IMAGE_SEARCH_303_ENABLED) throw new Error("303 image search is disabled");
+  if (!TAVILY_API_KEY) throw new Error("TAVILY_API_KEY is missing for image search");
+  const cleanQuery = buildImageSearchQuery303(query);
+  if (!cleanQuery) throw new Error("303 image search received empty query");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TAVILY_303_TIMEOUT_MS);
+  try {
+    const response = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TAVILY_API_KEY}`
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        query: cleanQuery,
+        topic: "general",
+        search_depth: "basic",
+        include_answer: false,
+        include_raw_content: false,
+        include_images: true,
+        include_image_descriptions: true,
+        max_results: 3
+      })
+    });
+    const raw = await response.text();
+    let payload = {};
+    try { payload = raw ? JSON.parse(raw) : {}; } catch (_) { payload = {}; }
+    if (!response.ok) {
+      const message = payload?.detail?.error || payload?.error?.message || payload?.message || raw || `HTTP ${response.status}`;
+      const error = new Error(`Tavily image search failed: ${message}`);
+      error.status = response.status;
+      throw error;
+    }
+    return {
+      query: (payload?.query || cleanQuery).toString().trim(),
+      candidates: collectTavilyImageCandidates303(payload),
+      requestId: (payload?.request_id || "").toString().trim(),
+      credits: Number(payload?.usage?.credits || 0)
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function getUsableImageFromTavily303(query = "") {
+  const search = await runTavily303ImageSearch(query);
+  let lastError = null;
+  for (const candidate of search.candidates) {
+    try {
+      const media = await downloadRemoteImage303(candidate.url);
+      return { search, candidate, media };
+    } catch (error) {
+      lastError = error;
+      console.warn("[303 Image] candidate download skipped", {
+        url: candidate.url,
+        message: error?.message || String(error)
+      });
+    }
+  }
+  const error = new Error(lastError?.message || "Tavily returned no WhatsApp-compatible image");
+  error.status = Number(lastError?.status || 0) || 404;
+  throw error;
+}
+
+function getImageGenerationAspectRatio303(text = "", hasReference = false) {
+  const value = (text || "").toString();
+  if (/(?:بوستر|poster|portrait|عمودي|ستوري|story)/iu.test(value)) return "4:5";
+  if (/(?:بانر|banner|غلاف|cover|wide|عريض|سينمائي\s+عريض)/iu.test(value)) return "16:9";
+  return hasReference ? "" : "1:1";
+}
+
+function extractGeminiInteractionImage303(payload = {}) {
+  const direct = payload?.output_image;
+  if (direct?.data) {
+    return {
+      data: direct.data.toString(),
+      mimeType: (direct.mime_type || direct.mimeType || "image/jpeg").toString()
+    };
+  }
+  const pools = [payload?.output, payload?.outputs, payload?.response?.output];
+  for (const pool of pools) {
+    if (!Array.isArray(pool)) continue;
+    for (const item of pool) {
+      if (item?.data && /image/i.test((item?.type || item?.mime_type || "").toString())) {
+        return { data: item.data.toString(), mimeType: (item.mime_type || item.mimeType || "image/jpeg").toString() };
+      }
+      if (item?.image?.data) {
+        return { data: item.image.data.toString(), mimeType: (item.image.mime_type || item.image.mimeType || "image/jpeg").toString() };
+      }
+    }
+  }
+  return null;
+}
+
+async function generateGeminiImage303(prompt = "", referenceMedia = null) {
+  if (!IMAGE_GENERATION_303_ENABLED) throw new Error("303 image generation is disabled");
+  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is missing for image generation");
+  const cleanPrompt = (prompt || "").toString().trim();
+  if (!cleanPrompt) throw new Error("303 image generation received empty prompt");
+  const hasReference = Boolean(referenceMedia?.data && referenceMedia?.mimeType);
+  const input = hasReference
+    ? [
+        {
+          type: "text",
+          text: [
+            cleanPrompt,
+            "Use the supplied image as the visual reference for this edit. Preserve the main subject and recognizable details unless the request explicitly asks to change them. Return the final image only."
+          ].join(" ")
+        },
+        {
+          type: "image",
+          data: referenceMedia.data,
+          mime_type: referenceMedia.mimeType
+        }
+      ]
+    : cleanPrompt;
+  const aspectRatio = getImageGenerationAspectRatio303(cleanPrompt, hasReference);
+  const responseFormat = {
+    type: "image",
+    mime_type: "image/jpeg",
+    image_size: IMAGE_GENERATION_SIZE_303,
+    ...(aspectRatio ? { aspect_ratio: aspectRatio } : {})
+  };
+
+  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": GEMINI_API_KEY
+    },
+    body: JSON.stringify({
+      model: IMAGE_GENERATION_MODEL_303,
+      input,
+      response_format: responseFormat
+    })
+  });
+  const raw = await response.text();
+  let payload = {};
+  try { payload = raw ? JSON.parse(raw) : {}; } catch (_) { payload = {}; }
+  if (!response.ok) {
+    const message = payload?.error?.message || raw || `HTTP ${response.status}`;
+    const error = new Error(`Gemini image generation failed: ${message}`);
+    error.status = response.status;
+    throw error;
+  }
+  const output = extractGeminiInteractionImage303(payload);
+  if (!output?.data) throw new Error("Gemini image generation returned no image");
+  const mimeType = normalizeGemini303MimeType(output.mimeType || "image/jpeg", "image");
+  const buffer = Buffer.from(output.data, "base64");
+  if (!buffer.length) throw new Error("Gemini image generation returned empty image data");
+  if (buffer.length > 5 * 1024 * 1024) throw new Error("Generated image exceeds WhatsApp 5MB limit");
+  return { kind: "image", mimeType, data: buffer.toString("base64"), bytes: buffer.length, model: IMAGE_GENERATION_MODEL_303 };
+}
+
+async function loadImage303ReferenceFromContext(phone = "") {
+  const context = getLastImage303Context(phone);
+  if (!context) return null;
+  if (context.data && context.mimeType) {
+    return { kind: "image", data: context.data, mimeType: context.mimeType, bytes: Number(context.bytes || 0) };
+  }
+  if (context.mediaId) {
+    try {
+      const media = await downloadWhatsAppMediaFor303({
+        type: "image",
+        image: { id: context.mediaId, mime_type: context.mimeType || "image/jpeg" }
+      });
+      if (media?.data) {
+        rememberImage303Context(phone, { ...context, data: media.data, mimeType: media.mimeType, bytes: media.bytes });
+        return media;
+      }
+    } catch (error) {
+      console.warn("[303 Image] stored WhatsApp media could not be restored", error?.message || error);
+    }
+  }
+  if (context.sourceUrl) {
+    try {
+      const media = await downloadRemoteImage303(context.sourceUrl);
+      rememberImage303Context(phone, { ...context, data: media.data, mimeType: media.mimeType, bytes: media.bytes });
+      return media;
+    } catch (error) {
+      console.warn("[303 Image] stored source URL could not be restored", error?.message || error);
+    }
+  }
+  return null;
+}
+
+function appendImage303TurnToSharedHistory(phone = "", userText = "", assistantMarker = "") {
+  const previous = getGemini303History(phone);
+  const cleanUser = (userText || "").toString().trim();
+  const cleanAssistant = (assistantMarker || "").toString().trim();
+  const next = [...previous];
+  if (cleanUser) next.push({ role: "user", parts: [{ text: cleanUser }] });
+  if (cleanAssistant) next.push({ role: "model", parts: [{ text: cleanAssistant }] });
+  saveGemini303History(phone, next);
+}
+
+async function maybeHandle303ImageRouter(task = {}) {
+  const route = detectImage303Route(task);
+  if (route.route === "none") return { handled: false };
+
+  const phoneNumberId = normalizePhoneNumberId(task.phoneNumberId || AI_303_PHONE_NUMBER_ID);
+  const userText = (task.inputText || "").toString().trim();
+
+  try {
+    if (route.route === "search") {
+      const query = buildImageSearchQuery303(userText);
+      console.log("[303 Image] real image search started", { phone: task.phone, query });
+      const found = await getUsableImageFromTavily303(query);
+      const dataUrl = `data:${found.media.mimeType};base64,${found.media.data}`;
+      const filename = `search-image-${Date.now()}.${found.media.mimeType === "image/png" ? "png" : found.media.mimeType === "image/webp" ? "webp" : "jpg"}`;
+      const caption = `🔎 ${query}`.slice(0, 900);
+      const sendResult = await sendWhatsAppImageMessage(task.phone, dataUrl, caption, filename, phoneNumberId);
+      if (!sendResult?.ok) {
+        const error = new Error(`WhatsApp image send failed (${sendResult?.status || "unknown"})`);
+        error.status = sendResult?.status;
+        throw error;
+      }
+      await persistImage303Context(task.phone, {
+        phoneNumberId,
+        kind: "search",
+        mediaId: sendResult.mediaId,
+        mimeType: found.media.mimeType,
+        data: found.media.data,
+        bytes: found.media.bytes,
+        sourceUrl: found.candidate.url,
+        sourceTitle: found.candidate.description || query,
+        query,
+        prompt: ""
+      });
+      appendImage303TurnToSharedHistory(task.phone, userText, `[تم إرسال صورة حقيقية من بحث الصور عن: ${query}]`);
+      console.log("[303 Image] real image search sent", {
+        phone: task.phone,
+        query,
+        sourceUrl: found.candidate.url,
+        sendOk: true
+      });
+      return { handled: true, ok: true, route: "search" };
+    }
+
+    let referenceMedia = null;
+    if (task.mediaInput?.kind === "image" && task.mediaInput?.data) {
+      referenceMedia = task.mediaInput;
+    } else if (route.route === "edit" || route.route === "generate_or_edit") {
+      referenceMedia = await loadImage303ReferenceFromContext(task.phone);
+    }
+
+    if (route.route === "edit" && !referenceMedia) {
+      await sendWhatsAppMessage(
+        task.phone,
+        "ما قدرت أرجّع آخر صورة نفسها هلق. ابعتها إلي مرة ثانية وبعمل التعديل عليها مباشرة.",
+        phoneNumberId,
+        { skipAutoLanguage: true }
+      );
+      return { handled: true, ok: false, route: "edit_no_reference" };
+    }
+
+    console.log("[303 Image] Gemini image generation started", {
+      phone: task.phone,
+      route: route.route,
+      model: IMAGE_GENERATION_MODEL_303,
+      hasReference: Boolean(referenceMedia)
+    });
+    const generated = await generateGeminiImage303(userText, referenceMedia);
+    const dataUrl = `data:${generated.mimeType};base64,${generated.data}`;
+    const filename = `303-generated-${Date.now()}.jpg`;
+    const sendResult = await sendWhatsAppImageMessage(task.phone, dataUrl, "", filename, phoneNumberId);
+    if (!sendResult?.ok) {
+      const error = new Error(`WhatsApp generated image send failed (${sendResult?.status || "unknown"})`);
+      error.status = sendResult?.status;
+      throw error;
+    }
+    await persistImage303Context(task.phone, {
+      phoneNumberId,
+      kind: referenceMedia ? "edited" : "generated",
+      mediaId: sendResult.mediaId,
+      mimeType: generated.mimeType,
+      data: generated.data,
+      bytes: generated.bytes,
+      sourceUrl: "",
+      sourceTitle: "",
+      query: "",
+      prompt: userText
+    });
+    appendImage303TurnToSharedHistory(
+      task.phone,
+      userText,
+      referenceMedia ? "[تم تعديل الصورة وإرسال النسخة الجديدة]" : "[تم توليد الصورة وإرسالها]"
+    );
+    console.log("[303 Image] Gemini image sent", {
+      phone: task.phone,
+      route: route.route,
+      model: generated.model,
+      sendOk: true,
+      bytes: generated.bytes
+    });
+    return { handled: true, ok: true, route: route.route };
+  } catch (error) {
+    console.warn("[303 Image] image route failed", {
+      phone: task.phone,
+      route: route.route,
+      status: Number(error?.status || 0) || null,
+      message: error?.message || String(error)
+    });
+    const failureText = route.route === "search"
+      ? "ما قدرت أجيب صورة من البحث هلق. جرّب نفس الطلب بعد شوي."
+      : "ما قدرت أطلع الصورة هلق، بس باقي المحادثة شغالة طبيعي. جرّب طلب الصورة مرة ثانية بعد شوي.";
+    await sendWhatsAppMessage(task.phone, failureText, phoneNumberId, { skipAutoLanguage: true });
+    return { handled: true, ok: false, route: route.route, error };
+  }
+}
+
+
 function normalizePronunciationLanguage303(value = "") {
   const raw = (value || "").toString().trim().toLowerCase();
   if (/^(?:ar|ar-ae|arabic|العربي|العربية)$/.test(raw)) return "ar";
@@ -2765,7 +3347,7 @@ async function generate303ReplyWithFailover(task = {}) {
   let cloudflareError = null;
   let cloudflareRetryMs = 0;
 
-  // V15 multimodal failover + Groq pronunciation voice. Image/audio turns keep the same provider order
+  // V16 image router + V15 multimodal failover + Groq pronunciation voice. Image/audio turns keep the same provider order
   // as text: Gemini -> Groq -> Cloudflare -> queue. Each fallback uses the provider's
   // own vision / speech capability while preserving the shared 303 conversation memory.
   if (!textOnly) {
@@ -3097,6 +3679,38 @@ async function processGemini303Queue(phone = "") {
           task.mediaInput = await downloadWhatsAppMediaFor303(task.message || {});
         }
 
+        // V16: remember an incoming customer image even when this turn only asks for analysis.
+        // A later message such as "اعمل منها بوستر" can then edit that same image.
+        if (task.mediaInput?.kind === "image" && task.mediaInput?.data) {
+          await persistImage303Context(task.phone, {
+            phoneNumberId: task.phoneNumberId,
+            kind: "incoming",
+            mediaId: task.mediaInput.mediaId || task.message?.image?.id || "",
+            mimeType: task.mediaInput.mimeType,
+            data: task.mediaInput.data,
+            bytes: task.mediaInput.bytes,
+            sourceUrl: "",
+            sourceTitle: "",
+            query: "",
+            prompt: (task.inputText || "").toString().trim()
+          });
+        }
+
+        const imageRouteResult = await maybeHandle303ImageRouter(task);
+        if (imageRouteResult?.handled) {
+          console.log("[303 Queue] image route completed", {
+            phone: task.phone,
+            messageId: task.messageId,
+            route: imageRouteResult.route,
+            ok: Boolean(imageRouteResult.ok),
+            queueDelayMs: Date.now() - task.queuedAt
+          });
+          gemini303ConsecutiveRateLimits = 0;
+          queue.shift();
+          gemini303QueueByPhone.set(cleanPhone, queue);
+          continue;
+        }
+
         const aiResult = await generate303ReplyWithFailover(task);
 
         const visibleAiReply = sanitize303AiVisibleReply(aiResult.reply);
@@ -3107,7 +3721,7 @@ async function processGemini303Queue(phone = "") {
           { skipAutoLanguage: true }
         );
 
-        // V15: pronunciation is intentionally opt-in. The normal answer stays text.
+        // V16 keeps V15 pronunciation intentionally opt-in. The normal answer stays text.
         // Only explicit "how do I say/pronounce..." requests receive one short audio clip
         // containing the target word/phrase itself.
         if (!task.mediaKind && looksLikePronunciationRequest303(task.inputText || "")) {
@@ -4578,10 +5192,12 @@ async function loadMessagesFromGoogleSheet() {
     // but returned separately for the private 303 reminder engine.
     restoreSmartConversationMemoryFromMessages(allMessages);
     restoreSmartUnknownLearningQueueFromMessages(allMessages);
+    restoreImage303ContextFromMessages(allMessages);
     const ownerReminderRows = allMessages.filter(isOwnerReminderInternalMessage303);
     const messages = allMessages.filter((message) =>
       !isSmartMemorySnapshotMessage(message) &&
       !isSmartUnknownLearningMessage(message) &&
+      !isImageContextSnapshotMessage303(message) &&
       !isOwnerReminderInternalMessage303(message)
     );
 
