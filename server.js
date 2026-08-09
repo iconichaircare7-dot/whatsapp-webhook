@@ -1556,14 +1556,22 @@ async function runTavily303Search(query = "", topic = "general", freshness = {})
       max_results: TAVILY_303_MAX_RESULTS
     };
 
-    if (["day", "week", "month", "year"].includes((freshness?.timeRange || "").toString())) {
+    const validTimeRange = ["day", "week", "month", "year"].includes(
+      (freshness?.timeRange || "").toString()
+    );
+
+    // Tavily recommends using a relative time_range OR an absolute date range,
+    // not both in the same request. Keep start/end dates in `freshness` for
+    // strict post-filtering, but only send them when no time_range is active.
+    if (validTimeRange) {
       requestBody.time_range = freshness.timeRange;
-    }
-    if (/^\d{4}-\d{2}-\d{2}$/.test((freshness?.startDate || "").toString())) {
-      requestBody.start_date = freshness.startDate;
-    }
-    if (/^\d{4}-\d{2}-\d{2}$/.test((freshness?.endDate || "").toString())) {
-      requestBody.end_date = freshness.endDate;
+    } else {
+      if (/^\d{4}-\d{2}-\d{2}$/.test((freshness?.startDate || "").toString())) {
+        requestBody.start_date = freshness.startDate;
+      }
+      if (/^\d{4}-\d{2}-\d{2}$/.test((freshness?.endDate || "").toString())) {
+        requestBody.end_date = freshness.endDate;
+      }
     }
 
     const response = await fetch("https://api.tavily.com/search", {
