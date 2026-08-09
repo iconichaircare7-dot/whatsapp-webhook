@@ -543,9 +543,9 @@ const GEMINI_303_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.GEMINI_303_ENABLED || "true").toString().trim().toLowerCase()
 );
 
-// V5 Multi-AI failover for the private 303 owner route.
-// Gemini stays primary. Groq is used immediately for TEXT turns when Gemini is
-// rate-limited or temporarily unavailable. Shared conversation memory remains in
+// V6 Multi-AI failover for the private 303 owner route.
+// Gemini stays primary. Groq is second and Cloudflare Workers AI is third for TEXT turns.
+// Shared conversation memory remains in
 // this service, so switching providers does not reset the conversation.
 const GROQ_API_KEY = (process.env.GROQ_API_KEY || "").toString().trim();
 const GROQ_MODEL = (process.env.GROQ_MODEL || "llama-3.3-70b-versatile").toString().trim();
@@ -555,6 +555,19 @@ const GROQ_303_ENABLED = !["false", "0", "no", "off"].includes(
 const GROQ_303_TEMPORARY_FAILURE_FALLBACK_MS = Math.max(
   5000,
   Number(process.env.GROQ_303_TEMPORARY_FAILURE_FALLBACK_MS || 30000)
+);
+
+// V6 third-provider fallback: Cloudflare Workers AI.
+// Text turns flow Gemini -> Groq -> Cloudflare -> queue.
+const CLOUDFLARE_AI_API_TOKEN = (process.env.CLOUDFLARE_AI_API_TOKEN || "").toString().trim();
+const CLOUDFLARE_ACCOUNT_ID = (process.env.CLOUDFLARE_ACCOUNT_ID || "").toString().trim();
+const CLOUDFLARE_AI_MODEL = (process.env.CLOUDFLARE_AI_MODEL || "@cf/zai-org/glm-4.7-flash").toString().trim();
+const CLOUDFLARE_AI_303_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.CLOUDFLARE_AI_303_ENABLED || "true").toString().trim().toLowerCase()
+);
+const CLOUDFLARE_AI_303_TEMPORARY_FAILURE_FALLBACK_MS = Math.max(
+  5000,
+  Number(process.env.CLOUDFLARE_AI_303_TEMPORARY_FAILURE_FALLBACK_MS || 30000)
 );
 const GEMINI_303_HISTORY_TURNS = Math.min(10, Math.max(2, Number(process.env.GEMINI_303_HISTORY_TURNS || 6)));
 const GEMINI_303_INLINE_MEDIA_MAX_BYTES = Math.min(
@@ -1309,14 +1322,98 @@ async function generateGroq303Reply(phone = "", userText = "") {
   return reply;
 }
 
+function getShared303HistoryAsCloudflareMessages(phone = "") {
+  return getShared303HistoryAsGroqMessages(phone);
+}
+
+async function generateCloudflare303Reply(phone = "", userText = "") {
+  const cleanText = (userText || "").toString().trim();
+  if (!CLOUDFLARE_AI_303_ENABLED) throw new Error("Cloudflare AI 303 fallback is disabled");
+  if (!CLOUDFLARE_AI_API_TOKEN) throw new Error("CLOUDFLARE_AI_API_TOKEN is missing");
+  if (!CLOUDFLARE_ACCOUNT_ID) throw new Error("CLOUDFLARE_ACCOUNT_ID is missing");
+  if (!cleanText) throw new Error("Cloudflare AI 303 received empty text input");
+
+  const previous = getGemini303History(phone);
+  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(CLOUDFLARE_ACCOUNT_ID)}/ai/v1/chat/completions`;
+  const messages = [
+    {
+      role: "system",
+      content: [
+        "You are Osama's private WhatsApp assistant on the 303 line.",
+        "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
+        "Maintain continuity with the supplied conversation history.",
+        "Do not claim you are ChatGPT, OpenAI, Gemini, Groq, or Cloudflare; you are the private 303 assistant.",
+        "If you do not know something, say so clearly instead of inventing facts."
+      ].join(" ")
+    },
+    ...getShared303HistoryAsCloudflareMessages(phone),
+    { role: "user", content: cleanText }
+  ];
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${CLOUDFLARE_AI_API_TOKEN}`
+    },
+    body: JSON.stringify({
+      model: CLOUDFLARE_AI_MODEL,
+      messages,
+      temperature: 0.4,
+      max_completion_tokens: 1200
+    })
+  });
+
+  const raw = await response.text();
+  let payload = {};
+  try {
+    payload = raw ? JSON.parse(raw) : {};
+  } catch (_) {
+    payload = {};
+  }
+
+  if (!response.ok) {
+    const message =
+      payload?.error?.message ||
+      payload?.errors?.[0]?.message ||
+      raw ||
+      `HTTP ${response.status}`;
+    const error = new Error(`Cloudflare Workers AI error: ${message}`);
+    error.status = response.status;
+    error.cloudflarePayload = payload;
+    const retryAfterHeader = Number(response.headers.get("retry-after") || 0);
+    if (Number.isFinite(retryAfterHeader) && retryAfterHeader > 0) {
+      error.retryAfterMs = retryAfterHeader * 1000 + 1000;
+    }
+    throw error;
+  }
+
+  const reply = (payload?.choices?.[0]?.message?.content || "").toString().trim();
+  if (!reply) throw new Error("Cloudflare Workers AI returned no text");
+
+  // Store provider-neutral history in the existing shared history map so a later
+  // Gemini/Groq turn continues the same conversation without a reset.
+  saveGemini303History(phone, [
+    ...previous,
+    { role: "user", parts: [{ text: cleanText }] },
+    { role: "model", parts: [{ text: reply }] }
+  ]);
+
+  return reply;
+}
+
 async function generate303ReplyWithFailover(task = {}) {
   const hasMedia = Boolean(task.mediaInput?.data && task.mediaInput?.mimeType);
   const textOnly = !hasMedia;
   let geminiError = null;
   let geminiRetryMs = 0;
+  let groqError = null;
+  let groqRetryMs = 0;
+  let cloudflareError = null;
+  let cloudflareRetryMs = 0;
 
-  // Media stays on Gemini in V5. Groq's Llama text fallback is deliberately only
-  // used for text turns so image/audio behavior is not silently degraded.
+  // Media remains on Gemini in V6. The Groq + Cloudflare fallback chain is text-only
+  // until their image/audio behavior is explicitly tested on the private 303 route.
   if (!textOnly) {
     await waitForGemini303TrafficSlot();
     const reply = await generateGemini303Reply(task.phone, task.inputText, task.mediaInput);
@@ -1334,17 +1431,20 @@ async function generate303ReplyWithFailover(task = {}) {
     } catch (error) {
       geminiError = error;
       geminiRetryMs = markGemini303TemporarilyUnavailable(error);
-      console.warn("[303 Failover] Gemini unavailable; trying Groq immediately", {
+      console.warn("[303 Failover] Gemini unavailable; trying fallback chain immediately", {
         phone: task.phone,
         status: Number(error?.status || 0) || null,
         temporary: isTemporaryAiProviderError303(error),
         geminiRetryInMs: geminiRetryMs,
-        groqConfigured: Boolean(GROQ_303_ENABLED && GROQ_API_KEY)
+        groqConfigured: Boolean(GROQ_303_ENABLED && GROQ_API_KEY),
+        cloudflareConfigured: Boolean(
+          CLOUDFLARE_AI_303_ENABLED && CLOUDFLARE_AI_API_TOKEN && CLOUDFLARE_ACCOUNT_ID
+        )
       });
     }
   } else if (cooldownRemaining > 0) {
     geminiRetryMs = cooldownRemaining;
-    console.log("[303 Failover] Gemini circuit open; skipping directly to Groq", {
+    console.log("[303 Failover] Gemini circuit open; skipping directly to fallback chain", {
       phone: task.phone,
       geminiCooldownRemainingMs: cooldownRemaining
     });
@@ -1361,43 +1461,79 @@ async function generate303ReplyWithFailover(task = {}) {
         geminiCooldownRemainingMs: getGemini303CooldownRemainingMs()
       });
       return { reply, provider: "groq", model: GROQ_MODEL };
-    } catch (groqError) {
-      const groqRetryMs = getTemporaryAiProviderRetryMs303(
+    } catch (error) {
+      groqError = error;
+      groqRetryMs = getTemporaryAiProviderRetryMs303(
         groqError,
         GROQ_303_TEMPORARY_FAILURE_FALLBACK_MS
       );
 
-      console.warn("[303 Failover] Groq fallback failed", {
+      console.warn("[303 Failover] Groq unavailable; trying Cloudflare immediately", {
         phone: task.phone,
         status: Number(groqError?.status || 0) || null,
         temporary: isTemporaryAiProviderError303(groqError),
-        groqRetryInMs: groqRetryMs
+        groqRetryInMs: groqRetryMs,
+        cloudflareConfigured: Boolean(
+          CLOUDFLARE_AI_303_ENABLED && CLOUDFLARE_AI_API_TOKEN && CLOUDFLARE_ACCOUNT_ID
+        )
       });
-
-      // Queue/backoff is the final safety net only after both providers are unavailable.
-      const retryCandidates = [geminiRetryMs, groqRetryMs].filter((value) => Number(value) > 0);
-      if (retryCandidates.length) {
-        const error = new Error(
-          `303 AI providers temporarily unavailable. Gemini: ${geminiError?.message || "cooldown"}. Groq: ${groqError?.message || "temporary error"}`
-        );
-        error.status = 429;
-        error.retryAfterMs = Math.max(5000, Math.min(...retryCandidates));
-        error.providers = { gemini: geminiError, groq: groqError };
-        throw error;
-      }
-
-      // If both failures are permanent/configuration errors, surface the Groq error.
-      throw groqError;
     }
+  } else {
+    groqError = new Error("Groq 303 is unavailable or not configured");
   }
 
-  // Groq not configured: preserve the old queue/backoff behavior for Gemini.
-  if (geminiRetryMs > 0) {
-    const error = geminiError || new Error("Gemini is in cooldown and Groq is unavailable");
-    error.retryAfterMs = geminiRetryMs;
+  if (CLOUDFLARE_AI_303_ENABLED && CLOUDFLARE_AI_API_TOKEN && CLOUDFLARE_ACCOUNT_ID) {
+    try {
+      const reply = await generateCloudflare303Reply(task.phone, task.inputText);
+      console.log("[303 Failover] Cloudflare fallback succeeded", {
+        phone: task.phone,
+        model: CLOUDFLARE_AI_MODEL,
+        geminiCooldownRemainingMs: getGemini303CooldownRemainingMs()
+      });
+      return { reply, provider: "cloudflare", model: CLOUDFLARE_AI_MODEL };
+    } catch (error) {
+      cloudflareError = error;
+      cloudflareRetryMs = getTemporaryAiProviderRetryMs303(
+        cloudflareError,
+        CLOUDFLARE_AI_303_TEMPORARY_FAILURE_FALLBACK_MS
+      );
+
+      console.warn("[303 Failover] Cloudflare fallback failed; queue is final safety net", {
+        phone: task.phone,
+        status: Number(cloudflareError?.status || 0) || null,
+        temporary: isTemporaryAiProviderError303(cloudflareError),
+        cloudflareRetryInMs: cloudflareRetryMs
+      });
+    }
+  } else {
+    cloudflareError = new Error("Cloudflare AI 303 is unavailable or not configured");
+  }
+
+  // Queue/backoff is only used after the entire provider chain is unavailable.
+  const retryCandidates = [geminiRetryMs, groqRetryMs, cloudflareRetryMs]
+    .filter((value) => Number(value) > 0);
+
+  if (retryCandidates.length) {
+    const error = new Error(
+      [
+        "303 AI providers temporarily unavailable.",
+        `Gemini: ${geminiError?.message || "cooldown"}.`,
+        `Groq: ${groqError?.message || "unavailable"}.`,
+        `Cloudflare: ${cloudflareError?.message || "unavailable"}.`
+      ].join(" ")
+    );
+    error.status = 429;
+    error.retryAfterMs = Math.max(5000, Math.min(...retryCandidates));
+    error.providers = {
+      gemini: geminiError,
+      groq: groqError,
+      cloudflare: cloudflareError
+    };
     throw error;
   }
-  throw geminiError || new Error("No 303 AI provider is available");
+
+  // No temporary retry signal means the failures are configuration/permanent errors.
+  throw cloudflareError || groqError || geminiError || new Error("No 303 AI provider is available");
 }
 
 function enqueueGemini303Task(task = {}) {
@@ -49466,7 +49602,15 @@ app.post("/webhook", async (req, res) => {
     // IMPORTANT: this runs after the V15.5 test-number gate and returns immediately,
     // so the legacy bot never handles the owner's message. If Gemini fails, we still
     // stop here rather than falling back to the old bot.
-    if (AI_303_TEST_MODE && isAi303TestNumberAllowed(from) && GEMINI_303_ENABLED) {
+    if (
+      AI_303_TEST_MODE &&
+      isAi303TestNumberAllowed(from) &&
+      (
+        (GEMINI_303_ENABLED && GEMINI_API_KEY) ||
+        (GROQ_303_ENABLED && GROQ_API_KEY) ||
+        (CLOUDFLARE_AI_303_ENABLED && CLOUDFLARE_AI_API_TOKEN && CLOUDFLARE_ACCOUNT_ID)
+      )
+    ) {
       const geminiInputText = (
         suppressedInternalText ||
         getIncomingMessageText(message) ||
@@ -49479,8 +49623,11 @@ app.post("/webhook", async (req, res) => {
       console.log("[303 AI] owner/test message accepted", {
         from,
         phoneNumberId: incomingPhoneNumberId,
-        primaryModel: GEMINI_MODEL,
+        primaryModel: GEMINI_303_ENABLED && GEMINI_API_KEY ? GEMINI_MODEL : null,
         fallbackModel: GROQ_303_ENABLED && GROQ_API_KEY ? GROQ_MODEL : null,
+        thirdModel: (CLOUDFLARE_AI_303_ENABLED && CLOUDFLARE_AI_API_TOKEN && CLOUDFLARE_ACCOUNT_ID)
+          ? CLOUDFLARE_AI_MODEL
+          : null,
         messageType: message?.type || "",
         hasText: Boolean(geminiInputText),
         hasSupportedMedia: Boolean(geminiMediaKind)
