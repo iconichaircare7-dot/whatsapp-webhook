@@ -549,6 +549,22 @@ const GEMINI_303_INLINE_MEDIA_MAX_BYTES = Math.min(
 );
 const gemini303HistoryByPhone = new Map();
 
+// 303 Gemini traffic manager — owner/test messages only.
+// Keeps Gemini chat turns in order, spaces rapid requests proactively, deduplicates
+// webhook retries, and automatically retries the same message when Gemini returns
+// a temporary rate-limit/quota cooldown. Local reminder commands still bypass Gemini.
+const GEMINI_303_MIN_REQUEST_GAP_MS = Math.max(0, Number(process.env.GEMINI_303_MIN_REQUEST_GAP_MS || 3300));
+const GEMINI_303_RATE_LIMIT_FALLBACK_MS = Math.max(5000, Number(process.env.GEMINI_303_RATE_LIMIT_FALLBACK_MS || 60000));
+const GEMINI_303_RATE_LIMIT_MAX_RETRIES = Math.min(30, Math.max(1, Number(process.env.GEMINI_303_RATE_LIMIT_MAX_RETRIES || 10)));
+const GEMINI_303_QUEUE_MAX_PER_PHONE = Math.min(100, Math.max(5, Number(process.env.GEMINI_303_QUEUE_MAX_PER_PHONE || 50)));
+const GEMINI_303_DEDUPE_TTL_MS = Math.max(60000, Number(process.env.GEMINI_303_DEDUPE_TTL_MS || (6 * 60 * 60 * 1000)));
+const gemini303QueueByPhone = new Map();
+const gemini303QueueProcessingPhones = new Set();
+const gemini303SeenMessageIds = new Map();
+const gemini303RateLimitNoticeAtByPhone = new Map();
+let gemini303GlobalCooldownUntil = 0;
+let gemini303NextRequestAt = 0;
+
 // Private owner reminders for the 303 test number.
 // Reminder events are persisted through the existing Google Sheet message log, so no new database is required.
 const OWNER_REMINDERS_303_ENABLED = !["false", "0", "no", "off"].includes(
@@ -1047,6 +1063,272 @@ function buildGemini303MediaPrompt(kind = "", userText = "") {
   return cleanText;
 }
 
+
+function sleepGemini303(ms = 0) {
+  const delay = Math.max(0, Number(ms || 0));
+  if (!delay) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+function cleanupGemini303SeenMessageIds(now = Date.now()) {
+  for (const [messageId, seenAt] of gemini303SeenMessageIds.entries()) {
+    if (now - Number(seenAt || 0) > GEMINI_303_DEDUPE_TTL_MS) {
+      gemini303SeenMessageIds.delete(messageId);
+    }
+  }
+}
+
+function getGemini303RateLimitRetryMs(error) {
+  if (!error) return 0;
+  if (Number.isFinite(Number(error.retryAfterMs)) && Number(error.retryAfterMs) > 0) {
+    return Math.max(1000, Number(error.retryAfterMs));
+  }
+
+  const text = [
+    error?.message || "",
+    error?.stack || "",
+    typeof error === "string" ? error : ""
+  ].join(" ");
+
+  if (!/(quota exceeded|rate.?limit|too many requests|resource[_\s-]?exhausted|\b429\b)/i.test(text)) {
+    return 0;
+  }
+
+  const patterns = [
+    /please\s+retry\s+in\s+([0-9]+(?:\.[0-9]+)?)\s*s/i,
+    /retry\s+(?:after|in)\s+([0-9]+(?:\.[0-9]+)?)\s*(?:s|sec|secs|second|seconds)\b/i,
+    /retryDelay[^0-9]*([0-9]+(?:\.[0-9]+)?)s/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const seconds = Number(match[1]);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      // Small safety buffer so we do not retry exactly on the provider boundary.
+      return Math.ceil(seconds * 1000) + 1500;
+    }
+  }
+
+  return GEMINI_303_RATE_LIMIT_FALLBACK_MS;
+}
+
+async function waitForGemini303TrafficSlot() {
+  while (true) {
+    const now = Date.now();
+    const target = Math.max(gemini303GlobalCooldownUntil, gemini303NextRequestAt);
+    if (target > now) {
+      await sleepGemini303(target - now);
+      continue;
+    }
+
+    gemini303NextRequestAt = Date.now() + GEMINI_303_MIN_REQUEST_GAP_MS;
+    return;
+  }
+}
+
+async function sendGemini303RateLimitNoticeOnce(task = {}, retryMs = 0) {
+  const phone = normalizePhoneDigits(task.phone || "");
+  if (!phone) return;
+
+  const now = Date.now();
+  const lastNoticeAt = Number(gemini303RateLimitNoticeAtByPhone.get(phone) || 0);
+  if (now - lastNoticeAt < 45000) return;
+  gemini303RateLimitNoticeAtByPhone.set(phone, now);
+
+  const seconds = Math.max(5, Math.ceil(Number(retryMs || 0) / 1000));
+  const message = [
+    "وصلتني رسالتك يا أسامة ✅",
+    `Gemini عليه حد مؤقت هلق. رح احتفظ بطلبك وأرجع أرد عليك تلقائيًا خلال حوالي ${seconds} ثانية — ما بدك تعيد تبعت شي.`
+  ].join("\n");
+
+  try {
+    await sendWhatsAppMessage(
+      phone,
+      message,
+      task.phoneNumberId || AI_303_PHONE_NUMBER_ID,
+      { skipAutoLanguage: true }
+    );
+  } catch (error) {
+    console.warn("[303 Queue] rate-limit notice send failed:", error?.message || error);
+  }
+}
+
+function enqueueGemini303Task(task = {}) {
+  const phone = normalizePhoneDigits(task.phone || "");
+  if (!phone) return { ok: false, queued: false, reason: "missing_phone" };
+
+  const now = Date.now();
+  cleanupGemini303SeenMessageIds(now);
+
+  const messageId = (task.messageId || "").toString().trim();
+  if (messageId && gemini303SeenMessageIds.has(messageId)) {
+    console.log("[303 Queue] duplicate WhatsApp message skipped", { phone, messageId });
+    return { ok: true, queued: false, duplicate: true };
+  }
+
+  const queue = gemini303QueueByPhone.get(phone) || [];
+  if (queue.length >= GEMINI_303_QUEUE_MAX_PER_PHONE) {
+    console.error("[303 Queue] queue full", {
+      phone,
+      size: queue.length,
+      max: GEMINI_303_QUEUE_MAX_PER_PHONE
+    });
+    return { ok: false, queued: false, reason: "queue_full" };
+  }
+
+  const queuedTask = {
+    phone,
+    phoneNumberId: normalizePhoneNumberId(task.phoneNumberId || AI_303_PHONE_NUMBER_ID),
+    messageId,
+    inputText: (task.inputText || "").toString().trim(),
+    mediaKind: (task.mediaKind || "").toString().trim().toLowerCase(),
+    message: task.message || null,
+    mediaInput: null,
+    queuedAt: now,
+    rateLimitRetries: 0,
+    rateLimitNoticeSent: false
+  };
+
+  if (messageId) gemini303SeenMessageIds.set(messageId, now);
+  queue.push(queuedTask);
+  gemini303QueueByPhone.set(phone, queue);
+
+  console.log("[303 Queue] message queued", {
+    phone,
+    messageId,
+    position: queue.length,
+    mediaKind: queuedTask.mediaKind || "text"
+  });
+
+  if (!gemini303QueueProcessingPhones.has(phone)) {
+    setImmediate(() => {
+      processGemini303Queue(phone).catch((error) => {
+        console.error("[303 Queue] worker crashed:", error);
+      });
+    });
+  }
+
+  return { ok: true, queued: true, position: queue.length };
+}
+
+async function processGemini303Queue(phone = "") {
+  const cleanPhone = normalizePhoneDigits(phone);
+  if (!cleanPhone || gemini303QueueProcessingPhones.has(cleanPhone)) return;
+
+  gemini303QueueProcessingPhones.add(cleanPhone);
+
+  try {
+    while (true) {
+      const queue = gemini303QueueByPhone.get(cleanPhone) || [];
+      if (!queue.length) break;
+
+      const task = queue[0];
+
+      try {
+        await waitForGemini303TrafficSlot();
+
+        await showBotTypingBeforeReply({
+          to: task.phone,
+          incomingMessageId: task.messageId || "",
+          phoneNumberId: task.phoneNumberId,
+          fromInternalNumber: true
+        });
+
+        if (task.mediaKind && !task.mediaInput) {
+          task.mediaInput = await downloadWhatsAppMediaForGemini303(task.message || {});
+        }
+
+        const geminiReply = await generateGemini303Reply(
+          task.phone,
+          task.inputText,
+          task.mediaInput
+        );
+
+        const sendResult = await sendWhatsAppMessage(
+          task.phone,
+          geminiReply,
+          task.phoneNumberId,
+          { skipAutoLanguage: true }
+        );
+
+        console.log("[303 Queue] Gemini reply sent", {
+          phone: task.phone,
+          messageId: task.messageId,
+          model: GEMINI_MODEL,
+          queueDelayMs: Date.now() - task.queuedAt,
+          rateLimitRetries: task.rateLimitRetries,
+          inputKind: task.mediaInput?.kind || "text",
+          sendOk: Boolean(sendResult?.ok),
+          sendSkipped: Boolean(sendResult?.skipped),
+          sendDisabled: Boolean(sendResult?.disabled)
+        });
+
+        queue.shift();
+        gemini303QueueByPhone.set(cleanPhone, queue);
+      } catch (error) {
+        const retryMs = getGemini303RateLimitRetryMs(error);
+
+        if (retryMs > 0 && task.rateLimitRetries < GEMINI_303_RATE_LIMIT_MAX_RETRIES) {
+          task.rateLimitRetries += 1;
+          gemini303GlobalCooldownUntil = Math.max(
+            gemini303GlobalCooldownUntil,
+            Date.now() + retryMs
+          );
+
+          console.warn("[303 Queue] Gemini rate limited; same message will retry automatically", {
+            phone: task.phone,
+            messageId: task.messageId,
+            retryInMs: retryMs,
+            retryNumber: task.rateLimitRetries,
+            queuedBehind: Math.max(0, queue.length - 1)
+          });
+
+          if (!task.rateLimitNoticeSent) {
+            task.rateLimitNoticeSent = true;
+            await sendGemini303RateLimitNoticeOnce(task, retryMs);
+          }
+
+          await sleepGemini303(retryMs);
+          continue;
+        }
+
+        console.error("[303 Queue] Gemini task failed permanently:");
+        console.error(error);
+
+        const failureText = retryMs > 0
+          ? "رسالتك وصلتني يا أسامة، بس حد Gemini ما فتح بعد عدة محاولات تلقائية. ما ضاعت الرسالة، بس جرّبها لاحقًا."
+          : "صار خطأ تقني وأنا بعالج هالرسالة يا أسامة. ابعتها مرة ثانية إذا ما وصلك رد.";
+
+        try {
+          await sendWhatsAppMessage(
+            task.phone,
+            failureText,
+            task.phoneNumberId,
+            { skipAutoLanguage: true }
+          );
+        } catch (_) {}
+
+        queue.shift();
+        gemini303QueueByPhone.set(cleanPhone, queue);
+      }
+    }
+  } finally {
+    gemini303QueueProcessingPhones.delete(cleanPhone);
+    const remaining = gemini303QueueByPhone.get(cleanPhone) || [];
+    if (!remaining.length) {
+      gemini303QueueByPhone.delete(cleanPhone);
+    } else {
+      // A message may have arrived between the final empty check and worker cleanup.
+      setImmediate(() => {
+        processGemini303Queue(cleanPhone).catch((error) => {
+          console.error("[303 Queue] worker restart failed:", error);
+        });
+      });
+    }
+  }
+}
+
 async function generateGemini303Reply(phone = "", userText = "", mediaInput = null) {
   const cleanText = (userText || "").toString().trim();
   const hasMedia = Boolean(mediaInput?.data && mediaInput?.mimeType);
@@ -1107,7 +1389,14 @@ async function generateGemini303Reply(phone = "", userText = "", mediaInput = nu
 
   if (!response.ok) {
     const message = payload?.error?.message || raw || `HTTP ${response.status}`;
-    throw new Error(`Gemini API error: ${message}`);
+    const error = new Error(`Gemini API error: ${message}`);
+    error.status = response.status;
+    error.geminiPayload = payload;
+    const retryAfterHeader = Number(response.headers.get("retry-after") || 0);
+    if (Number.isFinite(retryAfterHeader) && retryAfterHeader > 0) {
+      error.retryAfterMs = retryAfterHeader * 1000 + 1500;
+    }
+    throw error;
   }
 
   const reply = extractGemini303Text(payload);
@@ -48942,21 +49231,28 @@ app.post("/webhook", async (req, res) => {
       }
 
       try {
-        await showBotTypingBeforeReply({
-          to: from,
-          incomingMessageId: message.id || "",
-          phoneNumberId: incomingPhoneNumberId,
-          fromInternalNumber: true
-        });
-
-        // Private owner reminder commands are handled before normal Gemini chat.
+        // Private owner reminder commands are handled immediately and locally whenever possible.
+        // Normal Gemini chat is queued below so rapid messages keep their order and survive
+        // temporary Gemini rate limits without requiring Osama to resend anything.
         if (!geminiMediaKind && OWNER_REMINDERS_303_ENABLED && looksLikeOwnerReminderListCommand303(geminiInputText)) {
+          await showBotTypingBeforeReply({
+            to: from,
+            incomingMessageId: message.id || "",
+            phoneNumberId: incomingPhoneNumberId,
+            fromInternalNumber: true
+          });
           const reminderListReply = await buildOwnerReminderListReply303();
           await sendWhatsAppMessage(from, reminderListReply, incomingPhoneNumberId, { skipAutoLanguage: true });
           return res.sendStatus(200);
         }
 
         if (!geminiMediaKind && OWNER_REMINDERS_303_ENABLED && looksLikeOwnerReminderCreateCommand303(geminiInputText)) {
+          await showBotTypingBeforeReply({
+            to: from,
+            incomingMessageId: message.id || "",
+            phoneNumberId: incomingPhoneNumberId,
+            fromInternalNumber: true
+          });
           const reminderResult = await createOwnerReminder303(from, incomingPhoneNumberId, geminiInputText);
           let reminderReply = "";
           if (reminderResult.intent === "create_reminder" && reminderResult.reminder) {
@@ -48972,30 +49268,26 @@ app.post("/webhook", async (req, res) => {
           return res.sendStatus(200);
         }
 
-        const geminiMediaInput = geminiMediaKind
-          ? await downloadWhatsAppMediaForGemini303(message)
-          : null;
-
-        const geminiReply = await generateGemini303Reply(from, geminiInputText, geminiMediaInput);
-        const sendResult = await sendWhatsAppMessage(
-          from,
-          geminiReply,
-          incomingPhoneNumberId,
-          { skipAutoLanguage: true }
-        );
-
-        console.log("[303 Gemini] reply processed", {
-          from,
-          model: GEMINI_MODEL,
-          inputKind: geminiMediaInput?.kind || "text",
-          inputMimeType: geminiMediaInput?.mimeType || "text/plain",
-          inputBytes: Number(geminiMediaInput?.bytes || 0),
-          sendOk: Boolean(sendResult?.ok),
-          sendSkipped: Boolean(sendResult?.skipped),
-          sendDisabled: Boolean(sendResult?.disabled)
+        const queueResult = enqueueGemini303Task({
+          phone: from,
+          phoneNumberId: incomingPhoneNumberId,
+          messageId: message.id || "",
+          inputText: geminiInputText,
+          mediaKind: geminiMediaKind,
+          message
         });
+
+        if (!queueResult.ok) {
+          console.error("[303 Queue] unable to queue owner/test message", queueResult);
+          await sendWhatsAppMessage(
+            from,
+            "وصلتني رسالتك يا أسامة، بس طابور المعالجة ممتلئ بشكل غير طبيعي. جرّبها بعد شوي.",
+            incomingPhoneNumberId,
+            { skipAutoLanguage: true }
+          );
+        }
       } catch (error) {
-        console.error("[303 Gemini] failed; legacy bot fallback intentionally blocked:");
+        console.error("[303 Gemini] owner/test routing failed; legacy bot fallback intentionally blocked:");
         console.error(error);
       }
 
