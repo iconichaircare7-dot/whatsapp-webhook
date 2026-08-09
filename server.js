@@ -605,7 +605,7 @@ const PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 = Math.min(
   Math.max(5000, Number(process.env.PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 || 15000))
 );
 
-// V17 — keeps V16.3 image search/generation/editing + pronunciation/reminders/search, and adds durable explicit Personal Memory.
+// V17.1 — keeps V17 durable Personal Memory + V16.3 image/search/pronunciation/reminders, and fixes multilingual behavior, contextual-link routing, and pronunciation-vs-translation separation.
 // Existing-image requests use Tavily image search; create/edit requests use Gemini Image then Cloudflare FLUX.2 fallback.
 // The last image context is persisted as a lightweight Google Sheet snapshot (media id / source URL / prompt),
 // so follow-up commands like "اعمل منها بوستر" can continue the same visual context when possible.
@@ -728,6 +728,80 @@ const GEMINI_303_INLINE_MEDIA_MAX_BYTES = Math.min(
   Math.max(1 * 1024 * 1024, Number(process.env.GEMINI_303_INLINE_MEDIA_MAX_BYTES || (12 * 1024 * 1024)))
 );
 const gemini303HistoryByPhone = new Map();
+
+const responseLanguageOverride303ByPhone = new Map();
+
+function detectExplicitResponseLanguage303(value = "") {
+  const text = (value || "").toString().trim().toLowerCase();
+  if (!text) return "";
+
+  if (/(?:same\s+language\s+as\s+me|reply\s+in\s+my\s+language|respond\s+in\s+my\s+language|حسب\s+لغة\s+رسالتي|نفس\s+لغة\s+رسالتي|رد\s+بنفس\s+لغتي)/i.test(text)) {
+    return "__auto__";
+  }
+
+  const patterns = [
+    {
+      code: "en",
+      re: /(?:\b(?:speak|talk|reply|respond|answer|write)\b[\s\S]{0,32}\benglish\b|\bcan\s+you\s+speak\s+english\b|(?:احكي|حكي|تكلم|تكلّم|جاوب|رد)(?:لي| معي| معى)?[\s\S]{0,20}(?:بال)?(?:انكليزي|إنكليزي|انجليزي|إنجليزي|الانكليزية|الإنكليزية|الانجليزية|الإنجليزية))/i
+    },
+    {
+      code: "ar",
+      re: /(?:\b(?:speak|talk|reply|respond|answer|write)\b[\s\S]{0,32}\barabic\b|\bcan\s+you\s+speak\s+arabic\b|(?:احكي|حكي|تكلم|تكلّم|جاوب|رد)(?:لي| معي| معى)?[\s\S]{0,20}(?:بال)?(?:عربي|العربي|العربية))/i
+    },
+    {
+      code: "fr",
+      re: /(?:\b(?:speak|talk|reply|respond|answer|write)\b[\s\S]{0,32}\bfrench\b|\bcan\s+you\s+speak\s+french\b|\b(?:parle|parlez|réponds|reponds|répondez|repondez)\b[\s\S]{0,24}\bfran[cç]ais\b|(?:احكي|حكي|تكلم|تكلّم|جاوب|رد)(?:لي| معي| معى)?[\s\S]{0,20}(?:بال)?(?:فرنسي|الفرنسي|الفرنسية))/i
+    },
+    {
+      code: "es",
+      re: /(?:\b(?:speak|talk|reply|respond|answer|write)\b[\s\S]{0,32}\bspanish\b|\bcan\s+you\s+speak\s+spanish\b|\b(?:habla|hable|responde|contesta)\b[\s\S]{0,24}\b(?:espa[nñ]ol|spanish)\b|(?:احكي|حكي|تكلم|تكلّم|جاوب|رد)(?:لي| معي| معى)?[\s\S]{0,20}(?:بال)?(?:اسباني|إسباني|الاسباني|الإسباني|الاسبانية|الإسبانية))/i
+    }
+  ];
+
+  const found = patterns.find((item) => item.re.test(text));
+  return found?.code || "";
+}
+
+function getResponseLanguageLabel303(code = "") {
+  if (code === "en") return "English";
+  if (code === "ar") return "Arabic";
+  if (code === "fr") return "French";
+  if (code === "es") return "Spanish";
+  return "";
+}
+
+function build303ResponseLanguageInstruction(phone = "", currentUserText = "") {
+  const key = normalizePhoneDigits(phone);
+  const explicit = detectExplicitResponseLanguage303(currentUserText);
+
+  if (key && explicit === "__auto__") {
+    responseLanguageOverride303ByPhone.delete(key);
+  } else if (key && explicit) {
+    responseLanguageOverride303ByPhone.set(key, explicit);
+  }
+
+  const active = key ? (responseLanguageOverride303ByPhone.get(key) || "") : "";
+  const activeLabel = getResponseLanguageLabel303(active);
+
+  if (activeLabel) {
+    return [
+      `The user explicitly selected ${activeLabel} for this conversation.`,
+      `Reply naturally and concisely in ${activeLabel} unless the current message explicitly asks for translation or output in another language.`,
+      "Preserve technical abbreviations, names, URLs, and proper nouns exactly when practical."
+    ].join(" ");
+  }
+
+  return [
+    "Reply naturally and concisely in the same primary language as the user's current message or voice note.",
+    "If the user explicitly asks for another language, comply immediately.",
+    "For a server-generated web-search wrapper, choose the language of the embedded USER QUESTION, not the wrapper text.",
+    "Preserve technical abbreviations, names, URLs, and proper nouns exactly when practical."
+  ].join(" ");
+}
+
+const CONTEXTUAL_REFERENCE_LINK_RULE_303 =
+  "For contextual references such as 'this video', 'this link', 'this image', 'that file', or their Arabic equivalents, use the supplied conversation history. If the exact target or URL is not present, ask one brief clarification instead of searching the web or inventing a URL.";
+
 
 // 303 Gemini traffic manager — owner/test messages only.
 // Keeps Gemini chat turns in order, spaces rapid requests proactively, deduplicates
@@ -1418,8 +1492,9 @@ async function generateGroq303Reply(phone = "", userText = "", memoryUserText = 
       role: "system",
       content: [
         "You are Osama's private WhatsApp assistant on the 303 line.",
-        "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
+        build303ResponseLanguageInstruction(phone, memoryText),
         "Maintain continuity with the supplied conversation history.",
+        CONTEXTUAL_REFERENCE_LINK_RULE_303,
         buildPersonalMemorySystemContext303(phone),
         "Do not claim you are ChatGPT, OpenAI, Gemini, or Groq; you are the private 303 assistant.",
         "If you do not know something, say so clearly instead of inventing facts.",
@@ -1654,9 +1729,10 @@ async function generateGroq303ImageReply(phone = "", userText = "", mediaInput =
       role: "system",
       content: [
         "You are Osama's private WhatsApp assistant on the 303 line.",
-        "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
+        build303ResponseLanguageInstruction(phone, userText),
         "Analyze the supplied image carefully, including visible text, UI, charts, and screenshots when relevant.",
         "Maintain continuity with the supplied conversation history.",
+        CONTEXTUAL_REFERENCE_LINK_RULE_303,
         buildPersonalMemorySystemContext303(phone),
         "Do not invent details that are not visible in the image.",
         "Return only the final user-facing answer. Do not output analysis steps, reasoning, chain-of-thought, draft sections, or internal notes."
@@ -1787,9 +1863,10 @@ async function generateCloudflare303ImageReply(phone = "", userText = "", mediaI
       role: "system",
       content: [
         "You are Osama's private WhatsApp assistant on the 303 line.",
-        "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
+        build303ResponseLanguageInstruction(phone, userText),
         "Analyze the supplied image carefully, including visible text, UI, charts, and screenshots when relevant.",
         "Maintain continuity with the supplied conversation history.",
+        CONTEXTUAL_REFERENCE_LINK_RULE_303,
         buildPersonalMemorySystemContext303(phone),
         "Do not invent details that are not visible in the image.",
         "Return only the final user-facing answer. Do not output analysis steps, reasoning, chain-of-thought, draft sections, or internal notes."
@@ -1855,8 +1932,9 @@ async function generateCloudflare303Reply(phone = "", userText = "", memoryUserT
       role: "system",
       content: [
         "You are Osama's private WhatsApp assistant on the 303 line.",
-        "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
+        build303ResponseLanguageInstruction(phone, memoryText),
         "Maintain continuity with the supplied conversation history.",
+        CONTEXTUAL_REFERENCE_LINK_RULE_303,
         buildPersonalMemorySystemContext303(phone),
         "Do not claim you are ChatGPT, OpenAI, Gemini, Groq, or Cloudflare; you are the private 303 assistant.",
         "If you do not know something, say so clearly instead of inventing facts.",
@@ -1997,7 +2075,11 @@ function detectTavilySearchIntent303(value = "") {
   }
 
   const explicitSearch = /(?:ابحث(?:لي)?|دور(?:لي|\s+لي)?|فتش(?:لي|\s+لي)?|شوف(?:لي|\s+لي)?\s+(?:عالنت|على\s+النت|بالنت|بالويب|على\s+الويب)|بحث\s+(?:بالنت|بالويب|على\s+النت|على\s+الويب)|search\s+(?:the\s+)?(?:web|internet)|look\s+it\s+up|google\s+it)/i.test(text);
-  const sourceOrLink = /(?:رابط|لينك|الموقع\s+الرسمي|مصدر|مصادر|هات\s+المصدر|source|sources|official\s+(?:site|website)|\blink\b|\burl\b)/i.test(text);
+
+  // V17.1: contextual references should use chat history first instead of
+  // launching an unrelated search merely because the word "link" is present.
+  const contextualReference = /(?:\b(?:this|that|previous|last|above)\s+(?:video|image|photo|picture|file|page|post|message|link|website)\b|(?:هالفيديو|هاد\s+الفيديو|هذا\s+الفيديو|الفيديو\s+هاد|هالصورة|هاي\s+الصورة|هذه\s+الصورة|هاد\s+الملف|هذا\s+الملف|هالرابط|هاد\s+الرابط|هذا\s+الرابط|هالصفحة|هذه\s+الصفحة|هاد\s+الموقع|هذا\s+الموقع))/i.test(text);
+  const sourceOrLink = !contextualReference && /(?:رابط|لينك|الموقع\s+الرسمي|مصدر|مصادر|هات\s+المصدر|source|sources|official\s+(?:site|website)|\blink\b|\burl\b)/i.test(text);
   const freshness = /(?:اليوم|هلق|هلأ|الان|الآن|حاليا|حاليًا|اخر|آخر|احدث|أحدث|الجديد|مؤخرا|مؤخرًا|امبارح|أمس|بكرا|غدا|غدًا|هذا\s+الاسبوع|هذا\s+الأسبوع|today|right\s+now|currently|current|latest|recent|recently|yesterday|tomorrow|this\s+week)/i.test(text);
   const newsIntent = /(?:اخبار|أخبار|خبر|news|breaking|تطورات|مستجدات)/i.test(text);
   const inherentlyLive = /(?:الطقس|طقس|weather|نتيجة\s+(?:المباراة|الماتش)|score|(?:كم|قديش|شو)\s+سعر|what\s+is\s+the\s+price|سعر\s+(?:السهم|الذهب|البيتكوين|bitcoin|btc)|بورصة|stock\s+price|exchange\s+rate|سعر\s+الصرف|(?:متى|موعد)\s+(?:مباراة|المباراة|الماتش)|مين\s+(?:الرئيس|المدير\s+التنفيذي)|who\s+is\s+(?:the\s+)?(?:president|ceo))/i.test(text);
@@ -2229,7 +2311,7 @@ function buildTavilyGroundedPrompt303(originalText = "", search = null) {
     "- Do not invent consequences (for example policy changes, motives, causation, or links between events) unless a supplied source explicitly supports them.",
     "- Never invent, alter, shorten, or manufacture a URL.",
     "- Do not add a separate sources list or URLs in your answer; the server appends the exact source URLs.",
-    "- Reply naturally and concisely in Arabic, matching Osama's dialect when practical.",
+    "- Reply naturally and concisely in the same primary language as USER QUESTION, unless USER QUESTION explicitly asks for another language.",
     "",
     `USER QUESTION: ${question}`,
     "",
@@ -2238,7 +2320,7 @@ function buildTavilyGroundedPrompt303(originalText = "", search = null) {
   ].join("\n");
 }
 
-function appendTavilySources303(reply = "", search = null) {
+function appendTavilySources303(reply = "", search = null, userQuestion = "") {
   const cleanReply = (reply || "").toString().trim();
   const results = Array.isArray(search?.results) ? search.results : [];
   if (!results.length) return cleanReply;
@@ -2257,7 +2339,8 @@ function appendTavilySources303(reply = "", search = null) {
   }
 
   if (!sourceLines.length) return cleanReply;
-  return `${cleanReply}\n\n🔎 المصادر:\n${sourceLines.join("\n")}`.trim();
+  const sourcesLabel = /[\u0600-\u06FF]/.test((userQuestion || "").toString()) ? "المصادر" : "Sources";
+  return `${cleanReply}\n\n🔎 ${sourcesLabel}:\n${sourceLines.join("\n")}`.trim();
 }
 
 async function prepareTavilySearchFor303Task(task = {}) {
@@ -3556,7 +3639,9 @@ function looksLikePronunciationRequest303(value = "") {
   const text = (value || "").toString().trim();
   if (!text || !PRONUNCIATION_VOICE_303_ENABLED) return false;
 
-  return /(?:كيف\s*(?:بتنلفظ|تنلفظ|تِنلفظ|بنلفظ|تلفظ|بِنحكي|بنحكي|بقول|بنقول|تنقال|بنقولها)|(?:لفظ|لفّظ|انطق|إنطق|نطق)(?:لي|ها|هالي|ليلي)?|شو\s+(?:لفظ|نطق)|طريقة\s+(?:لفظ|نطق)|pronounc(?:e|iation)|how\s+(?:do|can|would)\s+(?:i|you)\s+say|how\s+is\s+.+\s+pronounced|say\s+.+\s+in\s+(?:english|arabic))/i.test(text);
+  // V17.1: translation/meaning requests remain text-only.
+  // Audio is opt-in only when the user explicitly asks for pronunciation / read-aloud.
+  return /(?:كيف\s*(?:بتنلفظ|تنلفظ|تِنلفظ|بنلفظ|تلفظ)|(?:لفظ|لفّظ|انطق|إنطق|نطق)(?:لي|ها|هالي|ليلي)?|شو\s+(?:لفظ|نطق)|طريقة\s+(?:لفظ|نطق)|pronounc(?:e|iation)|how\s+(?:do|can)\s+you\s+pronounce|how\s+is\s+.+\s+pronounced|say\s+(?:it|this)\s+out\s+loud|read\s+(?:it|this)\s+aloud)/i.test(text);
 }
 
 function extractFirstJsonObject303(value = "") {
@@ -4063,7 +4148,7 @@ async function generate303ReplyWithFailover(task = {}) {
     if (!result?.reply) return result;
     return {
       ...result,
-      reply: tavilySearch ? appendTavilySources303(result.reply, tavilySearch) : result.reply,
+      reply: tavilySearch ? appendTavilySources303(result.reply, tavilySearch, originalInputText) : result.reply,
       webSearch: Boolean(tavilySearch),
       webSearchResults: tavilySearch?.results?.length || 0
     };
@@ -4619,8 +4704,9 @@ async function generateGemini303Reply(phone = "", userText = "", mediaInput = nu
         parts: [{
           text: [
             "You are Osama's private WhatsApp assistant on the 303 line.",
-            "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
+            build303ResponseLanguageInstruction(phone, memoryUserText || cleanText),
             buildPersonalMemorySystemContext303(phone),
+            CONTEXTUAL_REFERENCE_LINK_RULE_303,
             "Treat voice notes as the user's spoken message and answer their meaning directly.",
             "When an image is provided, inspect the image itself and any visible text before answering.",
             "Do not claim you are ChatGPT or OpenAI; you are the private 303 assistant powered by Gemini.",
