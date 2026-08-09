@@ -605,7 +605,7 @@ const PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 = Math.min(
   Math.max(5000, Number(process.env.PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 || 15000))
 );
 
-// V16 IMAGE ROUTER — separates real-image search from AI generation/editing.
+// V16.1 IMAGE ROUTER — separates real-image search from AI generation/editing and ranks real-photo results.
 // Existing-image requests use Tavily image search; explicit create/design requests use Gemini Image.
 // The last image context is persisted as a lightweight Google Sheet snapshot (media id / source URL / prompt),
 // so follow-up commands like "اعمل منها بوستر" can continue the same visual context when possible.
@@ -2410,18 +2410,93 @@ function looksLikeExistingImageSearchRequest303(value = "") {
   return text.length <= 140;
 }
 
+function imageSearchPrefersPhotography303(value = "") {
+  const text = (value || "").toString().trim();
+  if (!text) return false;
+  // Preserve explicit non-photographic searches instead of forcing a photo intent.
+  if (/(?:بوستر|ملصق|poster|شعار|لوجو|logo|خريطة|map|مخطط|رسم\s+بياني|chart|diagram|انفوغرافيك|إنفوغرافيك|infographic|illustration|vector|icon)/iu.test(text)) {
+    return false;
+  }
+  return true;
+}
+
 function buildImageSearchQuery303(value = "") {
-  let query = (value || "").toString().trim();
+  const original = (value || "").toString().trim();
+  let query = original;
   query = query
     .replace(/(?:جيب(?:لي)?|هات(?:لي)?|ورجيني|فرجيني|بدي|اريد|أريد|ابعت(?:لي)?|بعث(?:لي)?)/giu, " ")
     .replace(/(?:send\s+me|show\s+me|find\s+(?:me\s+)?|get\s+(?:me\s+)?|i\s+want)/giu, " ")
     .replace(/(?:صورة|صوره|صور)/giu, " ")
     .replace(/\s+/g, " ")
     .trim();
-  if (/\bposter\b/i.test(value || "") || /بوستر|ملصق/iu.test(value || "")) {
+  if (/\bposter\b/i.test(original) || /بوستر|ملصق/iu.test(original)) {
     query = `${query.replace(/(?:بوستر|ملصق)/giu, " ").trim()} poster`.trim();
+  } else if (imageSearchPrefersPhotography303(original)) {
+    // Make the search itself favor a real photograph before local candidate ranking.
+    query = `${query} photo photograph`.trim();
   }
-  return (query || (value || "").toString().trim()).slice(0, 320);
+  return (query || original).slice(0, 320);
+}
+
+function normalizeImageRankingText303(value = "") {
+  return (value || "")
+    .toString()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getImageSearchSubjectTokens303(value = "") {
+  const clean = normalizeImageRankingText303(buildImageSearchQuery303(value))
+    .replace(/\b(?:photo|photograph|poster)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const stop = new Set([
+    "جيبلي", "جيب", "هاتلي", "هات", "ورجيني", "فرجيني", "بدي", "اريد", "أريد", "صورة", "صوره", "صور",
+    "send", "me", "show", "find", "get", "want", "image", "photo", "picture", "please", "the", "a", "an"
+  ]);
+  return clean.split(" ").filter((token) => token.length >= 2 && !stop.has(token)).slice(0, 10);
+}
+
+function scoreTavilyImageCandidate303(candidate = {}, requestText = "") {
+  const url = (candidate?.url || "").toString();
+  const description = (candidate?.description || "").toString();
+  const haystack = normalizeImageRankingText303(`${description} ${url}`);
+  const prefersPhoto = imageSearchPrefersPhotography303(requestText);
+  const tokens = getImageSearchSubjectTokens303(requestText);
+  let score = 0;
+
+  for (const token of tokens) {
+    if (haystack.includes(token)) score += 7;
+  }
+
+  if (prefersPhoto) {
+    if (/(?:\bphoto\b|\bphotograph\b|\bportrait\b|\bphotography\b|\breal\s+photo\b|\bofficial\b|\bgetty\b|\breuters\b|\bap\s+images\b)/i.test(`${description} ${url}`)) score += 10;
+    if (/(?:infographic|chart|diagram|comparison|silhouette|vector|illustration|drawing|sketch|icon|logo|map|blueprint|height\s+comparison|size\s+comparison|انفوغرافيك|إنفوغرافيك|مخطط|رسم\s+بياني|مقارنة|خريطة|شعار|ايقونة|أيقونة|رسم\s+توضيحي)/iu.test(`${description} ${url}`)) score -= 40;
+  }
+
+  // Common asset/file hints are useful tie-breakers only; never override subject relevance.
+  if (/\.(?:jpe?g|webp)(?:$|[?#])/i.test(url)) score += 2;
+  if (/\.(?:svg)(?:$|[?#])/i.test(url)) score -= 12;
+  if (/(?:thumb|thumbnail|sprite|icon|logo)/i.test(url)) score -= 8;
+
+  return score;
+}
+
+function rankTavilyImageCandidates303(candidates = [], requestText = "") {
+  return (Array.isArray(candidates) ? candidates : [])
+    .map((candidate, index) => ({
+      ...candidate,
+      _imageRankScore303: scoreTavilyImageCandidate303(candidate, requestText),
+      _imageRankOriginalIndex303: index
+    }))
+    .sort((a, b) => {
+      const delta = Number(b._imageRankScore303 || 0) - Number(a._imageRankScore303 || 0);
+      return delta || (a._imageRankOriginalIndex303 - b._imageRankOriginalIndex303);
+    });
 }
 
 function detectImage303Route(task = {}) {
@@ -2525,7 +2600,7 @@ async function runTavily303ImageSearch(query = "") {
         include_raw_content: false,
         include_images: true,
         include_image_descriptions: true,
-        max_results: 3
+        max_results: 5
       })
     });
     const raw = await response.text();
@@ -2550,14 +2625,27 @@ async function runTavily303ImageSearch(query = "") {
 
 async function getUsableImageFromTavily303(query = "") {
   const search = await runTavily303ImageSearch(query);
+  const rankedCandidates = rankTavilyImageCandidates303(search.candidates, query);
   let lastError = null;
-  for (const candidate of search.candidates) {
+
+  console.log("[303 Image] ranked Tavily candidates", rankedCandidates.slice(0, 5).map((candidate) => ({
+    score: candidate._imageRankScore303,
+    description: (candidate.description || "").slice(0, 140),
+    url: candidate.url
+  })));
+
+  for (const candidate of rankedCandidates) {
     try {
       const media = await downloadRemoteImage303(candidate.url);
-      return { search, candidate, media };
+      return {
+        search: { ...search, candidates: rankedCandidates },
+        candidate,
+        media
+      };
     } catch (error) {
       lastError = error;
       console.warn("[303 Image] candidate download skipped", {
+        score: candidate._imageRankScore303,
         url: candidate.url,
         message: error?.message || String(error)
       });
