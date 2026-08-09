@@ -1169,7 +1169,11 @@ function formatDubaiDateTime303(value) {
 function looksLikeOwnerReminderCreateCommand303(text = "") {
   const value = (text || "").toString().trim().toLowerCase();
   if (!value) return false;
-  return /(^|\s)(ذكّرني|ذكرني|نبهني|نبّهني|فكرني|فكّرني|remind me)(\s|$)/i.test(value);
+
+  const reminderVerb = /(^|\s)(ذكّرني|ذكرني|نبهني|نبّهني|فكرني|فكّرني|remind me)(\s|$)/i;
+  const sendMessageVerb = /(^|\s)(?:(?:ابعثلي|ابعتلي|ابعث\s+لي|ابعت\s+لي|ارسللي|أرسللي|ارسل\s+لي|أرسل\s+لي)\s+(?:رسالة|مسج)|send\s+me\s+(?:a\s+)?message)(\s|$)/i;
+
+  return reminderVerb.test(value) || sendMessageVerb.test(value);
 }
 
 function looksLikeOwnerReminderListCommand303(text = "") {
@@ -1204,9 +1208,14 @@ function normalizeReminderDigits303Local(value = "") {
     .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)));
 }
 
+function isOwnerReminderPingCommand303Local(value = "") {
+  const text = (value || "").toString().trim().toLowerCase();
+  return /^(?:(?:ابعثلي|ابعتلي|ابعث\s+لي|ابعت\s+لي|ارسللي|أرسللي|ارسل\s+لي|أرسل\s+لي)\s+(?:رسالة|مسج)|send\s+me\s+(?:a\s+)?message)(?:\s|$)/i.test(text);
+}
+
 function stripOwnerReminderCommandPrefix303Local(value = "") {
   return (value || "").toString().trim().replace(
-    /^\s*(?:ذكّرني|ذكرني|نبهني|نبّهني|فكرني|فكّرني|remind\s+me)\s*/i,
+    /^\s*(?:(?:ذكّرني|ذكرني|نبهني|نبّهني|فكرني|فكّرني|remind\s+me)|(?:(?:ابعثلي|ابعتلي|ابعث\s+لي|ابعت\s+لي|ارسللي|أرسللي|ارسل\s+لي|أرسل\s+لي)\s+(?:رسالة|مسج)|send\s+me\s+(?:a\s+)?message))\s*/i,
     ""
   ).trim();
 }
@@ -1253,7 +1262,8 @@ function parseOwnerReminderRelative303Local(value = "") {
     const reminderText = cleanOwnerReminderText303Local(
       `${working.slice(0, match.index)} ${working.slice(match.index + match[0].length)}`
     );
-    return buildOwnerReminderLocalResult303(reminderText, Date.now() + item.ms);
+    const finalReminderText = reminderText || (isOwnerReminderPingCommand303Local(value) ? "هاي الرسالة اللي طلبتها." : "");
+    return buildOwnerReminderLocalResult303(finalReminderText, Date.now() + item.ms);
   }
 
   const numericPattern = /(?:^|\s)(?:بعد|in)\s+(\d+(?:\.\d+)?)\s*(دقيقة|دقائق|دقيقه|دقايق|minute|minutes|دقيقه|ساعة|ساعه|ساعات|hour|hours|يوم|ايام|أيام|day|days)(?:\s|$)/i;
@@ -1273,7 +1283,8 @@ function parseOwnerReminderRelative303Local(value = "") {
   const reminderText = cleanOwnerReminderText303Local(
     `${working.slice(0, match.index)} ${working.slice(match.index + match[0].length)}`
   );
-  return buildOwnerReminderLocalResult303(reminderText, Date.now() + amount * multiplier);
+  const finalReminderText = reminderText || (isOwnerReminderPingCommand303Local(value) ? "هاي الرسالة اللي طلبتها." : "");
+  return buildOwnerReminderLocalResult303(finalReminderText, Date.now() + amount * multiplier);
 }
 
 function getDubaiShiftedDate303Local(nowMs = Date.now()) {
@@ -1289,20 +1300,20 @@ function parseOwnerReminderClock303Local(value = "") {
   if (!working) return null;
 
   const dayMatch = /(?:^|\s)(اليوم|بكرا|بكرة|غدا|غداً|غدًا|tomorrow|today)(?:\s|$)/i.exec(working);
-  if (!dayMatch) return null;
-
   const timeMatch = /(?:الساعة|الساعه|ساعة|at)\s*(\d{1,2})(?:[:٫.](\d{1,2}))?\s*(صباح(?:ا|اً)?|الصبح|صبح|am|ظهر(?:ا|اً)?|الظهر|عصر(?:ا|اً)?|العصر|مساء(?:ً|ا|اً)?|المسا|ليل(?:ا|اً)?|الليل|pm)?/i.exec(working);
   if (!timeMatch) return null;
 
-  let hour = Number(timeMatch[1]);
+  const rawHour = Number(timeMatch[1]);
   const minute = Number(timeMatch[2] || 0);
-  if (!Number.isInteger(hour) || hour < 0 || hour > 23 || !Number.isInteger(minute) || minute < 0 || minute > 59) return null;
+  if (!Number.isInteger(rawHour) || rawHour < 0 || rawHour > 23 || !Number.isInteger(minute) || minute < 0 || minute > 59) return null;
 
   const period = (timeMatch[3] || "").toLowerCase();
   const isPm = /ظهر|عصر|مساء|مسا|ليل|pm/.test(period);
   const isAm = /صباح|صبح|am/.test(period);
 
-  if ((isPm || isAm) && hour > 12) return null;
+  if ((isPm || isAm) && rawHour > 12) return null;
+
+  let hour = rawHour;
   if (isPm && hour < 12) hour += 12;
   if (isAm && hour === 12) hour = 0;
 
@@ -1310,29 +1321,54 @@ function parseOwnerReminderClock303Local(value = "") {
   const year = dubaiNow.getUTCFullYear();
   const month = dubaiNow.getUTCMonth();
   const today = dubaiNow.getUTCDate();
-  const dayToken = (dayMatch[1] || "").toLowerCase();
+  const dayToken = dayMatch ? (dayMatch[1] || "").toLowerCase() : "";
   const isTomorrow = /بكرا|بكرة|غد|tomorrow/.test(dayToken);
-  const dayOffset = isTomorrow ? 1 : 0;
+  const isExplicitToday = Boolean(dayMatch) && !isTomorrow;
 
-  // If no AM/PM was given for "today" and a 1..11 clock time already passed,
-  // use the next same-number clock occurrence today (e.g. 7 -> 19:00).
-  if (!period && !isTomorrow && hour >= 1 && hour <= 11) {
-    let candidate = dubaiLocalPartsToUtcMs303Local(year, month, today, hour, minute);
-    if (candidate <= Date.now() + 5000) hour += 12;
+  let dueMs = NaN;
+
+  if (isTomorrow) {
+    // "بكرا الساعة 9" means 09:00 tomorrow unless AM/PM says otherwise.
+    dueMs = dubaiLocalPartsToUtcMs303Local(year, month, today + 1, hour, minute);
+  } else if (isExplicitToday) {
+    // For explicit "today", keep the reminder on today only.
+    let todayHour = hour;
+    if (!period && todayHour >= 1 && todayHour <= 11) {
+      const morning = dubaiLocalPartsToUtcMs303Local(year, month, today, todayHour, minute);
+      if (morning <= Date.now() + 5000) todayHour += 12;
+    }
+    dueMs = dubaiLocalPartsToUtcMs303Local(year, month, today, todayHour, minute);
+  } else {
+    // No day was said: use the next natural occurrence of that clock time.
+    // Example at 18:45: "ساعة 9" -> 21:00 today. At 22:00 -> 09:00 tomorrow.
+    if (!period && rawHour >= 1 && rawHour <= 11) {
+      const morning = dubaiLocalPartsToUtcMs303Local(year, month, today, rawHour, minute);
+      const evening = dubaiLocalPartsToUtcMs303Local(year, month, today, rawHour + 12, minute);
+      if (morning > Date.now() + 5000) dueMs = morning;
+      else if (evening > Date.now() + 5000) dueMs = evening;
+      else dueMs = dubaiLocalPartsToUtcMs303Local(year, month, today + 1, rawHour, minute);
+    } else {
+      const todayCandidate = dubaiLocalPartsToUtcMs303Local(year, month, today, hour, minute);
+      dueMs = todayCandidate > Date.now() + 5000
+        ? todayCandidate
+        : dubaiLocalPartsToUtcMs303Local(year, month, today + 1, hour, minute);
+    }
   }
 
-  const dueMs = dubaiLocalPartsToUtcMs303Local(year, month, today + dayOffset, hour, minute);
   if (!Number.isFinite(dueMs) || dueMs <= Date.now() + 5000) return null;
 
   let reminderText = working;
   const removals = [dayMatch, timeMatch]
+    .filter(Boolean)
     .map((match) => ({ index: match.index, length: match[0].length }))
     .sort((a, b) => b.index - a.index);
   for (const item of removals) {
     reminderText = reminderText.slice(0, item.index) + " " + reminderText.slice(item.index + item.length);
   }
 
-  return buildOwnerReminderLocalResult303(reminderText, dueMs);
+  reminderText = cleanOwnerReminderText303Local(reminderText);
+  const finalReminderText = reminderText || (isOwnerReminderPingCommand303Local(value) ? "هاي الرسالة اللي طلبتها." : "");
+  return buildOwnerReminderLocalResult303(finalReminderText, dueMs);
 }
 
 function parseOwnerReminderCreateCommand303Local(userText = "") {
