@@ -573,6 +573,19 @@ const CLOUDFLARE_ACCOUNT_ID = (process.env.CLOUDFLARE_ACCOUNT_ID || "").toString
 const CLOUDFLARE_AI_MODEL = (process.env.CLOUDFLARE_AI_MODEL || "@cf/zai-org/glm-4.7-flash").toString().trim();
 const CLOUDFLARE_VISION_MODEL = (process.env.CLOUDFLARE_VISION_MODEL || "@cf/google/gemma-4-26b-a4b-it").toString().trim();
 const CLOUDFLARE_AUDIO_TRANSCRIPTION_MODEL = (process.env.CLOUDFLARE_AUDIO_TRANSCRIPTION_MODEL || "@cf/openai/whisper-large-v3-turbo").toString().trim();
+
+// V14 pronunciation voice: short word/phrase pronunciation only.
+// Uses the existing Cloudflare account/token and the Unified AI catalog TTS endpoint.
+// Normal 303 replies remain text-only unless the user explicitly asks how a word/phrase is said or pronounced.
+const PRONUNCIATION_VOICE_303_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.PRONUNCIATION_VOICE_303_ENABLED || "true").toString().trim().toLowerCase()
+);
+const PRONUNCIATION_TTS_MODEL_303 = (process.env.PRONUNCIATION_TTS_MODEL_303 || "xai/grok-tts").toString().trim();
+const PRONUNCIATION_TTS_VOICE_303 = (process.env.PRONUNCIATION_TTS_VOICE_303 || "ara").toString().trim();
+const PRONUNCIATION_TTS_MAX_CHARS_303 = Math.min(
+  160,
+  Math.max(24, Number(process.env.PRONUNCIATION_TTS_MAX_CHARS_303 || 120))
+);
 const CLOUDFLARE_AI_303_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.CLOUDFLARE_AI_303_ENABLED || "true").toString().trim().toLowerCase()
 );
@@ -2202,6 +2215,403 @@ async function prepareTavilySearchFor303Task(task = {}) {
   }
 }
 
+
+function normalizePronunciationLanguage303(value = "") {
+  const raw = (value || "").toString().trim().toLowerCase();
+  if (/^(?:ar|ar-ae|arabic|العربي|العربية)$/.test(raw)) return "ar";
+  if (/^(?:en|en-us|en-gb|english|الانكليزي|الإنكليزي|الانجليزية|الإنجليزية)$/.test(raw)) return "en";
+  return "";
+}
+
+function looksLikePronunciationRequest303(value = "") {
+  const text = (value || "").toString().trim();
+  if (!text || !PRONUNCIATION_VOICE_303_ENABLED) return false;
+
+  return /(?:كيف\s*(?:بتنلفظ|تنلفظ|تِنلفظ|بنلفظ|تلفظ|بِنحكي|بنحكي|بقول|بنقول|تنقال|بنقولها)|(?:لفظ|لفّظ|انطق|إنطق|نطق)(?:لي|ها|هالي|ليلي)?|شو\s+(?:لفظ|نطق)|طريقة\s+(?:لفظ|نطق)|pronounc(?:e|iation)|how\s+(?:do|can|would)\s+(?:i|you)\s+say|how\s+is\s+.+\s+pronounced|say\s+.+\s+in\s+(?:english|arabic))/i.test(text);
+}
+
+function extractFirstJsonObject303(value = "") {
+  const raw = (value || "").toString().trim();
+  if (!raw) return null;
+  const cleaned = raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  try {
+    const parsed = JSON.parse(cleaned);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch (_) {}
+
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[0]);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function sanitizePronunciationTarget303(value = "") {
+  return (value || "")
+    .toString()
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^["'“”‘’`]+|["'“”‘’`]+$/g, "")
+    .trim()
+    .slice(0, PRONUNCIATION_TTS_MAX_CHARS_303);
+}
+
+function inferPronunciationLanguage303(userText = "", target = "") {
+  const source = (userText || "").toString();
+  if (/(?:بال(?:ا|إ)نكليزي|بال(?:ا|إ)نجليزي|بالإنجليزية|بالانجليزية|in\s+english|to\s+english)/i.test(source)) return "en";
+  if (/(?:بالعربي|بالعربية|in\s+arabic|to\s+arabic)/i.test(source)) return "ar";
+
+  const cleanTarget = (target || "").toString();
+  const arabicCount = (cleanTarget.match(/[\u0600-\u06FF]/g) || []).length;
+  const latinCount = (cleanTarget.match(/[A-Za-z]/g) || []).length;
+  if (arabicCount > latinCount) return "ar";
+  if (latinCount > 0) return "en";
+  return "";
+}
+
+function extractPronunciationTargetLocally303(userText = "", visibleReply = "") {
+  const source = (userText || "").toString().trim();
+  const reply = (visibleReply || "").toString().trim();
+  if (!looksLikePronunciationRequest303(source)) return null;
+
+  let target = "";
+  let language = "";
+
+  // Prefer explicit quoted/backticked text in the user request.
+  const quoted = source.match(/[`"“”']([^`"“”']{1,120})[`"“”']/);
+  if (quoted?.[1]) {
+    target = sanitizePronunciationTarget303(quoted[1]);
+    language = inferPronunciationLanguage303(source, target);
+  }
+
+  // Common direct form: "لفظلي appointment" / "pronounce appointment".
+  if (!target) {
+    const direct = source.match(/(?:لفظ(?:لي)?|لفّظ(?:لي)?|انطق(?:لي)?|إنطق(?:لي)?|pronounce)\s*[:\-–—]?\s*([^\n?.!،؛]{1,120})/i);
+    if (direct?.[1]) {
+      target = sanitizePronunciationTarget303(direct[1]);
+      language = inferPronunciationLanguage303(source, target);
+    }
+  }
+
+  const requestedLanguage = inferPronunciationLanguage303(source, "");
+
+  // Translation-style request: derive the requested target language from the visible answer.
+  if (!target && reply) {
+    if (requestedLanguage === "en") {
+      const code = reply.match(/`([^`]{1,120})`/);
+      if (code?.[1] && /[A-Za-z]/.test(code[1])) {
+        target = sanitizePronunciationTarget303(code[1]);
+      }
+      if (!target) {
+        const eq = reply.match(/(?:^|\n|\s)([A-Za-z][A-Za-z'’\- ]{0,100})\s*(?:=|:|—|-)\s*[\u0600-\u06FF]/);
+        if (eq?.[1]) target = sanitizePronunciationTarget303(eq[1]);
+      }
+      if (!target) {
+        const line = reply.match(/(?:^|\n)\s*(?:[-*]\s*)?([A-Za-z][A-Za-z'’\- ]{0,80})(?:\n|$)/);
+        if (line?.[1]) target = sanitizePronunciationTarget303(line[1]);
+      }
+      language = target ? "en" : "";
+    } else if (requestedLanguage === "ar") {
+      const code = reply.match(/`([^`]{1,120})`/);
+      if (code?.[1] && /[\u0600-\u06FF]/.test(code[1])) {
+        target = sanitizePronunciationTarget303(code[1]);
+      }
+      if (!target) {
+        const eq = reply.match(/(?:=|:|—|-)\s*([\u0600-\u06FF][\u0600-\u06FF\sًٌٍَُِّْـ]{0,100})/);
+        if (eq?.[1]) target = sanitizePronunciationTarget303(eq[1]);
+      }
+      if (!target) {
+        const line = reply.match(/(?:^|\n)\s*(?:[-*]\s*)?([\u0600-\u06FF][\u0600-\u06FF\sًٌٍَُِّْـ]{0,80})(?:\n|$)/);
+        if (line?.[1]) target = sanitizePronunciationTarget303(line[1]);
+      }
+      language = target ? "ar" : "";
+    }
+  }
+
+  if (!target || !language) return null;
+  return { text: target, language };
+}
+
+function buildPronunciationExtractorPrompt303(userText = "", visibleReply = "") {
+  return [
+    "Return JSON only. No markdown.",
+    "Determine whether the user is asking to hear the pronunciation of ONE word or short phrase.",
+    'Schema: {"speak":true|false,"language":"en"|"ar","text":"..."}',
+    "Rules:",
+    "- If the user asks how to say something in English, choose the English translation from the assistant reply.",
+    "- If the user asks how to say something in Arabic, choose the Arabic translation from the assistant reply.",
+    "- If the user directly asks to pronounce a supplied English or Arabic word/phrase, use that exact target.",
+    "- The spoken text must contain only the word or short phrase to pronounce, never an explanation.",
+    "- Keep text under 120 characters.",
+    "- If the target is not clear, return speak=false with empty language/text.",
+    "",
+    `USER: ${userText}`,
+    `ASSISTANT: ${visibleReply}`
+  ].join("\n");
+}
+
+async function extractPronunciationTargetWithGroq303(userText = "", visibleReply = "") {
+  if (!GROQ_303_ENABLED || !GROQ_API_KEY) return null;
+
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${GROQ_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: [
+        {
+          role: "system",
+          content: "You extract a pronunciation target. Return strict JSON only."
+        },
+        {
+          role: "user",
+          content: buildPronunciationExtractorPrompt303(userText, visibleReply)
+        }
+      ],
+      temperature: 0,
+      max_completion_tokens: 120
+    })
+  });
+
+  const raw = await response.text();
+  let payload = {};
+  try { payload = raw ? JSON.parse(raw) : {}; } catch (_) { payload = {}; }
+  if (!response.ok) {
+    const message = payload?.error?.message || raw || `HTTP ${response.status}`;
+    const error = new Error(`Groq pronunciation extractor failed: ${message}`);
+    error.status = response.status;
+    throw error;
+  }
+
+  const content = (payload?.choices?.[0]?.message?.content || "").toString().trim();
+  const parsed = extractFirstJsonObject303(content);
+  if (!parsed || parsed.speak !== true) return null;
+
+  const text = sanitizePronunciationTarget303(parsed.text || "");
+  const language = normalizePronunciationLanguage303(parsed.language || "") || inferPronunciationLanguage303(userText, text);
+  if (!text || !language) return null;
+  return { text, language };
+}
+
+async function extractPronunciationTargetWithCloudflare303(userText = "", visibleReply = "") {
+  if (!CLOUDFLARE_AI_303_ENABLED || !CLOUDFLARE_AI_API_TOKEN || !CLOUDFLARE_ACCOUNT_ID) return null;
+
+  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(CLOUDFLARE_ACCOUNT_ID)}/ai/v1/chat/completions`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${CLOUDFLARE_AI_API_TOKEN}`
+    },
+    body: JSON.stringify({
+      model: CLOUDFLARE_AI_MODEL,
+      messages: [
+        {
+          role: "system",
+          content: "You extract one pronunciation target. Return strict JSON only and no reasoning."
+        },
+        {
+          role: "user",
+          content: buildPronunciationExtractorPrompt303(userText, visibleReply)
+        }
+      ],
+      temperature: 0,
+      max_tokens: 120
+    })
+  });
+
+  const raw = await response.text();
+  let payload = {};
+  try { payload = raw ? JSON.parse(raw) : {}; } catch (_) { payload = {}; }
+  if (!response.ok || payload?.success === false) {
+    const message = payload?.errors?.[0]?.message || payload?.error?.message || raw || `HTTP ${response.status}`;
+    const error = new Error(`Cloudflare pronunciation extractor failed: ${message}`);
+    error.status = response.status;
+    throw error;
+  }
+
+  const content = (
+    payload?.choices?.[0]?.message?.content ||
+    payload?.result?.response ||
+    payload?.result?.text ||
+    ""
+  ).toString().trim();
+  const parsed = extractFirstJsonObject303(content);
+  if (!parsed || parsed.speak !== true) return null;
+
+  const text = sanitizePronunciationTarget303(parsed.text || "");
+  const language = normalizePronunciationLanguage303(parsed.language || "") || inferPronunciationLanguage303(userText, text);
+  if (!text || !language) return null;
+  return { text, language };
+}
+
+async function resolvePronunciationTarget303(userText = "", visibleReply = "") {
+  if (!looksLikePronunciationRequest303(userText)) return null;
+
+  try {
+    const groqTarget = await extractPronunciationTargetWithGroq303(userText, visibleReply);
+    if (groqTarget) {
+      console.log("[303 Pronunciation] target extracted with Groq", {
+        language: groqTarget.language,
+        text: groqTarget.text
+      });
+      return groqTarget;
+    }
+  } catch (error) {
+    console.warn("[303 Pronunciation] Groq target extraction failed; trying Cloudflare", {
+      status: Number(error?.status || 0) || null,
+      message: error?.message || String(error)
+    });
+  }
+
+  try {
+    const cloudflareTarget = await extractPronunciationTargetWithCloudflare303(userText, visibleReply);
+    if (cloudflareTarget) {
+      console.log("[303 Pronunciation] target extracted with Cloudflare", {
+        language: cloudflareTarget.language,
+        text: cloudflareTarget.text
+      });
+      return cloudflareTarget;
+    }
+  } catch (error) {
+    console.warn("[303 Pronunciation] Cloudflare target extraction failed; using local fallback", {
+      status: Number(error?.status || 0) || null,
+      message: error?.message || String(error)
+    });
+  }
+
+  const localTarget = extractPronunciationTargetLocally303(userText, visibleReply);
+  if (localTarget) {
+    console.log("[303 Pronunciation] target extracted locally", {
+      language: localTarget.language,
+      text: localTarget.text
+    });
+  }
+  return localTarget;
+}
+
+async function generatePronunciationMp3303(target = {}) {
+  if (!PRONUNCIATION_VOICE_303_ENABLED) throw new Error("303 pronunciation voice is disabled");
+  if (!CLOUDFLARE_AI_API_TOKEN) throw new Error("CLOUDFLARE_AI_API_TOKEN is missing for pronunciation TTS");
+  if (!CLOUDFLARE_ACCOUNT_ID) throw new Error("CLOUDFLARE_ACCOUNT_ID is missing for pronunciation TTS");
+
+  const text = sanitizePronunciationTarget303(target?.text || "");
+  const language = normalizePronunciationLanguage303(target?.language || "") || inferPronunciationLanguage303("", text);
+  if (!text || !["en", "ar"].includes(language)) throw new Error("Pronunciation TTS target is invalid");
+
+  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(CLOUDFLARE_ACCOUNT_ID)}/ai/run`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${CLOUDFLARE_AI_API_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: PRONUNCIATION_TTS_MODEL_303,
+      input: {
+        text,
+        voice_id: PRONUNCIATION_TTS_VOICE_303,
+        language: language === "ar" ? "ar-AE" : "en",
+        text_normalization: false,
+        output_format: {
+          codec: "mp3",
+          sample_rate: 24000,
+          bit_rate: 128000
+        }
+      }
+    })
+  });
+
+  const raw = await response.text();
+  let payload = {};
+  try { payload = raw ? JSON.parse(raw) : {}; } catch (_) { payload = {}; }
+
+  if (!response.ok || payload?.state === "Failed" || payload?.success === false) {
+    const message =
+      payload?.errors?.[0]?.message ||
+      payload?.error?.message ||
+      payload?.message ||
+      raw ||
+      `HTTP ${response.status}`;
+    const error = new Error(`Pronunciation TTS failed: ${message}`);
+    error.status = response.status;
+    throw error;
+  }
+
+  const audioUrl = (
+    payload?.result?.audio ||
+    payload?.audio ||
+    payload?.result?.url ||
+    ""
+  ).toString().trim();
+  if (!/^https:\/\//i.test(audioUrl)) {
+    throw new Error("Pronunciation TTS returned no downloadable audio URL");
+  }
+
+  const audioResponse = await fetch(audioUrl);
+  if (!audioResponse.ok) {
+    throw new Error(`Pronunciation audio download failed: HTTP ${audioResponse.status}`);
+  }
+
+  const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+  if (!audioBuffer.length) throw new Error("Pronunciation TTS returned empty audio");
+  if (audioBuffer.length > 16 * 1024 * 1024) throw new Error("Pronunciation TTS audio exceeded WhatsApp size limit");
+
+  return {
+    buffer: audioBuffer,
+    mimeType: "audio/mpeg",
+    filename: `pronunciation-${language}.mp3`,
+    language,
+    text
+  };
+}
+
+async function sendPronunciationVoice303({ to = "", phoneNumberId = "", userText = "", visibleReply = "" } = {}) {
+  if (!PRONUNCIATION_VOICE_303_ENABLED) return { ok: false, skipped: true, reason: "disabled" };
+  if (!looksLikePronunciationRequest303(userText)) return { ok: false, skipped: true, reason: "not_pronunciation_request" };
+
+  const target = await resolvePronunciationTarget303(userText, visibleReply);
+  if (!target) {
+    console.log("[303 Pronunciation] no reliable pronunciation target; voice skipped", { to });
+    return { ok: false, skipped: true, reason: "no_target" };
+  }
+
+  const audio = await generatePronunciationMp3303(target);
+  const dataUrl = `data:${audio.mimeType};base64,${audio.buffer.toString("base64")}`;
+  const result = await sendWhatsAppAudioMessage(
+    to,
+    dataUrl,
+    audio.filename,
+    phoneNumberId
+  );
+
+  console.log("[303 Pronunciation] pronunciation audio send attempted", {
+    to,
+    language: audio.language,
+    text: audio.text,
+    sendOk: Boolean(result?.ok),
+    status: Number(result?.status || 0) || null
+  });
+
+  return {
+    ...result,
+    pronunciation: {
+      language: audio.language,
+      text: audio.text,
+      model: PRONUNCIATION_TTS_MODEL_303
+    }
+  };
+}
+
 async function generate303ReplyWithFailover(task = {}) {
   const hasMedia = Boolean(task.mediaInput?.data && task.mediaInput?.mimeType);
   const textOnly = !hasMedia;
@@ -2250,7 +2660,7 @@ async function generate303ReplyWithFailover(task = {}) {
   let cloudflareError = null;
   let cloudflareRetryMs = 0;
 
-  // V12 multimodal failover. Image/audio turns now follow the same provider order
+  // V14 multimodal failover + pronunciation voice. Image/audio turns keep the same provider order
   // as text: Gemini -> Groq -> Cloudflare -> queue. Each fallback uses the provider's
   // own vision / speech capability while preserving the shared 303 conversation memory.
   if (!textOnly) {
@@ -2591,6 +3001,27 @@ async function processGemini303Queue(phone = "") {
           task.phoneNumberId,
           { skipAutoLanguage: true }
         );
+
+        // V14: pronunciation is intentionally opt-in. The normal answer stays text.
+        // Only explicit "how do I say/pronounce..." requests receive one short audio clip
+        // containing the target word/phrase itself.
+        if (!task.mediaKind && looksLikePronunciationRequest303(task.inputText || "")) {
+          try {
+            await sendPronunciationVoice303({
+              to: task.phone,
+              phoneNumberId: task.phoneNumberId,
+              userText: task.inputText || "",
+              visibleReply: visibleAiReply
+            });
+          } catch (pronunciationError) {
+            // Never fail or retry the whole AI reply because optional pronunciation audio failed.
+            console.warn("[303 Pronunciation] optional voice failed; text reply remains successful", {
+              phone: task.phone,
+              status: Number(pronunciationError?.status || 0) || null,
+              message: pronunciationError?.message || String(pronunciationError)
+            });
+          }
+        }
 
         console.log("[303 Queue] AI reply sent", {
           phone: task.phone,
