@@ -605,7 +605,7 @@ const PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 = Math.min(
   Math.max(5000, Number(process.env.PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 || 15000))
 );
 
-// V17.1 — keeps V17 durable Personal Memory + V16.3 image/search/pronunciation/reminders, and fixes multilingual behavior, contextual-link routing, and pronunciation-vs-translation separation.
+// V17.2 — keeps V17.1 intact and hardens mixed-language understanding so embedded/quoted foreign text is treated as content, not as a reason to deny language support or switch incorrectly.
 // Existing-image requests use Tavily image search; create/edit requests use Gemini Image then Cloudflare FLUX.2 fallback.
 // The last image context is persisted as a lightweight Google Sheet snapshot (media id / source URL / prompt),
 // so follow-up commands like "اعمل منها بوستر" can continue the same visual context when possible.
@@ -787,13 +787,18 @@ function build303ResponseLanguageInstruction(phone = "", currentUserText = "") {
     return [
       `The user explicitly selected ${activeLabel} for this conversation.`,
       `Reply naturally and concisely in ${activeLabel} unless the current message explicitly asks for translation or output in another language.`,
+      "Mixed-language rule: treat quoted or embedded foreign-language text as content to interpret, translate, pronounce, or discuss; do not treat it by itself as a request to switch the conversation language.",
+      "Never claim that you cannot speak or understand Arabic, English, French, Spanish, or another supported language merely because the message mixes languages. If the request is understandable, answer it directly.",
       "Preserve technical abbreviations, names, URLs, and proper nouns exactly when practical."
     ].join(" ");
   }
 
   return [
-    "Reply naturally and concisely in the same primary language as the user's current message or voice note.",
-    "If the user explicitly asks for another language, comply immediately.",
+    "Reply naturally and concisely in the same primary language as the user's current instruction or voice note.",
+    "If the user explicitly asks for another language or a translation target, comply immediately.",
+    "Mixed-language rule: identify which part is the user's instruction and which parts are quoted, embedded, named, or being translated. Foreign words or phrases inside an otherwise different-language instruction are content, not automatic evidence that the reply language should switch.",
+    "For translation requests, translate the requested content into the requested target language; if a brief explanation is useful, keep that explanation in the language of the user's instruction unless the user asks otherwise.",
+    "Never claim that you cannot speak or understand Arabic, English, French, Spanish, or another supported language merely because one message mixes languages. If the request is understandable, answer it directly.",
     "For a server-generated web-search wrapper, choose the language of the embedded USER QUESTION, not the wrapper text.",
     "Preserve technical abbreviations, names, URLs, and proper nouns exactly when practical."
   ].join(" ");
@@ -2311,7 +2316,8 @@ function buildTavilyGroundedPrompt303(originalText = "", search = null) {
     "- Do not invent consequences (for example policy changes, motives, causation, or links between events) unless a supplied source explicitly supports them.",
     "- Never invent, alter, shorten, or manufacture a URL.",
     "- Do not add a separate sources list or URLs in your answer; the server appends the exact source URLs.",
-    "- Reply naturally and concisely in the same primary language as USER QUESTION, unless USER QUESTION explicitly asks for another language.",
+    "- Reply naturally and concisely in the language of the user's instruction inside USER QUESTION, unless USER QUESTION explicitly asks for another output language.",
+    "- Mixed-language questions: distinguish the instruction from quoted/embedded foreign text. Do not switch language merely because the content being translated or discussed is in another language, and never claim inability to speak a language solely because the question mixes languages.",
     "",
     `USER QUESTION: ${question}`,
     "",
