@@ -548,6 +548,20 @@ const GEMINI_303_INLINE_MEDIA_MAX_BYTES = Math.min(
 );
 const gemini303HistoryByPhone = new Map();
 
+// Private owner reminders for the 303 test number.
+// Reminder events are persisted through the existing Google Sheet message log, so no new database is required.
+const OWNER_REMINDERS_303_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.OWNER_REMINDERS_303_ENABLED || "true").toString().trim().toLowerCase()
+);
+const OWNER_REMINDER_CRON_TOKEN = (process.env.OWNER_REMINDER_CRON_TOKEN || "").toString().trim();
+const OWNER_REMINDER_TEMPLATE_NAME_303 = (process.env.OWNER_REMINDER_TEMPLATE_NAME_303 || "").toString().trim();
+const OWNER_REMINDER_TEMPLATE_LANGUAGE = (process.env.OWNER_REMINDER_TEMPLATE_LANGUAGE || "ar").toString().trim();
+const OWNER_REMINDER_INTERVAL_MS = Math.max(30000, Number(process.env.OWNER_REMINDER_INTERVAL_MS || 60000));
+const OWNER_REMINDER_MAX_LATE_HOURS = Math.max(1, Number(process.env.OWNER_REMINDER_MAX_LATE_HOURS || 72));
+const OWNER_REMINDER_INTERNAL_TYPE = "Owner Reminder 303 Internal";
+const OWNER_REMINDER_BODY_PREFIX = "[[OWNER_REMINDER_303]]";
+const ownerReminder303SendLocks = new Set();
+
 // Dedicated 303 AI service identity:
 // PHONE_NUMBER_ID on this Render service is the Coexistence line +971 50 338 2303.
 // Dubai and Abu Dhabi IDs remain explicit so this branch never re-labels 303 as Dubai.
@@ -1111,6 +1125,312 @@ async function generateGemini303Reply(phone = "", userText = "", mediaInput = nu
   ]);
 
   return reply;
+}
+
+function isOwnerReminderInternalMessage303(message = {}) {
+  return (message?.messageType || "").toString().trim() === OWNER_REMINDER_INTERNAL_TYPE ||
+    (message?.body || "").toString().startsWith(OWNER_REMINDER_BODY_PREFIX);
+}
+
+function buildOwnerReminderEventBody303(event = {}) {
+  return `${OWNER_REMINDER_BODY_PREFIX}${JSON.stringify(event)}`;
+}
+
+function parseOwnerReminderEventBody303(body = "") {
+  const raw = (body || "").toString();
+  if (!raw.startsWith(OWNER_REMINDER_BODY_PREFIX)) return null;
+  try {
+    const parsed = JSON.parse(raw.slice(OWNER_REMINDER_BODY_PREFIX.length));
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function createOwnerReminderId303() {
+  return `r303_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function formatDubaiDateTime303(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ar-AE", {
+    timeZone: "Asia/Dubai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  }).format(date);
+}
+
+function looksLikeOwnerReminderCreateCommand303(text = "") {
+  const value = (text || "").toString().trim().toLowerCase();
+  if (!value) return false;
+  return /(^|\s)(ذكّرني|ذكرني|نبهني|نبّهني|فكرني|فكّرني|remind me)(\s|$)/i.test(value);
+}
+
+function looksLikeOwnerReminderListCommand303(text = "") {
+  const value = (text || "").toString().trim().toLowerCase();
+  if (!value) return false;
+  return value.includes("تذكيراتي") ||
+    value.includes("التذكيرات عندي") ||
+    value.includes("عندي تذكيرات") ||
+    value.includes("شو عندي تذكير") ||
+    value.includes("شو عندي تذكيرات") ||
+    value.includes("اعرض التذكيرات") ||
+    value.includes("show my reminders");
+}
+
+function extractStrictJsonObject303(raw = "") {
+  const text = (raw || "").toString().trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  try { return JSON.parse(text); } catch (_) {}
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    try { return JSON.parse(text.slice(start, end + 1)); } catch (_) {}
+  }
+  return null;
+}
+
+async function parseOwnerReminderCreateCommand303(userText = "") {
+  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is missing for reminder parsing");
+
+  const now = new Date();
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`;
+  const prompt = [
+    "You parse reminder commands for Osama in Dubai.",
+    `Current UTC time: ${now.toISOString()}`,
+    "Timezone: Asia/Dubai (UTC+04:00, no daylight-saving change).",
+    `User message: ${JSON.stringify((userText || "").toString())}`,
+    "Return ONLY one JSON object with exactly these keys:",
+    '{"intent":"create_reminder|needs_clarification|not_reminder","reminderText":"","dueAt":"","clarification":""}',
+    "Rules:",
+    "- If this is a reminder command and both reminder content and time are clear, intent=create_reminder.",
+    "- dueAt must be a future ISO 8601 timestamp with +04:00 offset.",
+    "- Understand Arabic Gulf/Levant wording such as اليوم, بكرا, بعد ساعتين, الساعة 7, الصبح, الظهر, العصر, المسا, الليل.",
+    "- If the time is ambiguous or missing, intent=needs_clarification and ask one short Arabic question in clarification.",
+    "- Never invent a missing time.",
+    "- reminderText must contain only what Osama wants to be reminded about, without the scheduling words."
+  ].join("\n");
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": GEMINI_API_KEY
+    },
+    body: JSON.stringify({
+      generationConfig: { temperature: 0.1 },
+      contents: [{ role: "user", parts: [{ text: prompt }] }]
+    })
+  });
+
+  const raw = await response.text();
+  let payload = {};
+  try { payload = raw ? JSON.parse(raw) : {}; } catch (_) { payload = {}; }
+  if (!response.ok) {
+    const message = payload?.error?.message || raw || `HTTP ${response.status}`;
+    throw new Error(`Gemini reminder parser error: ${message}`);
+  }
+
+  const parsed = extractStrictJsonObject303(extractGemini303Text(payload));
+  if (!parsed) throw new Error("Gemini reminder parser returned invalid JSON");
+
+  const intent = (parsed.intent || "").toString().trim();
+  const reminderText = (parsed.reminderText || "").toString().trim();
+  const dueAt = (parsed.dueAt || "").toString().trim();
+  const clarification = (parsed.clarification || "").toString().trim();
+
+  if (intent === "create_reminder") {
+    const dueDate = new Date(dueAt);
+    if (!reminderText || !Number.isFinite(dueDate.getTime()) || dueDate.getTime() <= Date.now() + 5000) {
+      return {
+        intent: "needs_clarification",
+        reminderText: "",
+        dueAt: "",
+        clarification: "حددلي وقت التذكير بشكل أوضح يا أسامة."
+      };
+    }
+    return { intent, reminderText, dueAt: dueDate.toISOString(), clarification: "" };
+  }
+
+  return {
+    intent: intent === "needs_clarification" ? intent : "not_reminder",
+    reminderText: "",
+    dueAt: "",
+    clarification: clarification || "حددلي وقت التذكير يا أسامة."
+  };
+}
+
+function logOwnerReminderEvent303(event = {}, phone = "", phoneNumberId = "") {
+  return addInboxMessage(
+    phone,
+    "system",
+    buildOwnerReminderEventBody303(event),
+    event.event === "sent" ? "Owner Reminder Sent" : "Owner Reminder Pending",
+    phoneNumberId || AI_303_PHONE_NUMBER_ID,
+    {
+      messageType: OWNER_REMINDER_INTERNAL_TYPE,
+      statusOverride: event.event === "sent" ? "Owner Reminder Sent" : "Owner Reminder Pending"
+    }
+  );
+}
+
+function buildOwnerReminderStates303(rows = []) {
+  const states = new Map();
+  const sorted = (rows || []).slice().sort((a, b) => {
+    const at = new Date(a?.time || 0).getTime() || 0;
+    const bt = new Date(b?.time || 0).getTime() || 0;
+    return at - bt;
+  });
+
+  for (const row of sorted) {
+    const event = parseOwnerReminderEventBody303(row?.body || "");
+    if (!event?.id) continue;
+    const existing = states.get(event.id) || {};
+    states.set(event.id, { ...existing, ...event, rowTime: row?.time || existing.rowTime || "" });
+  }
+  return states;
+}
+
+async function loadOwnerReminderRows303() {
+  const sheetData = await loadMessagesFromGoogleSheet();
+  const sheetRows = Array.isArray(sheetData.ownerReminderRows) ? sheetData.ownerReminderRows : [];
+  const memoryRows = (inboxMessages || []).filter(isOwnerReminderInternalMessage303);
+  const merged = new Map();
+  for (const row of [...sheetRows, ...memoryRows]) {
+    const key = getMessageMergeKey(row);
+    if (key && !merged.has(key)) merged.set(key, row);
+  }
+  return Array.from(merged.values());
+}
+
+async function getPendingOwnerReminders303() {
+  const rows = await loadOwnerReminderRows303();
+  const states = buildOwnerReminderStates303(rows);
+  return Array.from(states.values())
+    .filter((item) => item.event === "created" && item.status !== "sent" && item.status !== "cancelled")
+    .filter((item) => Number.isFinite(new Date(item.dueAt || "").getTime()))
+    .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
+}
+
+async function createOwnerReminder303(phone = "", phoneNumberId = "", userText = "") {
+  const parsed = await parseOwnerReminderCreateCommand303(userText);
+  if (parsed.intent !== "create_reminder") return parsed;
+
+  const event = {
+    id: createOwnerReminderId303(),
+    event: "created",
+    status: "pending",
+    reminderText: parsed.reminderText,
+    dueAt: parsed.dueAt,
+    createdAt: new Date().toISOString(),
+    phone: normalizePhoneDigits(phone),
+    phoneNumberId: normalizePhoneNumberId(phoneNumberId || AI_303_PHONE_NUMBER_ID)
+  };
+  logOwnerReminderEvent303(event, phone, phoneNumberId);
+  return { intent: "create_reminder", reminder: event };
+}
+
+function isOwnerReminderSendSuccess303(result = {}) {
+  if (!result || typeof result !== "object") return false;
+  if (result.ok === true) return true;
+  if (Array.isArray(result.messages) && result.messages.length > 0 && !result.error) return true;
+  return false;
+}
+
+async function sendOwnerReminder303(record = {}) {
+  const phone = normalizePhoneDigits(record.phone || "");
+  const phoneNumberId = normalizePhoneNumberId(record.phoneNumberId || AI_303_PHONE_NUMBER_ID);
+  const reminderText = (record.reminderText || "").toString().trim();
+  if (!phone || !reminderText) return { ok: false, error: "invalid reminder record" };
+
+  const body = `⏰ تذكير يا أسامة:\n${reminderText}`;
+  const textResult = await sendWhatsAppMessage(phone, body, phoneNumberId, { skipAutoLanguage: true });
+  if (isOwnerReminderSendSuccess303(textResult)) {
+    return { ok: true, mode: "text", result: textResult };
+  }
+
+  const textError = getWhatsAppApiError(textResult) || {};
+  if (isWhatsAppOutside24HourWindowError(textError) && OWNER_REMINDER_TEMPLATE_NAME_303) {
+    const templateResult = await sendWhatsAppTemplate(
+      phone,
+      OWNER_REMINDER_TEMPLATE_NAME_303,
+      phoneNumberId,
+      OWNER_REMINDER_TEMPLATE_LANGUAGE,
+      { bodyParameters: [reminderText] }
+    );
+    return { ok: Boolean(templateResult?.ok), mode: "template", result: templateResult };
+  }
+
+  return {
+    ok: false,
+    mode: "text",
+    outside24h: isWhatsAppOutside24HourWindowError(textError),
+    templateConfigured: Boolean(OWNER_REMINDER_TEMPLATE_NAME_303),
+    result: textResult
+  };
+}
+
+async function processDueOwnerReminders303(source = "manual") {
+  if (!OWNER_REMINDERS_303_ENABLED) return { ok: true, disabled: true, source, dueCount: 0, sent: [], failed: [] };
+
+  const now = Date.now();
+  const maxLateMs = OWNER_REMINDER_MAX_LATE_HOURS * 60 * 60 * 1000;
+  const pending = await getPendingOwnerReminders303();
+  const due = pending.filter((record) => {
+    const dueMs = new Date(record.dueAt || "").getTime();
+    return Number.isFinite(dueMs) && dueMs <= now && (now - dueMs) <= maxLateMs;
+  });
+  const sent = [];
+  const failed = [];
+
+  for (const record of due) {
+    if (!record.id || ownerReminder303SendLocks.has(record.id)) continue;
+    ownerReminder303SendLocks.add(record.id);
+    try {
+      const result = await sendOwnerReminder303(record);
+      if (result.ok) {
+        const sentEvent = {
+          ...record,
+          event: "sent",
+          status: "sent",
+          sentAt: new Date().toISOString(),
+          sendMode: result.mode || "text"
+        };
+        logOwnerReminderEvent303(sentEvent, record.phone, record.phoneNumberId);
+        sent.push({ id: record.id, dueAt: record.dueAt, text: record.reminderText, mode: result.mode || "text" });
+      } else {
+        failed.push({
+          id: record.id,
+          dueAt: record.dueAt,
+          text: record.reminderText,
+          outside24h: Boolean(result.outside24h),
+          templateConfigured: Boolean(result.templateConfigured)
+        });
+      }
+    } catch (error) {
+      failed.push({ id: record.id, dueAt: record.dueAt, text: record.reminderText, error: error?.message || String(error) });
+    } finally {
+      ownerReminder303SendLocks.delete(record.id);
+    }
+  }
+
+  return { ok: failed.length === 0, source, dueCount: due.length, sentCount: sent.length, failedCount: failed.length, sent, failed };
+}
+
+async function buildOwnerReminderListReply303() {
+  const pending = await getPendingOwnerReminders303();
+  if (!pending.length) return "ما عندك أي تذكيرات معلّقة حاليًا يا أسامة.";
+  const lines = pending.slice(0, 10).map((item, index) =>
+    `${index + 1}) ${formatDubaiDateTime303(item.dueAt)} — ${item.reminderText}`
+  );
+  return ["تذكيراتك المعلّقة:", "", ...lines].join("\n");
 }
 
 function normalizeWhatsAppRecipientDigits(value) {
@@ -1848,12 +2168,15 @@ async function loadMessagesFromGoogleSheet() {
     }));
 
     // Restore hidden internal state, then remove those internal rows before
-    // returning data to Team Inbox.
+    // returning data to Team Inbox. Owner reminder rows are also persisted here
+    // but returned separately for the private 303 reminder engine.
     restoreSmartConversationMemoryFromMessages(allMessages);
     restoreSmartUnknownLearningQueueFromMessages(allMessages);
+    const ownerReminderRows = allMessages.filter(isOwnerReminderInternalMessage303);
     const messages = allMessages.filter((message) =>
       !isSmartMemorySnapshotMessage(message) &&
-      !isSmartUnknownLearningMessage(message)
+      !isSmartUnknownLearningMessage(message) &&
+      !isOwnerReminderInternalMessage303(message)
     );
 
     const conversationStates = Array.isArray(data.conversationStates)
@@ -1885,7 +2208,7 @@ async function loadMessagesFromGoogleSheet() {
         }))
       : [];
 
-    return { messages, conversationStates, bookingRequests };
+    return { messages, conversationStates, bookingRequests, ownerReminderRows };
   } catch (error) {
     console.log("Google Sheet load failed:");
     console.log(error);
@@ -17785,6 +18108,46 @@ app.post("/api/flows/iconic-booking", async (req, res) => {
 });
 
 
+app.get("/api/owner-reminders/preview", async (req, res) => {
+  try {
+    const token = (req.query.token || req.headers["x-owner-reminder-token"] || "").toString().trim();
+    if (!OWNER_REMINDER_CRON_TOKEN || token !== OWNER_REMINDER_CRON_TOKEN) {
+      return res.status(403).json({ ok: false, error: "Forbidden" });
+    }
+    const pending = await getPendingOwnerReminders303();
+    const now = Date.now();
+    const due = pending.filter((item) => new Date(item.dueAt || "").getTime() <= now);
+    return res.json({
+      ok: true,
+      enabled: OWNER_REMINDERS_303_ENABLED,
+      pendingCount: pending.length,
+      dueCount: due.length,
+      templateConfigured: Boolean(OWNER_REMINDER_TEMPLATE_NAME_303),
+      pending: pending.slice(0, 20).map((item) => ({
+        id: item.id,
+        dueAt: item.dueAt,
+        dueDubai: formatDubaiDateTime303(item.dueAt),
+        text: item.reminderText
+      }))
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error?.message || String(error) });
+  }
+});
+
+app.get("/api/owner-reminders/send-due", async (req, res) => {
+  try {
+    const token = (req.query.token || req.headers["x-owner-reminder-token"] || "").toString().trim();
+    if (!OWNER_REMINDER_CRON_TOKEN || token !== OWNER_REMINDER_CRON_TOKEN) {
+      return res.status(403).json({ ok: false, error: "Forbidden" });
+    }
+    const result = await processDueOwnerReminders303("external-cron");
+    return res.status(result.ok ? 200 : 207).json(result);
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error?.message || String(error) });
+  }
+});
+
 app.get("/api/reminders/preview", protectInbox, async (req, res) => {
   try {
     const sheetData = await loadMessagesFromGoogleSheet();
@@ -18426,6 +18789,7 @@ function mergeInboxHistory(sheetMessages = [], memoryMessages = []) {
 
   // Add current in-memory messages so a partial Sheet response cannot hide live conversations.
   for (const message of memoryMessages || []) {
+    if (isOwnerReminderInternalMessage303(message)) continue;
     const key = getMessageMergeKey(message);
     if (key.trim() && !mergedMap.has(key)) {
       mergedMap.set(key, message);
@@ -48332,6 +48696,29 @@ app.post("/webhook", async (req, res) => {
           fromInternalNumber: true
         });
 
+        // Private owner reminder commands are handled before normal Gemini chat.
+        if (!geminiMediaKind && OWNER_REMINDERS_303_ENABLED && looksLikeOwnerReminderListCommand303(geminiInputText)) {
+          const reminderListReply = await buildOwnerReminderListReply303();
+          await sendWhatsAppMessage(from, reminderListReply, incomingPhoneNumberId, { skipAutoLanguage: true });
+          return res.sendStatus(200);
+        }
+
+        if (!geminiMediaKind && OWNER_REMINDERS_303_ENABLED && looksLikeOwnerReminderCreateCommand303(geminiInputText)) {
+          const reminderResult = await createOwnerReminder303(from, incomingPhoneNumberId, geminiInputText);
+          let reminderReply = "";
+          if (reminderResult.intent === "create_reminder" && reminderResult.reminder) {
+            reminderReply = [
+              "تم يا أسامة ✅",
+              `⏰ ${formatDubaiDateTime303(reminderResult.reminder.dueAt)}`,
+              `📝 ${reminderResult.reminder.reminderText}`
+            ].join("\n");
+          } else {
+            reminderReply = reminderResult.clarification || "حددلي وقت التذكير يا أسامة.";
+          }
+          await sendWhatsAppMessage(from, reminderReply, incomingPhoneNumberId, { skipAutoLanguage: true });
+          return res.sendStatus(200);
+        }
+
         const geminiMediaInput = geminiMediaKind
           ? await downloadWhatsAppMediaForGemini303(message)
           : null;
@@ -50157,3 +50544,15 @@ app.get("/api/flow-config", (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// While this Render service is awake, process owner reminders locally once per minute.
+// The public token-protected endpoint above is intended for a Google Apps Script trigger
+// so reminders still fire when the free Render instance would otherwise be asleep.
+if (OWNER_REMINDERS_303_ENABLED) {
+  const ownerReminderTimer = setInterval(() => {
+    processDueOwnerReminders303("local-interval").catch((error) => {
+      console.error("[303 Owner Reminder] interval failed:", error);
+    });
+  }, OWNER_REMINDER_INTERVAL_MS);
+  if (typeof ownerReminderTimer.unref === "function") ownerReminderTimer.unref();
+}
