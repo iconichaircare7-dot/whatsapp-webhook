@@ -542,6 +542,20 @@ const GEMINI_MODEL = (process.env.GEMINI_MODEL || "gemini-3.5-flash-lite").toStr
 const GEMINI_303_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.GEMINI_303_ENABLED || "true").toString().trim().toLowerCase()
 );
+
+// V5 Multi-AI failover for the private 303 owner route.
+// Gemini stays primary. Groq is used immediately for TEXT turns when Gemini is
+// rate-limited or temporarily unavailable. Shared conversation memory remains in
+// this service, so switching providers does not reset the conversation.
+const GROQ_API_KEY = (process.env.GROQ_API_KEY || "").toString().trim();
+const GROQ_MODEL = (process.env.GROQ_MODEL || "llama-3.3-70b-versatile").toString().trim();
+const GROQ_303_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.GROQ_303_ENABLED || "true").toString().trim().toLowerCase()
+);
+const GROQ_303_TEMPORARY_FAILURE_FALLBACK_MS = Math.max(
+  5000,
+  Number(process.env.GROQ_303_TEMPORARY_FAILURE_FALLBACK_MS || 30000)
+);
 const GEMINI_303_HISTORY_TURNS = Math.min(10, Math.max(2, Number(process.env.GEMINI_303_HISTORY_TURNS || 6)));
 const GEMINI_303_INLINE_MEDIA_MAX_BYTES = Math.min(
   12 * 1024 * 1024,
@@ -1164,7 +1178,7 @@ async function sendGemini303RateLimitNoticeOnce(task = {}, retryMs = 0) {
 
   const message = [
     "وصلتني رسالتك يا أسامة ✅",
-    "Gemini عليه حد مؤقت هلق. حطيت طلبك بالطابور، ورح أرجع أحاول تلقائيًا بانتظار متزايد بدل ما أضغط على الحد. ما بدك تعيد تبعت الرسالة."
+    "محركات الذكاء مشغولة مؤقتًا. حفظت طلبك بالطابور ورح أرجع أحاول تلقائيًا. ما بدك تعيد تبعت الرسالة."
   ].join("\n");
 
   try {
@@ -1177,6 +1191,213 @@ async function sendGemini303RateLimitNoticeOnce(task = {}, retryMs = 0) {
   } catch (error) {
     console.warn("[303 Queue] rate-limit notice send failed:", error?.message || error);
   }
+}
+
+
+function isTemporaryAiProviderError303(error) {
+  if (!error) return false;
+  const status = Number(error.status || 0);
+  if (status === 408 || status === 409 || status === 425 || status === 429 || status >= 500) return true;
+
+  const message = [
+    error?.message || "",
+    error?.code || "",
+    error?.cause?.code || ""
+  ].join(" ");
+
+  return /(quota exceeded|rate.?limit|too many requests|resource[_\s-]?exhausted|timeout|timed out|fetch failed|network|econnreset|econnrefused|enotfound|socket hang up|\b429\b)/i.test(message);
+}
+
+function getTemporaryAiProviderRetryMs303(error, fallbackMs = 30000) {
+  const explicit = getGemini303RateLimitRetryMs(error);
+  if (explicit > 0) return explicit;
+  if (isTemporaryAiProviderError303(error)) return Math.max(5000, Number(fallbackMs || 30000));
+  return 0;
+}
+
+function getGemini303CooldownRemainingMs() {
+  return Math.max(0, Number(gemini303GlobalCooldownUntil || 0) - Date.now());
+}
+
+function markGemini303TemporarilyUnavailable(error) {
+  const retryMs = getTemporaryAiProviderRetryMs303(error, GEMINI_303_RATE_LIMIT_FALLBACK_MS);
+  if (retryMs <= 0) return 0;
+  gemini303GlobalCooldownUntil = Math.max(gemini303GlobalCooldownUntil, Date.now() + retryMs);
+  return retryMs;
+}
+
+function getShared303HistoryAsGroqMessages(phone = "") {
+  return getGemini303History(phone).map((item) => {
+    const role = item?.role === "model" ? "assistant" : "user";
+    const content = (item?.parts || [])
+      .map((part) => (part?.text || "").toString())
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+    return { role, content };
+  }).filter((item) => item.content);
+}
+
+async function generateGroq303Reply(phone = "", userText = "") {
+  const cleanText = (userText || "").toString().trim();
+  if (!GROQ_303_ENABLED) throw new Error("Groq 303 fallback is disabled");
+  if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY is missing");
+  if (!cleanText) throw new Error("Groq 303 received empty text input");
+
+  const previous = getGemini303History(phone);
+  const endpoint = "https://api.groq.com/openai/v1/chat/completions";
+  const messages = [
+    {
+      role: "system",
+      content: [
+        "You are Osama's private WhatsApp assistant on the 303 line.",
+        "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
+        "Maintain continuity with the supplied conversation history.",
+        "Do not claim you are ChatGPT, OpenAI, Gemini, or Groq; you are the private 303 assistant.",
+        "If you do not know something, say so clearly instead of inventing facts."
+      ].join(" ")
+    },
+    ...getShared303HistoryAsGroqMessages(phone),
+    { role: "user", content: cleanText }
+  ];
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${GROQ_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages,
+      temperature: 0.4,
+      max_completion_tokens: 1200
+    })
+  });
+
+  const raw = await response.text();
+  let payload = {};
+  try {
+    payload = raw ? JSON.parse(raw) : {};
+  } catch (_) {
+    payload = {};
+  }
+
+  if (!response.ok) {
+    const message = payload?.error?.message || raw || `HTTP ${response.status}`;
+    const error = new Error(`Groq API error: ${message}`);
+    error.status = response.status;
+    error.groqPayload = payload;
+    const retryAfterHeader = Number(response.headers.get("retry-after") || 0);
+    if (Number.isFinite(retryAfterHeader) && retryAfterHeader > 0) {
+      error.retryAfterMs = retryAfterHeader * 1000 + 1000;
+    }
+    throw error;
+  }
+
+  const reply = (payload?.choices?.[0]?.message?.content || "").toString().trim();
+  if (!reply) throw new Error("Groq API returned no text");
+
+  // Shared provider-neutral memory is stored in the existing Gemini-format history map.
+  // Gemini can consume the same history later, so switching back does not reset context.
+  saveGemini303History(phone, [
+    ...previous,
+    { role: "user", parts: [{ text: cleanText }] },
+    { role: "model", parts: [{ text: reply }] }
+  ]);
+
+  return reply;
+}
+
+async function generate303ReplyWithFailover(task = {}) {
+  const hasMedia = Boolean(task.mediaInput?.data && task.mediaInput?.mimeType);
+  const textOnly = !hasMedia;
+  let geminiError = null;
+  let geminiRetryMs = 0;
+
+  // Media stays on Gemini in V5. Groq's Llama text fallback is deliberately only
+  // used for text turns so image/audio behavior is not silently degraded.
+  if (!textOnly) {
+    await waitForGemini303TrafficSlot();
+    const reply = await generateGemini303Reply(task.phone, task.inputText, task.mediaInput);
+    return { reply, provider: "gemini", model: GEMINI_MODEL };
+  }
+
+  const cooldownRemaining = getGemini303CooldownRemainingMs();
+  if (GEMINI_303_ENABLED && GEMINI_API_KEY && cooldownRemaining <= 0) {
+    try {
+      await waitForGemini303TrafficSlot();
+      const reply = await generateGemini303Reply(task.phone, task.inputText, null);
+      gemini303ConsecutiveRateLimits = 0;
+      gemini303GlobalCooldownUntil = 0;
+      return { reply, provider: "gemini", model: GEMINI_MODEL };
+    } catch (error) {
+      geminiError = error;
+      geminiRetryMs = markGemini303TemporarilyUnavailable(error);
+      console.warn("[303 Failover] Gemini unavailable; trying Groq immediately", {
+        phone: task.phone,
+        status: Number(error?.status || 0) || null,
+        temporary: isTemporaryAiProviderError303(error),
+        geminiRetryInMs: geminiRetryMs,
+        groqConfigured: Boolean(GROQ_303_ENABLED && GROQ_API_KEY)
+      });
+    }
+  } else if (cooldownRemaining > 0) {
+    geminiRetryMs = cooldownRemaining;
+    console.log("[303 Failover] Gemini circuit open; skipping directly to Groq", {
+      phone: task.phone,
+      geminiCooldownRemainingMs: cooldownRemaining
+    });
+  } else {
+    geminiError = new Error("Gemini 303 is unavailable or not configured");
+  }
+
+  if (GROQ_303_ENABLED && GROQ_API_KEY) {
+    try {
+      const reply = await generateGroq303Reply(task.phone, task.inputText);
+      console.log("[303 Failover] Groq fallback succeeded", {
+        phone: task.phone,
+        model: GROQ_MODEL,
+        geminiCooldownRemainingMs: getGemini303CooldownRemainingMs()
+      });
+      return { reply, provider: "groq", model: GROQ_MODEL };
+    } catch (groqError) {
+      const groqRetryMs = getTemporaryAiProviderRetryMs303(
+        groqError,
+        GROQ_303_TEMPORARY_FAILURE_FALLBACK_MS
+      );
+
+      console.warn("[303 Failover] Groq fallback failed", {
+        phone: task.phone,
+        status: Number(groqError?.status || 0) || null,
+        temporary: isTemporaryAiProviderError303(groqError),
+        groqRetryInMs: groqRetryMs
+      });
+
+      // Queue/backoff is the final safety net only after both providers are unavailable.
+      const retryCandidates = [geminiRetryMs, groqRetryMs].filter((value) => Number(value) > 0);
+      if (retryCandidates.length) {
+        const error = new Error(
+          `303 AI providers temporarily unavailable. Gemini: ${geminiError?.message || "cooldown"}. Groq: ${groqError?.message || "temporary error"}`
+        );
+        error.status = 429;
+        error.retryAfterMs = Math.max(5000, Math.min(...retryCandidates));
+        error.providers = { gemini: geminiError, groq: groqError };
+        throw error;
+      }
+
+      // If both failures are permanent/configuration errors, surface the Groq error.
+      throw groqError;
+    }
+  }
+
+  // Groq not configured: preserve the old queue/backoff behavior for Gemini.
+  if (geminiRetryMs > 0) {
+    const error = geminiError || new Error("Gemini is in cooldown and Groq is unavailable");
+    error.retryAfterMs = geminiRetryMs;
+    throw error;
+  }
+  throw geminiError || new Error("No 303 AI provider is available");
 }
 
 function enqueueGemini303Task(task = {}) {
@@ -1253,8 +1474,6 @@ async function processGemini303Queue(phone = "") {
       const task = queue[0];
 
       try {
-        await waitForGemini303TrafficSlot();
-
         await showBotTypingBeforeReply({
           to: task.phone,
           incomingMessageId: task.messageId || "",
@@ -1266,23 +1485,20 @@ async function processGemini303Queue(phone = "") {
           task.mediaInput = await downloadWhatsAppMediaForGemini303(task.message || {});
         }
 
-        const geminiReply = await generateGemini303Reply(
-          task.phone,
-          task.inputText,
-          task.mediaInput
-        );
+        const aiResult = await generate303ReplyWithFailover(task);
 
         const sendResult = await sendWhatsAppMessage(
           task.phone,
-          geminiReply,
+          aiResult.reply,
           task.phoneNumberId,
           { skipAutoLanguage: true }
         );
 
-        console.log("[303 Queue] Gemini reply sent", {
+        console.log("[303 Queue] AI reply sent", {
           phone: task.phone,
           messageId: task.messageId,
-          model: GEMINI_MODEL,
+          provider: aiResult.provider,
+          model: aiResult.model,
           queueDelayMs: Date.now() - task.queuedAt,
           rateLimitRetries: task.rateLimitRetries,
           inputKind: task.mediaInput?.kind || "text",
@@ -1291,9 +1507,12 @@ async function processGemini303Queue(phone = "") {
           sendDisabled: Boolean(sendResult?.disabled)
         });
 
-        // A successful Gemini response proves the temporary quota window has opened again.
+        // Any successful provider clears queue-level backoff pressure. Gemini's own
+        // circuit cooldown remains intact if Groq handled the turn while Gemini rests.
         gemini303ConsecutiveRateLimits = 0;
-        gemini303GlobalCooldownUntil = 0;
+        if (aiResult.provider === "gemini") {
+          gemini303GlobalCooldownUntil = 0;
+        }
 
         queue.shift();
         gemini303QueueByPhone.set(cleanPhone, queue);
@@ -1314,7 +1533,7 @@ async function processGemini303Queue(phone = "") {
             Date.now() + appliedRetryMs
           );
 
-          console.warn("[303 Queue] Gemini rate limited; queue paused with exponential backoff", {
+          console.warn("[303 Queue] AI providers unavailable; queue paused with exponential backoff", {
             phone: task.phone,
             messageId: task.messageId,
             providerRetryInMs: providerRetryMs,
@@ -1338,7 +1557,7 @@ async function processGemini303Queue(phone = "") {
         console.error(error);
 
         const failureText = providerRetryMs > 0
-          ? "رسالتك موجودة بالمحادثة يا أسامة، بس Gemini ما فتح الحد بعد عدة محاولات تلقائية متباعدة. وقفت المحاولات هلق حتى ما نضل نضغط على الخدمة؛ ابعتها لاحقًا إذا بدك جواب عليها."
+          ? "رسالتك موجودة بالمحادثة يا أسامة، بس محركات الذكاء ما كانت متاحة بعد عدة محاولات تلقائية. وقفت المحاولات مؤقتًا حتى ما نضغط على الخدمات؛ ابعتها لاحقًا إذا بدك جواب عليها."
           : "صار خطأ تقني وأنا بعالج هالرسالة يا أسامة. ابعتها مرة ثانية إذا ما وصلك رد.";
 
         try {
@@ -49257,10 +49476,11 @@ app.post("/webhook", async (req, res) => {
         ? (message?.type || "").toString().toLowerCase()
         : "";
 
-      console.log("[303 Gemini] owner/test message accepted", {
+      console.log("[303 AI] owner/test message accepted", {
         from,
         phoneNumberId: incomingPhoneNumberId,
-        model: GEMINI_MODEL,
+        primaryModel: GEMINI_MODEL,
+        fallbackModel: GROQ_303_ENABLED && GROQ_API_KEY ? GROQ_MODEL : null,
         messageType: message?.type || "",
         hasText: Boolean(geminiInputText),
         hasSupportedMedia: Boolean(geminiMediaKind)
