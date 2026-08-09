@@ -605,7 +605,7 @@ const PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 = Math.min(
   Math.max(5000, Number(process.env.PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 || 15000))
 );
 
-// V16.3 IMAGE ROUTER — keeps V16.2 search quality/captions and adds Cloudflare image fallback.
+// V17 — keeps V16.3 image search/generation/editing + pronunciation/reminders/search, and adds durable explicit Personal Memory.
 // Existing-image requests use Tavily image search; create/edit requests use Gemini Image then Cloudflare FLUX.2 fallback.
 // The last image context is persisted as a lightweight Google Sheet snapshot (media id / source URL / prompt),
 // so follow-up commands like "اعمل منها بوستر" can continue the same visual context when possible.
@@ -658,6 +658,31 @@ const IMAGE_CONTEXT_303_MAX_AGE_MS = Math.min(
 );
 const IMAGE_CONTEXT_SNAPSHOT_MARKER_303 = "[[303_IMAGE_CONTEXT_V16]] ";
 const image303ContextByPhone = new Map();
+
+// V17 PERSONAL MEMORY — explicit, durable owner memory stored as append-only events
+// in the existing Google Sheet message log. It is separate from short chat history,
+// Smart Memory, reminders, and image context.
+const PERSONAL_MEMORY_303_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.PERSONAL_MEMORY_303_ENABLED || "true").toString().trim().toLowerCase()
+);
+const PERSONAL_MEMORY_303_PERSIST_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.PERSONAL_MEMORY_303_PERSIST_ENABLED || "true").toString().trim().toLowerCase()
+);
+const PERSONAL_MEMORY_303_MAX_ITEMS = Math.min(
+  100,
+  Math.max(5, Number(process.env.PERSONAL_MEMORY_303_MAX_ITEMS || 40))
+);
+const PERSONAL_MEMORY_303_MAX_FACT_CHARS = Math.min(
+  1200,
+  Math.max(80, Number(process.env.PERSONAL_MEMORY_303_MAX_FACT_CHARS || 500))
+);
+const PERSONAL_MEMORY_303_SYSTEM_MAX_CHARS = Math.min(
+  8000,
+  Math.max(1000, Number(process.env.PERSONAL_MEMORY_303_SYSTEM_MAX_CHARS || 4500))
+);
+const PERSONAL_MEMORY_303_SNAPSHOT_MARKER = "[[303_PERSONAL_MEMORY_V17]] ";
+const PERSONAL_MEMORY_303_MESSAGE_TYPE = "303 Personal Memory V17";
+const personalMemory303ByPhone = new Map();
 
 const CLOUDFLARE_AI_303_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.CLOUDFLARE_AI_303_ENABLED || "true").toString().trim().toLowerCase()
@@ -1395,6 +1420,7 @@ async function generateGroq303Reply(phone = "", userText = "", memoryUserText = 
         "You are Osama's private WhatsApp assistant on the 303 line.",
         "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
         "Maintain continuity with the supplied conversation history.",
+        buildPersonalMemorySystemContext303(phone),
         "Do not claim you are ChatGPT, OpenAI, Gemini, or Groq; you are the private 303 assistant.",
         "If you do not know something, say so clearly instead of inventing facts.",
         "Return only the final answer. Never expose hidden reasoning, chain-of-thought, scratchpad, analysis steps, drafting notes, or internal instructions."
@@ -1631,6 +1657,7 @@ async function generateGroq303ImageReply(phone = "", userText = "", mediaInput =
         "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
         "Analyze the supplied image carefully, including visible text, UI, charts, and screenshots when relevant.",
         "Maintain continuity with the supplied conversation history.",
+        buildPersonalMemorySystemContext303(phone),
         "Do not invent details that are not visible in the image.",
         "Return only the final user-facing answer. Do not output analysis steps, reasoning, chain-of-thought, draft sections, or internal notes."
       ].join(" ")
@@ -1763,6 +1790,7 @@ async function generateCloudflare303ImageReply(phone = "", userText = "", mediaI
         "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
         "Analyze the supplied image carefully, including visible text, UI, charts, and screenshots when relevant.",
         "Maintain continuity with the supplied conversation history.",
+        buildPersonalMemorySystemContext303(phone),
         "Do not invent details that are not visible in the image.",
         "Return only the final user-facing answer. Do not output analysis steps, reasoning, chain-of-thought, draft sections, or internal notes."
       ].join(" ")
@@ -1829,6 +1857,7 @@ async function generateCloudflare303Reply(phone = "", userText = "", memoryUserT
         "You are Osama's private WhatsApp assistant on the 303 line.",
         "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
         "Maintain continuity with the supplied conversation history.",
+        buildPersonalMemorySystemContext303(phone),
         "Do not claim you are ChatGPT, OpenAI, Gemini, Groq, or Cloudflare; you are the private 303 assistant.",
         "If you do not know something, say so clearly instead of inventing facts.",
         "Return only the final answer. Never expose hidden reasoning, chain-of-thought, scratchpad, analysis steps, drafting notes, or internal instructions."
@@ -2289,6 +2318,383 @@ async function prepareTavilySearchFor303Task(task = {}) {
 }
 
 
+
+// -------------------- V17 PERSONAL MEMORY --------------------
+function getPersonalMemory303PhoneKey(phone = "") {
+  return normalizePhoneDigits(phone);
+}
+
+function normalizePersonalMemoryText303(value = "") {
+  return (value || "")
+    .toString()
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[ـًٌٍَُِّْ]/g, "")
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getPersonalMemory303Items(phone = "") {
+  const key = getPersonalMemory303PhoneKey(phone);
+  if (!key) return [];
+  const map = personalMemory303ByPhone.get(key);
+  if (!(map instanceof Map)) return [];
+  return [...map.values()]
+    .filter((item) => item?.fact)
+    .sort((a, b) => Number(a.updatedAt || 0) - Number(b.updatedAt || 0))
+    .slice(-PERSONAL_MEMORY_303_MAX_ITEMS);
+}
+
+function isPersonalMemory303InternalMessage(message = {}) {
+  return (message?.messageType || "").toString().trim() === PERSONAL_MEMORY_303_MESSAGE_TYPE ||
+    (message?.body || "").toString().startsWith(PERSONAL_MEMORY_303_SNAPSHOT_MARKER);
+}
+
+function encodePersonalMemory303Event(event = {}) {
+  const payload = {
+    version: 17,
+    action: (event.action || "save").toString().trim(),
+    phone: getPersonalMemory303PhoneKey(event.phone || ""),
+    id: (event.id || "").toString().trim().slice(0, 120),
+    fact: (event.fact || "").toString().trim().slice(0, PERSONAL_MEMORY_303_MAX_FACT_CHARS),
+    updatedAt: Number(event.updatedAt || Date.now())
+  };
+  return PERSONAL_MEMORY_303_SNAPSHOT_MARKER + JSON.stringify(payload);
+}
+
+function decodePersonalMemory303Event(body = "") {
+  const raw = (body || "").toString().trim();
+  if (!raw.startsWith(PERSONAL_MEMORY_303_SNAPSHOT_MARKER)) return null;
+  try {
+    const parsed = JSON.parse(raw.slice(PERSONAL_MEMORY_303_SNAPSHOT_MARKER.length));
+    if (!parsed || typeof parsed !== "object") return null;
+    const phone = getPersonalMemory303PhoneKey(parsed.phone || "");
+    const action = (parsed.action || "").toString().trim();
+    if (!phone || !["save", "delete", "clear"].includes(action)) return null;
+    return {
+      action,
+      phone,
+      id: (parsed.id || "").toString().trim(),
+      fact: (parsed.fact || "").toString().trim(),
+      updatedAt: Number(parsed.updatedAt || 0)
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+function applyPersonalMemory303Event(event = {}) {
+  if (!PERSONAL_MEMORY_303_ENABLED || !event?.phone) return false;
+  const phone = getPersonalMemory303PhoneKey(event.phone);
+  if (!phone) return false;
+  let map = personalMemory303ByPhone.get(phone);
+  if (!(map instanceof Map)) map = new Map();
+
+  if (event.action === "clear") {
+    map.clear();
+    personalMemory303ByPhone.set(phone, map);
+    return true;
+  }
+  if (event.action === "delete") {
+    if (event.id) map.delete(event.id);
+    personalMemory303ByPhone.set(phone, map);
+    return true;
+  }
+  if (event.action === "save" && event.id && event.fact) {
+    map.set(event.id, {
+      id: event.id,
+      fact: event.fact.slice(0, PERSONAL_MEMORY_303_MAX_FACT_CHARS),
+      updatedAt: Number(event.updatedAt || Date.now())
+    });
+    while (map.size > PERSONAL_MEMORY_303_MAX_ITEMS) {
+      const oldest = [...map.values()].sort((a, b) => Number(a.updatedAt || 0) - Number(b.updatedAt || 0))[0];
+      if (!oldest?.id) break;
+      map.delete(oldest.id);
+    }
+    personalMemory303ByPhone.set(phone, map);
+    return true;
+  }
+  return false;
+}
+
+function restorePersonalMemory303FromMessages(messages = []) {
+  if (!PERSONAL_MEMORY_303_ENABLED) return 0;
+  const events = (messages || [])
+    .filter(isPersonalMemory303InternalMessage)
+    .map((message, index) => ({ event: decodePersonalMemory303Event(message.body || ""), index }))
+    .filter((item) => item.event?.phone)
+    .sort((a, b) => {
+      const delta = Number(a.event.updatedAt || 0) - Number(b.event.updatedAt || 0);
+      return delta || (a.index - b.index);
+    });
+
+  const touched = new Set();
+  events.forEach(({ event }) => {
+    applyPersonalMemory303Event(event);
+    touched.add(event.phone);
+  });
+  if (events.length) {
+    const itemCount = [...personalMemory303ByPhone.values()].reduce((sum, map) => sum + (map instanceof Map ? map.size : 0), 0);
+    console.log("[303 Personal Memory] restored from Google Sheet", {
+      events: events.length,
+      phones: touched.size,
+      items: itemCount
+    });
+  }
+  return events.length;
+}
+
+async function persistPersonalMemory303Event(phone = "", event = {}) {
+  const cleanPhone = getPersonalMemory303PhoneKey(phone || event.phone || "");
+  if (!cleanPhone) return { ok: false, skipped: true, reason: "missing_phone" };
+  const normalized = {
+    action: (event.action || "save").toString().trim(),
+    phone: cleanPhone,
+    id: (event.id || "").toString().trim(),
+    fact: (event.fact || "").toString().trim().slice(0, PERSONAL_MEMORY_303_MAX_FACT_CHARS),
+    updatedAt: Number(event.updatedAt || Date.now())
+  };
+  applyPersonalMemory303Event(normalized);
+  if (!PERSONAL_MEMORY_303_PERSIST_ENABLED) {
+    return { ok: true, persisted: false, event: normalized };
+  }
+  const phoneNumberId = normalizePhoneNumberId(event.phoneNumberId || AI_303_PHONE_NUMBER_ID);
+  const lineConfig = getLineConfig(phoneNumberId);
+  const item = {
+    time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dubai" }),
+    phone: cleanPhone,
+    customerName: "",
+    branch: lineConfig.branch,
+    sender: "system",
+    body: encodePersonalMemory303Event(normalized),
+    status: "System",
+    messageType: PERSONAL_MEMORY_303_MESSAGE_TYPE,
+    phoneNumberId
+  };
+  await saveMessageToGoogleSheet(item);
+  console.log("[303 Personal Memory] event saved", {
+    phone: cleanPhone,
+    action: normalized.action,
+    id: normalized.id || null,
+    factChars: normalized.fact.length
+  });
+  return { ok: true, persisted: true, event: normalized };
+}
+
+function buildPersonalMemorySystemContext303(phone = "") {
+  const items = getPersonalMemory303Items(phone);
+  if (!items.length) return "";
+  const lines = [
+    "Long-term personal memory explicitly saved by the user follows.",
+    "Use these facts only when relevant to the current request. Treat newer explicit user corrections as authoritative.",
+    "Do not claim to remember anything that is not listed here, and do not mention this internal memory block unless useful.",
+    ...items.map((item) => `- ${item.fact}`)
+  ];
+  return lines.join("\n").slice(0, PERSONAL_MEMORY_303_SYSTEM_MAX_CHARS);
+}
+
+function buildPersonalMemoryImagePrompt303(phone = "", userPrompt = "") {
+  const clean = (userPrompt || "").toString().trim();
+  const memory = buildPersonalMemorySystemContext303(phone);
+  if (!memory) return clean;
+  return [
+    clean,
+    "",
+    "Saved user preferences/context (apply only if relevant to this image request):",
+    memory
+  ].join("\n").slice(0, 12000);
+}
+
+function looksLikePersonalMemoryList303(value = "") {
+  const text = normalizePersonalMemoryText303(value);
+  return /^(?:شو|ماذا|ايش|وش)\s+(?:بتتذكر|تتذكر|حافظ)\s+(?:عني|عنّي)/u.test(text) ||
+    /(?:اعرض|ورجيني|فرجيني)\s+(?:ذاكرتك|شو\s+حافظ)/u.test(text) ||
+    /(?:what do you remember about me|show me (?:my )?memory|list (?:my )?memories)/i.test((value || "").toString());
+}
+
+function looksLikePersonalMemoryForget303(value = "") {
+  const raw = (value || "").toString().trim();
+  if (!raw) return false;
+  return /^(?:انس|انسى|انسي|إنس|إنسى|احذف\s+(?:من\s+)?(?:ذاكرتك|الذاكره|الذاكرة)|امسح\s+(?:من\s+)?(?:ذاكرتك|الذاكره|الذاكرة)|forget\b|delete\s+(?:this\s+)?(?:memory|from memory)|remove\s+(?:this\s+)?from memory)/iu.test(raw);
+}
+
+function looksLikePersonalMemorySave303(value = "") {
+  const raw = (value || "").toString().trim();
+  if (!raw || looksLikePersonalMemoryList303(raw) || looksLikePersonalMemoryForget303(raw)) return false;
+  if (/^(?:ذكرني|ذكّرني|تذكرني|تذكّرني)(?:\s|$)/u.test(raw) || /^remind me\b/i.test(raw)) return false;
+  const arabicSave = /^(?:تذكر|تذكّر|خلي\s+ببالك|خليها\s+ببالك|احفظ(?:لي)?|خز[ّن](?:لي)?)(?:\s|:|：|-|$)/u.test(raw);
+  const englishSave = /^(?:remember(?:\s+that)?|keep\s+in\s+mind(?:\s+that)?|save\s+(?:this\s+)?(?:in|to)\s+(?:your\s+)?memory)\b/i.test(raw);
+  return arabicSave || englishSave;
+}
+
+function extractPersonalMemorySaveFact303(value = "") {
+  let text = (value || "").toString().trim();
+  text = text
+    .replace(/^(?:تذكر|تذكّر)\s*(?:ان|إن|إنه|انه|انو|أنو)?\s*/iu, "")
+    .replace(/^خلي\s+ببالك\s*(?:إني|اني|إنه|انه|أنو|انو|إن|ان)?\s*/iu, "")
+    .replace(/^خليها\s+ببالك\s*/iu, "")
+    .replace(/^احفظ(?:لي)?\s*(?:هالمعلومه|هالمعلومة|المعلومه|المعلومة|هاد|هذا)?\s*(?:للمره\s+الجايه|للمرة\s+الجاية)?\s*[:：-]?\s*/iu, "")
+    .replace(/^خز[ّن](?:لي)?\s*[:：-]?\s*/iu, "")
+    .replace(/^remember\s*(?:that)?\s*/iu, "")
+    .replace(/^keep\s+in\s+mind\s*(?:that)?\s*/iu, "")
+    .replace(/^save\s+(?:this\s+)?(?:in|to)\s+(?:your\s+)?memory\s*[:：-]?\s*/iu, "")
+    .trim();
+  return text.slice(0, PERSONAL_MEMORY_303_MAX_FACT_CHARS);
+}
+
+function extractPersonalMemoryForgetQuery303(value = "") {
+  let text = (value || "").toString().trim();
+  text = text
+    .replace(/^(?:انس|انسى|انسي|إنس|إنسى)\s*/iu, "")
+    .replace(/^(?:احذف|امسح)\s+(?:من\s+)?(?:ذاكرتك|الذاكره|الذاكرة)\s*/iu, "")
+    .replace(/^forget\s*/iu, "")
+    .replace(/^delete\s+(?:this\s+)?(?:memory|from memory)\s*/iu, "")
+    .replace(/^remove\s+(?:this\s+)?from memory\s*/iu, "")
+    .replace(/^(?:المعلومه|المعلومة|الشي|الشيء)\s+(?:اللي|يلي)\s+(?:قلتلك|حفظتها|حافظها)\s*(?:عن)?\s*/iu, "")
+    .trim();
+  return text.slice(0, PERSONAL_MEMORY_303_MAX_FACT_CHARS);
+}
+
+function containsSensitivePersonalMemory303(value = "") {
+  const raw = (value || "").toString().trim();
+  const normalized = normalizePersonalMemoryText303(raw);
+  if (!raw) return false;
+  if (/(?:كلمه\s*السر|كلمة\s*السر|باسورد|password|passcode|pin\s*code|otp|api\s*key|مفتاح\s*(?:api|اي\s*بي\s*اي)|access\s*token|refresh\s*token|secret\s*key|private\s*key|bearer\s+token|cvv|cvc)/iu.test(raw)) return true;
+  if (/\b(?:sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{20,})\b/.test(raw)) return true;
+  if (/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/.test(raw)) return true;
+  if (/\b(?:\d[ -]*?){13,19}\b/.test(raw) && /(?:card|بطاق|visa|mastercard|amex)/iu.test(normalized)) return true;
+  return false;
+}
+
+function createPersonalMemory303Id() {
+  return `pm303_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+}
+
+function personalMemory303Tokens(value = "") {
+  const stop = new Set(["ان", "اني", "اني", "انا", "انه", "انو", "هذا", "هاد", "هاي", "عن", "من", "في", "على", "اللي", "يلي", "the", "a", "an", "that", "about", "my", "me", "i"]);
+  return normalizePersonalMemoryText303(value).split(" ").filter((token) => token.length > 1 && !stop.has(token));
+}
+
+function findBestPersonalMemory303Match(phone = "", query = "") {
+  const items = getPersonalMemory303Items(phone);
+  const q = normalizePersonalMemoryText303(query);
+  if (!q || !items.length) return null;
+  const qTokens = new Set(personalMemory303Tokens(q));
+  let best = null;
+  let bestScore = 0;
+  for (const item of items) {
+    const factNorm = normalizePersonalMemoryText303(item.fact);
+    let score = 0;
+    if (factNorm === q) score = 1;
+    else if (factNorm.includes(q) || q.includes(factNorm)) score = 0.9;
+    else {
+      const fTokens = new Set(personalMemory303Tokens(factNorm));
+      const intersection = [...qTokens].filter((token) => fTokens.has(token)).length;
+      const denominator = Math.max(1, Math.min(qTokens.size || 1, fTokens.size || 1));
+      score = intersection / denominator;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = item;
+    }
+  }
+  return bestScore >= 0.4 ? { item: best, score: bestScore } : null;
+}
+
+async function maybeHandle303PersonalMemoryCommand(task = {}) {
+  if (!PERSONAL_MEMORY_303_ENABLED || task.mediaKind) return { handled: false };
+  const text = (task.inputText || "").toString().trim();
+  if (!text) return { handled: false };
+  const phoneNumberId = normalizePhoneNumberId(task.phoneNumberId || AI_303_PHONE_NUMBER_ID);
+
+  if (looksLikePersonalMemoryList303(text)) {
+    const items = getPersonalMemory303Items(task.phone);
+    const reply = items.length
+      ? ["إي، هاد اللي حافظه عنك بذاكرتي الدائمة:", ...items.map((item, index) => `${index + 1}) ${item.fact}`)].join("\n")
+      : "ما عندي معلومات شخصية محفوظة بذاكرتي الدائمة لحد هلق.";
+    await sendWhatsAppMessage(task.phone, reply, phoneNumberId, { skipAutoLanguage: true });
+    return { handled: true, ok: true, action: "list", count: items.length };
+  }
+
+  if (looksLikePersonalMemoryForget303(text)) {
+    const normalized = normalizePersonalMemoryText303(text);
+    const clearAll = /(?:كل\s*(?:شي|شيء|المعلومات|ذاكرتك)|everything|all\s+(?:my\s+)?(?:memory|memories))/iu.test(normalized);
+    if (clearAll) {
+      const previousCount = getPersonalMemory303Items(task.phone).length;
+      await persistPersonalMemory303Event(task.phone, {
+        action: "clear",
+        phoneNumberId,
+        updatedAt: Date.now()
+      });
+      await sendWhatsAppMessage(
+        task.phone,
+        previousCount ? "تمام، مسحت كل المعلومات الشخصية المحفوظة بذاكرتي الدائمة ✅" : "ما كان عندي معلومات شخصية محفوظة أصلًا.",
+        phoneNumberId,
+        { skipAutoLanguage: true }
+      );
+      return { handled: true, ok: true, action: "clear", count: previousCount };
+    }
+
+    const query = extractPersonalMemoryForgetQuery303(text);
+    if (!query) {
+      await sendWhatsAppMessage(task.phone, "حددلي شو المعلومة اللي بدك ياني أنساها.", phoneNumberId, { skipAutoLanguage: true });
+      return { handled: true, ok: false, action: "delete", reason: "missing_query" };
+    }
+    const match = findBestPersonalMemory303Match(task.phone, query);
+    if (!match?.item) {
+      await sendWhatsAppMessage(task.phone, "ما لقيت معلومة محفوظة مطابقة لهالشي بذاكرتي الدائمة.", phoneNumberId, { skipAutoLanguage: true });
+      return { handled: true, ok: false, action: "delete", reason: "no_match" };
+    }
+    await persistPersonalMemory303Event(task.phone, {
+      action: "delete",
+      id: match.item.id,
+      phoneNumberId,
+      updatedAt: Date.now()
+    });
+    await sendWhatsAppMessage(task.phone, `نسيتها من ذاكرتي الدائمة ✅\n${match.item.fact}`, phoneNumberId, { skipAutoLanguage: true });
+    return { handled: true, ok: true, action: "delete", id: match.item.id };
+  }
+
+  if (looksLikePersonalMemorySave303(text)) {
+    const fact = extractPersonalMemorySaveFact303(text);
+    if (!fact || fact.length < 3) {
+      await sendWhatsAppMessage(task.phone, "قلّي المعلومة نفسها بعد كلمة «تذكر» وأنا بحفظها.", phoneNumberId, { skipAutoLanguage: true });
+      return { handled: true, ok: false, action: "save", reason: "empty_fact" };
+    }
+    if (containsSensitivePersonalMemory303(fact)) {
+      await sendWhatsAppMessage(
+        task.phone,
+        "هاي معلومة حساسة، فما رح خزّنها بذاكرة 303 الدائمة. كلمات المرور والمفاتيح والرموز السرية خليها خارج الذاكرة ✅",
+        phoneNumberId,
+        { skipAutoLanguage: true }
+      );
+      return { handled: true, ok: false, action: "save", reason: "sensitive" };
+    }
+    const exact = getPersonalMemory303Items(task.phone).find((item) =>
+      normalizePersonalMemoryText303(item.fact) === normalizePersonalMemoryText303(fact)
+    );
+    if (exact) {
+      await sendWhatsAppMessage(task.phone, `إي، هاي محفوظة عندي أصلًا ✅\n${exact.fact}`, phoneNumberId, { skipAutoLanguage: true });
+      return { handled: true, ok: true, action: "save", duplicate: true, id: exact.id };
+    }
+    const id = createPersonalMemory303Id();
+    await persistPersonalMemory303Event(task.phone, {
+      action: "save",
+      id,
+      fact,
+      phoneNumberId,
+      updatedAt: Date.now()
+    });
+    await sendWhatsAppMessage(task.phone, `حفظتها بذاكرتي الدائمة ✅\n${fact}`, phoneNumberId, { skipAutoLanguage: true });
+    return { handled: true, ok: true, action: "save", id, fact };
+  }
+
+  return { handled: false };
+}
 
 // -------------------- V16 IMAGE ROUTER --------------------
 function getImage303PhoneKey(phone = "") {
@@ -3087,7 +3493,8 @@ async function maybeHandle303ImageRouter(task = {}) {
       fallbackModel: IMAGE_CLOUDFLARE_MODEL_303,
       hasReference: Boolean(referenceMedia)
     });
-    const generated = await generate303ImageWithFailover(userText, referenceMedia);
+    const imageGenerationPrompt = buildPersonalMemoryImagePrompt303(task.phone, userText);
+    const generated = await generate303ImageWithFailover(imageGenerationPrompt, referenceMedia);
     const dataUrl = `data:${generated.mimeType};base64,${generated.data}`;
     const filename = `303-generated-${Date.now()}.jpg`;
     const sendResult = await sendWhatsAppImageMessage(task.phone, dataUrl, "", filename, phoneNumberId);
@@ -4018,6 +4425,21 @@ async function processGemini303Queue(phone = "") {
           });
         }
 
+        const personalMemoryResult = await maybeHandle303PersonalMemoryCommand(task);
+        if (personalMemoryResult?.handled) {
+          console.log("[303 Queue] personal memory route completed", {
+            phone: task.phone,
+            messageId: task.messageId,
+            action: personalMemoryResult.action || "unknown",
+            ok: Boolean(personalMemoryResult.ok),
+            queueDelayMs: Date.now() - task.queuedAt
+          });
+          gemini303ConsecutiveRateLimits = 0;
+          queue.shift();
+          gemini303QueueByPhone.set(cleanPhone, queue);
+          continue;
+        }
+
         const imageRouteResult = await maybeHandle303ImageRouter(task);
         if (imageRouteResult?.handled) {
           console.log("[303 Queue] image route completed", {
@@ -4198,6 +4620,7 @@ async function generateGemini303Reply(phone = "", userText = "", mediaInput = nu
           text: [
             "You are Osama's private WhatsApp assistant on the 303 line.",
             "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
+            buildPersonalMemorySystemContext303(phone),
             "Treat voice notes as the user's spoken message and answer their meaning directly.",
             "When an image is provided, inspect the image itself and any visible text before answering.",
             "Do not claim you are ChatGPT or OpenAI; you are the private 303 assistant powered by Gemini.",
@@ -5515,11 +5938,13 @@ async function loadMessagesFromGoogleSheet() {
     restoreSmartConversationMemoryFromMessages(allMessages);
     restoreSmartUnknownLearningQueueFromMessages(allMessages);
     restoreImage303ContextFromMessages(allMessages);
+    restorePersonalMemory303FromMessages(allMessages);
     const ownerReminderRows = allMessages.filter(isOwnerReminderInternalMessage303);
     const messages = allMessages.filter((message) =>
       !isSmartMemorySnapshotMessage(message) &&
       !isSmartUnknownLearningMessage(message) &&
       !isImageContextSnapshotMessage303(message) &&
+      !isPersonalMemory303InternalMessage(message) &&
       !isOwnerReminderInternalMessage303(message)
     );
 
