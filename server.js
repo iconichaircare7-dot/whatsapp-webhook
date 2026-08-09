@@ -543,12 +543,20 @@ const GEMINI_303_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.GEMINI_303_ENABLED || "true").toString().trim().toLowerCase()
 );
 
-// V10 Multi-AI failover + grounded web search for the private 303 owner route.
-// Gemini stays primary. Groq is second and Cloudflare Workers AI is third for TEXT turns.
+// V12 Multi-AI failover + grounded web search + multimodal fallbacks for the private 303 owner route.
+// Gemini stays primary. Groq is second and Cloudflare Workers AI is third for text, image, and audio turns.
 // Shared conversation memory remains in
 // this service, so switching providers does not reset the conversation.
 const GROQ_API_KEY = (process.env.GROQ_API_KEY || "").toString().trim();
 const GROQ_MODEL = (process.env.GROQ_MODEL || "llama-3.3-70b-versatile").toString().trim();
+// V12 multimodal fallbacks: keep the proven text model, and use provider-native
+// vision / speech models only when the incoming WhatsApp turn contains media.
+const GROQ_VISION_MODEL = (process.env.GROQ_VISION_MODEL || "qwen/qwen3.6-27b").toString().trim();
+const GROQ_AUDIO_TRANSCRIPTION_MODEL = (process.env.GROQ_AUDIO_TRANSCRIPTION_MODEL || "whisper-large-v3-turbo").toString().trim();
+const GROQ_303_BASE64_IMAGE_MAX_BYTES = Math.min(
+  4 * 1024 * 1024,
+  Math.max(512 * 1024, Number(process.env.GROQ_303_BASE64_IMAGE_MAX_BYTES || (4 * 1024 * 1024)))
+);
 const GROQ_303_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.GROQ_303_ENABLED || "true").toString().trim().toLowerCase()
 );
@@ -557,11 +565,14 @@ const GROQ_303_TEMPORARY_FAILURE_FALLBACK_MS = Math.max(
   Number(process.env.GROQ_303_TEMPORARY_FAILURE_FALLBACK_MS || 30000)
 );
 
-// V7 third-provider fallback: Cloudflare Workers AI.
+// V12 third-provider fallback: Cloudflare Workers AI.
 // Text turns flow Search (when needed) -> Gemini -> Groq -> Cloudflare -> queue.
+// Image/audio turns follow Gemini -> Groq multimodal -> Cloudflare multimodal -> queue.
 const CLOUDFLARE_AI_API_TOKEN = (process.env.CLOUDFLARE_AI_API_TOKEN || "").toString().trim();
 const CLOUDFLARE_ACCOUNT_ID = (process.env.CLOUDFLARE_ACCOUNT_ID || "").toString().trim();
 const CLOUDFLARE_AI_MODEL = (process.env.CLOUDFLARE_AI_MODEL || "@cf/zai-org/glm-4.7-flash").toString().trim();
+const CLOUDFLARE_VISION_MODEL = (process.env.CLOUDFLARE_VISION_MODEL || "@cf/google/gemma-4-26b-a4b-it").toString().trim();
+const CLOUDFLARE_AUDIO_TRANSCRIPTION_MODEL = (process.env.CLOUDFLARE_AUDIO_TRANSCRIPTION_MODEL || "@cf/openai/whisper-large-v3-turbo").toString().trim();
 const CLOUDFLARE_AI_303_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.CLOUDFLARE_AI_303_ENABLED || "true").toString().trim().toLowerCase()
 );
@@ -1056,7 +1067,7 @@ function normalizeGemini303MimeType(value = "", kind = "") {
   return "application/octet-stream";
 }
 
-async function downloadWhatsAppMediaForGemini303(message = {}) {
+async function downloadWhatsAppMediaFor303(message = {}) {
   const kind = (message?.type || "").toString().trim().toLowerCase();
   if (!['image', 'audio'].includes(kind)) return null;
 
@@ -1356,6 +1367,280 @@ async function generateGroq303Reply(phone = "", userText = "", memoryUserText = 
 
 function getShared303HistoryAsCloudflareMessages(phone = "") {
   return getShared303HistoryAsGroqMessages(phone);
+}
+
+function build303MediaMemoryText(kind = "", promptText = "", transcript = "") {
+  const cleanPrompt = (promptText || "").toString().trim();
+  const cleanTranscript = (transcript || "").toString().trim();
+  if (kind === "audio") {
+    return `[رسالة صوتية] ${cleanTranscript || cleanPrompt}`.trim();
+  }
+  if (kind === "image") {
+    return `[صورة] ${cleanPrompt}`.trim();
+  }
+  return cleanPrompt;
+}
+
+function getAudioFilenameFor303(mimeType = "") {
+  const mime = (mimeType || "").toString().toLowerCase().split(";")[0].trim();
+  if (mime.includes("mpeg") || mime.includes("mp3")) return "voice.mp3";
+  if (mime.includes("mp4") || mime.includes("m4a")) return "voice.m4a";
+  if (mime.includes("wav")) return "voice.wav";
+  if (mime.includes("webm")) return "voice.webm";
+  if (mime.includes("flac")) return "voice.flac";
+  return "voice.ogg";
+}
+
+async function transcribeGroq303Audio(mediaInput = {}) {
+  if (!GROQ_303_ENABLED) throw new Error("Groq 303 fallback is disabled");
+  if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY is missing");
+  if (mediaInput?.kind !== "audio" || !mediaInput?.data) throw new Error("Groq 303 audio input is missing");
+  if (typeof FormData === "undefined" || typeof Blob === "undefined") {
+    throw new Error("Groq 303 audio transcription requires Node FormData/Blob support");
+  }
+
+  const binary = Buffer.from(mediaInput.data, "base64");
+  const form = new FormData();
+  form.append("file", new Blob([binary], { type: mediaInput.mimeType || "audio/ogg" }), getAudioFilenameFor303(mediaInput.mimeType));
+  form.append("model", GROQ_AUDIO_TRANSCRIPTION_MODEL);
+  form.append("response_format", "json");
+  form.append("temperature", "0");
+
+  const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${GROQ_API_KEY}` },
+    body: form
+  });
+
+  const raw = await response.text();
+  let payload = {};
+  try { payload = raw ? JSON.parse(raw) : {}; } catch (_) { payload = {}; }
+  if (!response.ok) {
+    const message = payload?.error?.message || raw || `HTTP ${response.status}`;
+    const error = new Error(`Groq speech-to-text error: ${message}`);
+    error.status = response.status;
+    const retryAfterHeader = Number(response.headers.get("retry-after") || 0);
+    if (Number.isFinite(retryAfterHeader) && retryAfterHeader > 0) error.retryAfterMs = retryAfterHeader * 1000 + 1000;
+    throw error;
+  }
+
+  const transcript = (payload?.text || "").toString().trim();
+  if (!transcript) throw new Error("Groq speech-to-text returned an empty transcription");
+  console.log("[303 Media] Groq audio transcription succeeded", {
+    model: GROQ_AUDIO_TRANSCRIPTION_MODEL,
+    bytes: Number(mediaInput?.bytes || binary.length || 0),
+    transcriptChars: transcript.length
+  });
+  return transcript;
+}
+
+async function generateGroq303AudioReply(phone = "", userText = "", mediaInput = {}) {
+  const transcript = await transcribeGroq303Audio(mediaInput);
+  const userInstruction = (userText || "").toString().trim();
+  const providerText = [
+    userInstruction || "هذه رسالة صوتية مني. افهم مضمونها ورد علي مباشرة، ولا تعرض تفريغاً كاملاً إلا إذا طلبت ذلك.",
+    "محتوى الرسالة الصوتية بعد التفريغ:",
+    transcript
+  ].filter(Boolean).join("\n\n");
+  const memoryText = build303MediaMemoryText("audio", userInstruction, transcript);
+  const reply = await generateGroq303Reply(phone, providerText, memoryText);
+  return { reply, transcript };
+}
+
+async function generateGroq303ImageReply(phone = "", userText = "", mediaInput = {}) {
+  const cleanPrompt = buildGemini303MediaPrompt("image", userText);
+  if (!GROQ_303_ENABLED) throw new Error("Groq 303 fallback is disabled");
+  if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY is missing");
+  if (mediaInput?.kind !== "image" || !mediaInput?.data) throw new Error("Groq 303 image input is missing");
+  if (Number(mediaInput?.bytes || 0) > GROQ_303_BASE64_IMAGE_MAX_BYTES) {
+    const error = new Error(`Groq 303 base64 image exceeds ${GROQ_303_BASE64_IMAGE_MAX_BYTES} bytes`);
+    error.status = 413;
+    throw error;
+  }
+
+  const previous = getGemini303History(phone);
+  const endpoint = "https://api.groq.com/openai/v1/chat/completions";
+  const messages = [
+    {
+      role: "system",
+      content: [
+        "You are Osama's private WhatsApp assistant on the 303 line.",
+        "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
+        "Analyze the supplied image carefully, including visible text, UI, charts, and screenshots when relevant.",
+        "Maintain continuity with the supplied conversation history.",
+        "Do not invent details that are not visible in the image."
+      ].join(" ")
+    },
+    ...getShared303HistoryAsGroqMessages(phone),
+    {
+      role: "user",
+      content: [
+        { type: "text", text: cleanPrompt },
+        {
+          type: "image_url",
+          image_url: { url: `data:${mediaInput.mimeType || "image/jpeg"};base64,${mediaInput.data}` }
+        }
+      ]
+    }
+  ];
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${GROQ_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: GROQ_VISION_MODEL,
+      messages,
+      temperature: 0.4,
+      max_completion_tokens: 1200
+    })
+  });
+
+  const raw = await response.text();
+  let payload = {};
+  try { payload = raw ? JSON.parse(raw) : {}; } catch (_) { payload = {}; }
+  if (!response.ok) {
+    const message = payload?.error?.message || raw || `HTTP ${response.status}`;
+    const error = new Error(`Groq vision error: ${message}`);
+    error.status = response.status;
+    const retryAfterHeader = Number(response.headers.get("retry-after") || 0);
+    if (Number.isFinite(retryAfterHeader) && retryAfterHeader > 0) error.retryAfterMs = retryAfterHeader * 1000 + 1000;
+    throw error;
+  }
+
+  const reply = (payload?.choices?.[0]?.message?.content || "").toString().trim();
+  if (!reply) throw new Error("Groq vision returned no text");
+
+  saveGemini303History(phone, [
+    ...previous,
+    { role: "user", parts: [{ text: build303MediaMemoryText("image", cleanPrompt) }] },
+    { role: "model", parts: [{ text: reply }] }
+  ]);
+  return reply;
+}
+
+async function transcribeCloudflare303Audio(mediaInput = {}) {
+  if (!CLOUDFLARE_AI_303_ENABLED) throw new Error("Cloudflare AI 303 fallback is disabled");
+  if (!CLOUDFLARE_AI_API_TOKEN) throw new Error("CLOUDFLARE_AI_API_TOKEN is missing");
+  if (!CLOUDFLARE_ACCOUNT_ID) throw new Error("CLOUDFLARE_ACCOUNT_ID is missing");
+  if (mediaInput?.kind !== "audio" || !mediaInput?.data) throw new Error("Cloudflare 303 audio input is missing");
+
+  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(CLOUDFLARE_ACCOUNT_ID)}/ai/run/${CLOUDFLARE_AUDIO_TRANSCRIPTION_MODEL}`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${CLOUDFLARE_AI_API_TOKEN}`
+    },
+    body: JSON.stringify({
+      audio: mediaInput.data,
+      task: "transcribe",
+      vad_filter: true
+    })
+  });
+
+  const raw = await response.text();
+  let payload = {};
+  try { payload = raw ? JSON.parse(raw) : {}; } catch (_) { payload = {}; }
+  if (!response.ok || payload?.success === false) {
+    const message = payload?.errors?.[0]?.message || payload?.error?.message || raw || `HTTP ${response.status}`;
+    const error = new Error(`Cloudflare speech-to-text error: ${message}`);
+    error.status = response.status;
+    throw error;
+  }
+
+  const transcript = (
+    payload?.result?.text ||
+    payload?.result?.transcription_info?.text ||
+    payload?.text ||
+    ""
+  ).toString().trim();
+  if (!transcript) throw new Error("Cloudflare speech-to-text returned an empty transcription");
+  console.log("[303 Media] Cloudflare audio transcription succeeded", {
+    model: CLOUDFLARE_AUDIO_TRANSCRIPTION_MODEL,
+    bytes: Number(mediaInput?.bytes || 0),
+    transcriptChars: transcript.length
+  });
+  return transcript;
+}
+
+async function generateCloudflare303AudioReply(phone = "", userText = "", mediaInput = {}) {
+  const transcript = await transcribeCloudflare303Audio(mediaInput);
+  const userInstruction = (userText || "").toString().trim();
+  const providerText = [
+    userInstruction || "هذه رسالة صوتية مني. افهم مضمونها ورد علي مباشرة، ولا تعرض تفريغاً كاملاً إلا إذا طلبت ذلك.",
+    "محتوى الرسالة الصوتية بعد التفريغ:",
+    transcript
+  ].filter(Boolean).join("\n\n");
+  const memoryText = build303MediaMemoryText("audio", userInstruction, transcript);
+  const reply = await generateCloudflare303Reply(phone, providerText, memoryText);
+  return { reply, transcript };
+}
+
+async function generateCloudflare303ImageReply(phone = "", userText = "", mediaInput = {}) {
+  const cleanPrompt = buildGemini303MediaPrompt("image", userText);
+  if (!CLOUDFLARE_AI_303_ENABLED) throw new Error("Cloudflare AI 303 fallback is disabled");
+  if (!CLOUDFLARE_AI_API_TOKEN) throw new Error("CLOUDFLARE_AI_API_TOKEN is missing");
+  if (!CLOUDFLARE_ACCOUNT_ID) throw new Error("CLOUDFLARE_ACCOUNT_ID is missing");
+  if (mediaInput?.kind !== "image" || !mediaInput?.data) throw new Error("Cloudflare 303 image input is missing");
+
+  const previous = getGemini303History(phone);
+  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(CLOUDFLARE_ACCOUNT_ID)}/ai/run/${CLOUDFLARE_VISION_MODEL}`;
+  const messages = [
+    {
+      role: "system",
+      content: [
+        "You are Osama's private WhatsApp assistant on the 303 line.",
+        "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
+        "Analyze the supplied image carefully, including visible text, UI, charts, and screenshots when relevant.",
+        "Maintain continuity with the supplied conversation history.",
+        "Do not invent details that are not visible in the image."
+      ].join(" ")
+    },
+    ...getShared303HistoryAsCloudflareMessages(phone),
+    { role: "user", content: cleanPrompt }
+  ];
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${CLOUDFLARE_AI_API_TOKEN}`
+    },
+    body: JSON.stringify({
+      messages,
+      image: `data:${mediaInput.mimeType || "image/jpeg"};base64,${mediaInput.data}`,
+      temperature: 0.4,
+      max_tokens: 1200
+    })
+  });
+
+  const raw = await response.text();
+  let payload = {};
+  try { payload = raw ? JSON.parse(raw) : {}; } catch (_) { payload = {}; }
+  if (!response.ok || payload?.success === false) {
+    const message = payload?.errors?.[0]?.message || payload?.error?.message || raw || `HTTP ${response.status}`;
+    const error = new Error(`Cloudflare vision error: ${message}`);
+    error.status = response.status;
+    throw error;
+  }
+
+  const reply = (
+    payload?.result?.response ||
+    payload?.result?.text ||
+    (typeof payload?.result === "string" ? payload.result : "") ||
+    ""
+  ).toString().trim();
+  if (!reply) throw new Error("Cloudflare vision returned no text");
+
+  saveGemini303History(phone, [
+    ...previous,
+    { role: "user", parts: [{ text: build303MediaMemoryText("image", cleanPrompt) }] },
+    { role: "model", parts: [{ text: reply }] }
+  ]);
+  return reply;
 }
 
 async function generateCloudflare303Reply(phone = "", userText = "", memoryUserText = "") {
@@ -1836,7 +2121,7 @@ async function generate303ReplyWithFailover(task = {}) {
   const hasMedia = Boolean(task.mediaInput?.data && task.mediaInput?.mimeType);
   const textOnly = !hasMedia;
 
-  // Search is text-only in V7. Image/audio behavior remains unchanged.
+  // Tavily search remains text-only. Media turns use the multimodal provider chain below.
   let tavilySearch = null;
   if (textOnly) {
     tavilySearch = await prepareTavilySearchFor303Task(task);
@@ -1880,12 +2165,135 @@ async function generate303ReplyWithFailover(task = {}) {
   let cloudflareError = null;
   let cloudflareRetryMs = 0;
 
-  // Media remains on Gemini in V6. The Groq + Cloudflare fallback chain is text-only
-  // until their image/audio behavior is explicitly tested on the private 303 route.
+  // V12 multimodal failover. Image/audio turns now follow the same provider order
+  // as text: Gemini -> Groq -> Cloudflare -> queue. Each fallback uses the provider's
+  // own vision / speech capability while preserving the shared 303 conversation memory.
   if (!textOnly) {
-    await waitForGemini303TrafficSlot();
-    const reply = await generateGemini303Reply(task.phone, task.inputText, task.mediaInput);
-    return { reply, provider: "gemini", model: GEMINI_MODEL };
+    const mediaKind = (task.mediaInput?.kind || task.mediaKind || "").toString().trim().toLowerCase();
+    const mediaCooldownRemaining = getGemini303CooldownRemainingMs();
+
+    if (GEMINI_303_ENABLED && GEMINI_API_KEY && mediaCooldownRemaining <= 0) {
+      try {
+        await waitForGemini303TrafficSlot();
+        const reply = await generateGemini303Reply(task.phone, task.inputText, task.mediaInput);
+        gemini303ConsecutiveRateLimits = 0;
+        gemini303GlobalCooldownUntil = 0;
+        console.log("[303 Media] Gemini media reply succeeded", {
+          phone: task.phone,
+          kind: mediaKind,
+          model: GEMINI_MODEL
+        });
+        return { reply, provider: "gemini", model: GEMINI_MODEL };
+      } catch (error) {
+        geminiError = error;
+        geminiRetryMs = markGemini303TemporarilyUnavailable(error);
+        console.warn("[303 Media] Gemini unavailable; trying Groq media fallback", {
+          phone: task.phone,
+          kind: mediaKind,
+          status: Number(error?.status || 0) || null,
+          temporary: isTemporaryAiProviderError303(error),
+          geminiRetryInMs: geminiRetryMs
+        });
+      }
+    } else if (mediaCooldownRemaining > 0) {
+      geminiRetryMs = mediaCooldownRemaining;
+      console.log("[303 Media] Gemini circuit open; skipping to Groq media fallback", {
+        phone: task.phone,
+        kind: mediaKind,
+        geminiCooldownRemainingMs: mediaCooldownRemaining
+      });
+    } else {
+      geminiError = new Error("Gemini 303 is unavailable or not configured");
+    }
+
+    if (GROQ_303_ENABLED && GROQ_API_KEY) {
+      try {
+        if (mediaKind === "image") {
+          const reply = await generateGroq303ImageReply(task.phone, task.inputText, task.mediaInput);
+          console.log("[303 Media] Groq image fallback succeeded", {
+            phone: task.phone,
+            model: GROQ_VISION_MODEL
+          });
+          return { reply, provider: "groq", model: GROQ_VISION_MODEL };
+        }
+        if (mediaKind === "audio") {
+          const audioResult = await generateGroq303AudioReply(task.phone, task.inputText, task.mediaInput);
+          console.log("[303 Media] Groq audio fallback succeeded", {
+            phone: task.phone,
+            transcriptionModel: GROQ_AUDIO_TRANSCRIPTION_MODEL,
+            replyModel: GROQ_MODEL
+          });
+          return { reply: audioResult.reply, provider: "groq", model: `${GROQ_AUDIO_TRANSCRIPTION_MODEL} + ${GROQ_MODEL}` };
+        }
+        throw new Error(`Groq 303 unsupported media kind: ${mediaKind || "unknown"}`);
+      } catch (error) {
+        groqError = error;
+        groqRetryMs = getTemporaryAiProviderRetryMs303(groqError, GROQ_303_TEMPORARY_FAILURE_FALLBACK_MS);
+        console.warn("[303 Media] Groq media fallback failed; trying Cloudflare", {
+          phone: task.phone,
+          kind: mediaKind,
+          status: Number(error?.status || 0) || null,
+          temporary: isTemporaryAiProviderError303(error),
+          groqRetryInMs: groqRetryMs
+        });
+      }
+    } else {
+      groqError = new Error("Groq 303 is unavailable or not configured");
+    }
+
+    if (CLOUDFLARE_AI_303_ENABLED && CLOUDFLARE_AI_API_TOKEN && CLOUDFLARE_ACCOUNT_ID) {
+      try {
+        if (mediaKind === "image") {
+          const reply = await generateCloudflare303ImageReply(task.phone, task.inputText, task.mediaInput);
+          console.log("[303 Media] Cloudflare image fallback succeeded", {
+            phone: task.phone,
+            model: CLOUDFLARE_VISION_MODEL
+          });
+          return { reply, provider: "cloudflare", model: CLOUDFLARE_VISION_MODEL };
+        }
+        if (mediaKind === "audio") {
+          const audioResult = await generateCloudflare303AudioReply(task.phone, task.inputText, task.mediaInput);
+          console.log("[303 Media] Cloudflare audio fallback succeeded", {
+            phone: task.phone,
+            transcriptionModel: CLOUDFLARE_AUDIO_TRANSCRIPTION_MODEL,
+            replyModel: CLOUDFLARE_AI_MODEL
+          });
+          return { reply: audioResult.reply, provider: "cloudflare", model: `${CLOUDFLARE_AUDIO_TRANSCRIPTION_MODEL} + ${CLOUDFLARE_AI_MODEL}` };
+        }
+        throw new Error(`Cloudflare 303 unsupported media kind: ${mediaKind || "unknown"}`);
+      } catch (error) {
+        cloudflareError = error;
+        cloudflareRetryMs = getTemporaryAiProviderRetryMs303(cloudflareError, CLOUDFLARE_AI_303_TEMPORARY_FAILURE_FALLBACK_MS);
+        console.warn("[303 Media] Cloudflare media fallback failed; queue is final safety net", {
+          phone: task.phone,
+          kind: mediaKind,
+          status: Number(error?.status || 0) || null,
+          temporary: isTemporaryAiProviderError303(error),
+          cloudflareRetryInMs: cloudflareRetryMs
+        });
+      }
+    } else {
+      cloudflareError = new Error("Cloudflare AI 303 is unavailable or not configured");
+    }
+
+    const mediaRetryCandidates = [geminiRetryMs, groqRetryMs, cloudflareRetryMs]
+      .filter((value) => Number(value) > 0);
+    if (mediaRetryCandidates.length) {
+      const error = new Error(
+        [
+          `303 ${mediaKind || "media"} providers temporarily unavailable.`,
+          `Gemini: ${geminiError?.message || "cooldown"}.`,
+          `Groq: ${groqError?.message || "unavailable"}.`,
+          `Cloudflare: ${cloudflareError?.message || "unavailable"}.`
+        ].join(" ")
+      );
+      error.status = 429;
+      error.retryAfterMs = Math.max(5000, Math.min(...mediaRetryCandidates));
+      error.providers = { gemini: geminiError, groq: groqError, cloudflare: cloudflareError };
+      throw error;
+    }
+
+    throw cloudflareError || groqError || geminiError || new Error(`No 303 provider can process ${mediaKind || "media"}`);
   }
 
   const cooldownRemaining = getGemini303CooldownRemainingMs();
@@ -2086,7 +2494,7 @@ async function processGemini303Queue(phone = "") {
         });
 
         if (task.mediaKind && !task.mediaInput) {
-          task.mediaInput = await downloadWhatsAppMediaForGemini303(task.message || {});
+          task.mediaInput = await downloadWhatsAppMediaFor303(task.message || {});
         }
 
         const aiResult = await generate303ReplyWithFailover(task);
