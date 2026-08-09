@@ -542,6 +542,10 @@ const GEMINI_303_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.GEMINI_303_ENABLED || "true").toString().trim().toLowerCase()
 );
 const GEMINI_303_HISTORY_TURNS = Math.min(10, Math.max(2, Number(process.env.GEMINI_303_HISTORY_TURNS || 6)));
+const GEMINI_303_INLINE_MEDIA_MAX_BYTES = Math.min(
+  12 * 1024 * 1024,
+  Math.max(1 * 1024 * 1024, Number(process.env.GEMINI_303_INLINE_MEDIA_MAX_BYTES || (12 * 1024 * 1024)))
+);
 const gemini303HistoryByPhone = new Map();
 
 // Dedicated 303 AI service identity:
@@ -946,16 +950,112 @@ function extractGemini303Text(payload = {}) {
     .trim();
 }
 
-async function generateGemini303Reply(phone = "", userText = "") {
+function normalizeGemini303MimeType(value = "", kind = "") {
+  const raw = (value || "").toString().trim().toLowerCase();
+  const base = raw.split(";")[0].trim();
+
+  if (base) return base;
+  if (kind === "audio") return "audio/ogg";
+  if (kind === "image") return "image/jpeg";
+  return "application/octet-stream";
+}
+
+async function downloadWhatsAppMediaForGemini303(message = {}) {
+  const kind = (message?.type || "").toString().trim().toLowerCase();
+  if (!['image', 'audio'].includes(kind)) return null;
+
+  const media = kind === 'image' ? message?.image : message?.audio;
+  const mediaId = (media?.id || "").toString().trim();
+  if (!mediaId) throw new Error(`Gemini 303 ${kind} message is missing media id`);
+  if (!ACCESS_TOKEN) throw new Error("ACCESS_TOKEN is missing for WhatsApp media download");
+
+  const metaResponse = await fetch(`https://graph.facebook.com/v18.0/${encodeURIComponent(mediaId)}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }
+  });
+  const metaRaw = await metaResponse.text();
+  let meta = {};
+  try { meta = metaRaw ? JSON.parse(metaRaw) : {}; } catch (_) { meta = {}; }
+
+  if (!metaResponse.ok || !meta?.url) {
+    const reason = meta?.error?.message || metaRaw || `HTTP ${metaResponse.status}`;
+    throw new Error(`WhatsApp media metadata failed: ${reason}`);
+  }
+
+  const declaredSize = Number(meta?.file_size || 0);
+  if (declaredSize > GEMINI_303_INLINE_MEDIA_MAX_BYTES) {
+    throw new Error(`Gemini 303 media too large for inline processing: ${declaredSize} bytes`);
+  }
+
+  const mediaResponse = await fetch(meta.url, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }
+  });
+
+  if (!mediaResponse.ok) {
+    const reason = await mediaResponse.text();
+    throw new Error(`WhatsApp media download failed: ${reason || `HTTP ${mediaResponse.status}`}`);
+  }
+
+  const buffer = Buffer.from(await mediaResponse.arrayBuffer());
+  if (!buffer.length) throw new Error("WhatsApp media download returned an empty file");
+  if (buffer.length > GEMINI_303_INLINE_MEDIA_MAX_BYTES) {
+    throw new Error(`Gemini 303 media too large for inline processing: ${buffer.length} bytes`);
+  }
+
+  const mimeType = normalizeGemini303MimeType(
+    media?.mime_type || meta?.mime_type || mediaResponse.headers.get("content-type") || "",
+    kind
+  );
+
+  return {
+    kind,
+    mediaId,
+    mimeType,
+    data: buffer.toString("base64"),
+    bytes: buffer.length
+  };
+}
+
+function buildGemini303MediaPrompt(kind = "", userText = "") {
   const cleanText = (userText || "").toString().trim();
+  if (cleanText) return cleanText;
+
+  if (kind === "audio") {
+    return "هذه رسالة صوتية مني. استمع إليها وافهم كلامي، ثم رد على مضمونها مباشرة. لا تكتب تفريغاً كاملاً للصوت إلا إذا طلبت ذلك.";
+  }
+
+  if (kind === "image") {
+    return "هذه صورة أرسلتها لك. حلل ما يظهر فيها ورد بشكل مفيد. إذا كانت لقطة شاشة، اقرأ النص الظاهر فيها. إذا لم يكن المطلوب واضحاً، اسألني باختصار ماذا أريد أن أعرف عنها.";
+  }
+
+  return cleanText;
+}
+
+async function generateGemini303Reply(phone = "", userText = "", mediaInput = null) {
+  const cleanText = (userText || "").toString().trim();
+  const hasMedia = Boolean(mediaInput?.data && mediaInput?.mimeType);
   if (!GEMINI_303_ENABLED) throw new Error("Gemini 303 bridge is disabled");
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is missing");
-  if (!cleanText) throw new Error("Gemini 303 received empty text");
+  if (!cleanText && !hasMedia) throw new Error("Gemini 303 received empty input");
+
+  const promptText = buildGemini303MediaPrompt(mediaInput?.kind || "", cleanText);
+  const userParts = [];
+  if (promptText) userParts.push({ text: promptText });
+  if (hasMedia) {
+    userParts.push({
+      inlineData: {
+        mimeType: mediaInput.mimeType,
+        data: mediaInput.data
+      }
+    });
+  }
 
   const previous = getGemini303History(phone);
+  const currentUserContent = { role: "user", parts: userParts };
   const contents = [
     ...previous,
-    { role: "user", parts: [{ text: cleanText }] }
+    currentUserContent
   ];
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`;
@@ -971,6 +1071,8 @@ async function generateGemini303Reply(phone = "", userText = "") {
           text: [
             "You are Osama's private WhatsApp assistant on the 303 line.",
             "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
+            "Treat voice notes as the user's spoken message and answer their meaning directly.",
+            "When an image is provided, inspect the image itself and any visible text before answering.",
             "Do not claim you are ChatGPT or OpenAI; you are the private 303 assistant powered by Gemini.",
             "If you do not know something, say so clearly instead of inventing facts."
           ].join(" ")
@@ -996,8 +1098,15 @@ async function generateGemini303Reply(phone = "", userText = "") {
   const reply = extractGemini303Text(payload);
   if (!reply) throw new Error("Gemini API returned no text");
 
+  // Keep only a compact text marker in memory for media turns so Base64 media is not
+  // resent on every later message. The model reply remains in history as context.
+  const historyUserText = hasMedia
+    ? `[${mediaInput.kind === "audio" ? "رسالة صوتية" : "صورة"}] ${promptText}`.trim()
+    : cleanText;
+
   saveGemini303History(phone, [
-    ...contents,
+    ...previous,
+    { role: "user", parts: [{ text: historyUserText }] },
     { role: "model", parts: [{ text: reply }] }
   ]);
 
@@ -48197,16 +48306,21 @@ app.post("/webhook", async (req, res) => {
         getIncomingMessageText(message) ||
         ""
       ).toString().trim();
+      const geminiMediaKind = ["image", "audio"].includes((message?.type || "").toString().toLowerCase())
+        ? (message?.type || "").toString().toLowerCase()
+        : "";
 
       console.log("[303 Gemini] owner/test message accepted", {
         from,
         phoneNumberId: incomingPhoneNumberId,
         model: GEMINI_MODEL,
-        hasText: Boolean(geminiInputText)
+        messageType: message?.type || "",
+        hasText: Boolean(geminiInputText),
+        hasSupportedMedia: Boolean(geminiMediaKind)
       });
 
-      if (!geminiInputText) {
-        console.log("[303 Gemini] non-text/empty message skipped without legacy bot fallback");
+      if (!geminiInputText && !geminiMediaKind) {
+        console.log("[303 Gemini] unsupported/empty message skipped without legacy bot fallback");
         return res.sendStatus(200);
       }
 
@@ -48218,7 +48332,11 @@ app.post("/webhook", async (req, res) => {
           fromInternalNumber: true
         });
 
-        const geminiReply = await generateGemini303Reply(from, geminiInputText);
+        const geminiMediaInput = geminiMediaKind
+          ? await downloadWhatsAppMediaForGemini303(message)
+          : null;
+
+        const geminiReply = await generateGemini303Reply(from, geminiInputText, geminiMediaInput);
         const sendResult = await sendWhatsAppMessage(
           from,
           geminiReply,
@@ -48229,6 +48347,9 @@ app.post("/webhook", async (req, res) => {
         console.log("[303 Gemini] reply processed", {
           from,
           model: GEMINI_MODEL,
+          inputKind: geminiMediaInput?.kind || "text",
+          inputMimeType: geminiMediaInput?.mimeType || "text/plain",
+          inputBytes: Number(geminiMediaInput?.bytes || 0),
           sendOk: Boolean(sendResult?.ok),
           sendSkipped: Boolean(sendResult?.skipped),
           sendDisabled: Boolean(sendResult?.disabled)
