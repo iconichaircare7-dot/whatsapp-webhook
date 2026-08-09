@@ -2,6 +2,7 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { spawn } = require("child_process");
 
 // Render-safe fetch:
 // Uses Node 18+ built-in fetch first, and falls back to node-fetch only if needed.
@@ -574,17 +575,34 @@ const CLOUDFLARE_AI_MODEL = (process.env.CLOUDFLARE_AI_MODEL || "@cf/zai-org/glm
 const CLOUDFLARE_VISION_MODEL = (process.env.CLOUDFLARE_VISION_MODEL || "@cf/google/gemma-4-26b-a4b-it").toString().trim();
 const CLOUDFLARE_AUDIO_TRANSCRIPTION_MODEL = (process.env.CLOUDFLARE_AUDIO_TRANSCRIPTION_MODEL || "@cf/openai/whisper-large-v3-turbo").toString().trim();
 
-// V14 pronunciation voice: short word/phrase pronunciation only.
-// Uses the existing Cloudflare account/token and the Unified AI catalog TTS endpoint.
+// V15 pronunciation voice: short word/phrase pronunciation only.
+// Groq Orpheus generates WAV; Render's native ffmpeg converts it locally to WhatsApp-supported M4A/AAC.
 // Normal 303 replies remain text-only unless the user explicitly asks how a word/phrase is said or pronounced.
 const PRONUNCIATION_VOICE_303_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.PRONUNCIATION_VOICE_303_ENABLED || "true").toString().trim().toLowerCase()
 );
-const PRONUNCIATION_TTS_MODEL_303 = (process.env.PRONUNCIATION_TTS_MODEL_303 || "xai/grok-tts").toString().trim();
-const PRONUNCIATION_TTS_VOICE_303 = (process.env.PRONUNCIATION_TTS_VOICE_303 || "ara").toString().trim();
+const PRONUNCIATION_GROQ_TTS_MODEL_EN_303 = (
+  process.env.PRONUNCIATION_GROQ_TTS_MODEL_EN_303 || "canopylabs/orpheus-v1-english"
+).toString().trim();
+const PRONUNCIATION_GROQ_TTS_MODEL_AR_303 = (
+  process.env.PRONUNCIATION_GROQ_TTS_MODEL_AR_303 || "canopylabs/orpheus-arabic-saudi"
+).toString().trim();
+const PRONUNCIATION_GROQ_TTS_VOICE_EN_303 = (
+  process.env.PRONUNCIATION_GROQ_TTS_VOICE_EN_303 || "troy"
+).toString().trim();
+const PRONUNCIATION_GROQ_TTS_VOICE_AR_303 = (
+  process.env.PRONUNCIATION_GROQ_TTS_VOICE_AR_303 || "abdullah"
+).toString().trim();
 const PRONUNCIATION_TTS_MAX_CHARS_303 = Math.min(
-  160,
+  180,
   Math.max(24, Number(process.env.PRONUNCIATION_TTS_MAX_CHARS_303 || 120))
+);
+const PRONUNCIATION_FFMPEG_BIN_303 = (
+  process.env.PRONUNCIATION_FFMPEG_BIN_303 || "ffmpeg"
+).toString().trim();
+const PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 = Math.min(
+  30000,
+  Math.max(5000, Number(process.env.PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 || 15000))
 );
 const CLOUDFLARE_AI_303_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.CLOUDFLARE_AI_303_ENABLED || "true").toString().trim().toLowerCase()
@@ -2499,79 +2517,164 @@ async function resolvePronunciationTarget303(userText = "", visibleReply = "") {
   return localTarget;
 }
 
-async function generatePronunciationMp3303(target = {}) {
+function getPronunciationGroqTtsConfig303(language = "en") {
+  const cleanLanguage = normalizePronunciationLanguage303(language) || "en";
+  if (cleanLanguage === "ar") {
+    return {
+      language: "ar",
+      model: PRONUNCIATION_GROQ_TTS_MODEL_AR_303,
+      voice: PRONUNCIATION_GROQ_TTS_VOICE_AR_303
+    };
+  }
+  return {
+    language: "en",
+    model: PRONUNCIATION_GROQ_TTS_MODEL_EN_303,
+    voice: PRONUNCIATION_GROQ_TTS_VOICE_EN_303
+  };
+}
+
+async function convertPronunciationWavToM4a303(wavBuffer = Buffer.alloc(0)) {
+  if (!Buffer.isBuffer(wavBuffer) || !wavBuffer.length) {
+    throw new Error("Pronunciation WAV buffer is empty");
+  }
+
+  const tempToken = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}`;
+  const inputPath = path.join("/tmp", `pronunciation-${tempToken}.wav`);
+  const outputPath = path.join("/tmp", `pronunciation-${tempToken}.m4a`);
+
+  await fs.promises.writeFile(inputPath, wavBuffer);
+
+  try {
+    await new Promise((resolve, reject) => {
+      const args = [
+        "-hide_banner",
+        "-loglevel", "error",
+        "-y",
+        "-i", inputPath,
+        "-vn",
+        "-c:a", "aac",
+        "-b:a", "96k",
+        "-ar", "24000",
+        "-ac", "1",
+        "-movflags", "+faststart",
+        outputPath
+      ];
+
+      const child = spawn(PRONUNCIATION_FFMPEG_BIN_303, args, {
+        stdio: ["ignore", "ignore", "pipe"]
+      });
+
+      let stderr = "";
+      const timeout = setTimeout(() => {
+        try { child.kill("SIGKILL"); } catch (_) {}
+      }, PRONUNCIATION_FFMPEG_TIMEOUT_MS_303);
+
+      child.stderr.on("data", (chunk) => {
+        stderr += chunk.toString();
+        if (stderr.length > 5000) stderr = stderr.slice(-5000);
+      });
+
+      child.once("error", (error) => {
+        clearTimeout(timeout);
+        reject(new Error(`Pronunciation ffmpeg could not start: ${error?.message || error}`));
+      });
+
+      child.once("close", (code, signal) => {
+        clearTimeout(timeout);
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        reject(new Error(
+          `Pronunciation ffmpeg conversion failed (code=${code}, signal=${signal || "none"}): ${stderr.trim() || "no stderr"}`
+        ));
+      });
+    });
+
+    const converted = await fs.promises.readFile(outputPath);
+    if (!converted.length) throw new Error("Pronunciation ffmpeg returned empty M4A audio");
+    return converted;
+  } finally {
+    await Promise.allSettled([
+      fs.promises.unlink(inputPath),
+      fs.promises.unlink(outputPath)
+    ]);
+  }
+}
+
+async function generatePronunciationAudio303(target = {}) {
   if (!PRONUNCIATION_VOICE_303_ENABLED) throw new Error("303 pronunciation voice is disabled");
-  if (!CLOUDFLARE_AI_API_TOKEN) throw new Error("CLOUDFLARE_AI_API_TOKEN is missing for pronunciation TTS");
-  if (!CLOUDFLARE_ACCOUNT_ID) throw new Error("CLOUDFLARE_ACCOUNT_ID is missing for pronunciation TTS");
+  if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY is missing for pronunciation TTS");
 
   const text = sanitizePronunciationTarget303(target?.text || "");
   const language = normalizePronunciationLanguage303(target?.language || "") || inferPronunciationLanguage303("", text);
   if (!text || !["en", "ar"].includes(language)) throw new Error("Pronunciation TTS target is invalid");
 
-  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(CLOUDFLARE_ACCOUNT_ID)}/ai/run`;
-  const response = await fetch(endpoint, {
+  const tts = getPronunciationGroqTtsConfig303(language);
+  const response = await fetch("https://api.groq.com/openai/v1/audio/speech", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${CLOUDFLARE_AI_API_TOKEN}`,
+      "Authorization": `Bearer ${GROQ_API_KEY}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: PRONUNCIATION_TTS_MODEL_303,
-      input: {
-        text,
-        voice_id: PRONUNCIATION_TTS_VOICE_303,
-        language: language === "ar" ? "ar-AE" : "en",
-        text_normalization: false,
-        output_format: {
-          codec: "mp3",
-          sample_rate: 24000,
-          bit_rate: 128000
-        }
-      }
+      model: tts.model,
+      input: text,
+      voice: tts.voice,
+      response_format: "wav"
     })
   });
 
-  const raw = await response.text();
-  let payload = {};
-  try { payload = raw ? JSON.parse(raw) : {}; } catch (_) { payload = {}; }
+  const responseBuffer = Buffer.from(await response.arrayBuffer());
 
-  if (!response.ok || payload?.state === "Failed" || payload?.success === false) {
+  if (!response.ok) {
+    const raw = responseBuffer.toString("utf8").trim();
+    let payload = {};
+    try { payload = raw ? JSON.parse(raw) : {}; } catch (_) { payload = {}; }
+
     const message =
-      payload?.errors?.[0]?.message ||
       payload?.error?.message ||
       payload?.message ||
       raw ||
       `HTTP ${response.status}`;
-    const error = new Error(`Pronunciation TTS failed: ${message}`);
+
+    const error = new Error(`Groq pronunciation TTS failed: ${message}`);
     error.status = response.status;
     throw error;
   }
 
-  const audioUrl = (
-    payload?.result?.audio ||
-    payload?.audio ||
-    payload?.result?.url ||
-    ""
-  ).toString().trim();
-  if (!/^https:\/\//i.test(audioUrl)) {
-    throw new Error("Pronunciation TTS returned no downloadable audio URL");
+  if (!responseBuffer.length) throw new Error("Groq pronunciation TTS returned empty WAV audio");
+  if (responseBuffer.length > 16 * 1024 * 1024) {
+    throw new Error("Groq pronunciation WAV exceeded safe conversion size");
   }
 
-  const audioResponse = await fetch(audioUrl);
-  if (!audioResponse.ok) {
-    throw new Error(`Pronunciation audio download failed: HTTP ${audioResponse.status}`);
+  console.log("[303 Pronunciation] Groq TTS generated WAV", {
+    language,
+    text,
+    model: tts.model,
+    voice: tts.voice,
+    bytes: responseBuffer.length
+  });
+
+  const m4aBuffer = await convertPronunciationWavToM4a303(responseBuffer);
+  if (m4aBuffer.length > 16 * 1024 * 1024) {
+    throw new Error("Pronunciation M4A exceeded WhatsApp size limit");
   }
 
-  const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
-  if (!audioBuffer.length) throw new Error("Pronunciation TTS returned empty audio");
-  if (audioBuffer.length > 16 * 1024 * 1024) throw new Error("Pronunciation TTS audio exceeded WhatsApp size limit");
+  console.log("[303 Pronunciation] ffmpeg converted WAV to WhatsApp M4A", {
+    language,
+    text,
+    bytes: m4aBuffer.length
+  });
 
   return {
-    buffer: audioBuffer,
-    mimeType: "audio/mpeg",
-    filename: `pronunciation-${language}.mp3`,
+    buffer: m4aBuffer,
+    mimeType: "audio/mp4",
+    filename: `pronunciation-${language}.m4a`,
     language,
-    text
+    text,
+    model: tts.model,
+    voice: tts.voice
   };
 }
 
@@ -2585,7 +2688,7 @@ async function sendPronunciationVoice303({ to = "", phoneNumberId = "", userText
     return { ok: false, skipped: true, reason: "no_target" };
   }
 
-  const audio = await generatePronunciationMp3303(target);
+  const audio = await generatePronunciationAudio303(target);
   const dataUrl = `data:${audio.mimeType};base64,${audio.buffer.toString("base64")}`;
   const result = await sendWhatsAppAudioMessage(
     to,
@@ -2607,7 +2710,9 @@ async function sendPronunciationVoice303({ to = "", phoneNumberId = "", userText
     pronunciation: {
       language: audio.language,
       text: audio.text,
-      model: PRONUNCIATION_TTS_MODEL_303
+      model: audio.model,
+      voice: audio.voice,
+      format: audio.mimeType
     }
   };
 }
@@ -2660,7 +2765,7 @@ async function generate303ReplyWithFailover(task = {}) {
   let cloudflareError = null;
   let cloudflareRetryMs = 0;
 
-  // V14 multimodal failover + pronunciation voice. Image/audio turns keep the same provider order
+  // V15 multimodal failover + Groq pronunciation voice. Image/audio turns keep the same provider order
   // as text: Gemini -> Groq -> Cloudflare -> queue. Each fallback uses the provider's
   // own vision / speech capability while preserving the shared 303 conversation memory.
   if (!textOnly) {
@@ -3002,7 +3107,7 @@ async function processGemini303Queue(phone = "") {
           { skipAutoLanguage: true }
         );
 
-        // V14: pronunciation is intentionally opt-in. The normal answer stays text.
+        // V15: pronunciation is intentionally opt-in. The normal answer stays text.
         // Only explicit "how do I say/pronounce..." requests receive one short audio clip
         // containing the target word/phrase itself.
         if (!task.mediaKind && looksLikePronunciationRequest303(task.inputText || "")) {
