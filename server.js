@@ -543,7 +543,7 @@ const GEMINI_303_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.GEMINI_303_ENABLED || "true").toString().trim().toLowerCase()
 );
 
-// V6 Multi-AI failover for the private 303 owner route.
+// V7 Multi-AI failover + grounded web search for the private 303 owner route.
 // Gemini stays primary. Groq is second and Cloudflare Workers AI is third for TEXT turns.
 // Shared conversation memory remains in
 // this service, so switching providers does not reset the conversation.
@@ -557,8 +557,8 @@ const GROQ_303_TEMPORARY_FAILURE_FALLBACK_MS = Math.max(
   Number(process.env.GROQ_303_TEMPORARY_FAILURE_FALLBACK_MS || 30000)
 );
 
-// V6 third-provider fallback: Cloudflare Workers AI.
-// Text turns flow Gemini -> Groq -> Cloudflare -> queue.
+// V7 third-provider fallback: Cloudflare Workers AI.
+// Text turns flow Search (when needed) -> Gemini -> Groq -> Cloudflare -> queue.
 const CLOUDFLARE_AI_API_TOKEN = (process.env.CLOUDFLARE_AI_API_TOKEN || "").toString().trim();
 const CLOUDFLARE_ACCOUNT_ID = (process.env.CLOUDFLARE_ACCOUNT_ID || "").toString().trim();
 const CLOUDFLARE_AI_MODEL = (process.env.CLOUDFLARE_AI_MODEL || "@cf/zai-org/glm-4.7-flash").toString().trim();
@@ -569,6 +569,28 @@ const CLOUDFLARE_AI_303_TEMPORARY_FAILURE_FALLBACK_MS = Math.max(
   5000,
   Number(process.env.CLOUDFLARE_AI_303_TEMPORARY_FAILURE_FALLBACK_MS || 30000)
 );
+
+// V7 grounded web search for the private 303 owner route.
+// Search is local-rule triggered first, then Tavily returns real web sources.
+// The final AI provider receives only those search snippets for current/web facts,
+// and the server appends the exact returned source URLs after the answer.
+const TAVILY_API_KEY = (process.env.TAVILY_API_KEY || "").toString().trim();
+const TAVILY_303_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.TAVILY_303_ENABLED || "true").toString().trim().toLowerCase()
+);
+const TAVILY_303_MAX_RESULTS = Math.min(
+  5,
+  Math.max(2, Number(process.env.TAVILY_303_MAX_RESULTS || 4))
+);
+const TAVILY_303_TIMEOUT_MS = Math.min(
+  20000,
+  Math.max(4000, Number(process.env.TAVILY_303_TIMEOUT_MS || 12000))
+);
+const TAVILY_303_MAX_SNIPPET_CHARS = Math.min(
+  1800,
+  Math.max(500, Number(process.env.TAVILY_303_MAX_SNIPPET_CHARS || 1200))
+);
+
 const GEMINI_303_HISTORY_TURNS = Math.min(10, Math.max(2, Number(process.env.GEMINI_303_HISTORY_TURNS || 6)));
 const GEMINI_303_INLINE_MEDIA_MAX_BYTES = Math.min(
   12 * 1024 * 1024,
@@ -1251,13 +1273,14 @@ function getShared303HistoryAsGroqMessages(phone = "") {
   }).filter((item) => item.content);
 }
 
-async function generateGroq303Reply(phone = "", userText = "") {
+async function generateGroq303Reply(phone = "", userText = "", memoryUserText = "") {
   const cleanText = (userText || "").toString().trim();
   if (!GROQ_303_ENABLED) throw new Error("Groq 303 fallback is disabled");
   if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY is missing");
   if (!cleanText) throw new Error("Groq 303 received empty text input");
 
   const previous = getGemini303History(phone);
+  const memoryText = (memoryUserText || cleanText).toString().trim() || cleanText;
   const endpoint = "https://api.groq.com/openai/v1/chat/completions";
   const messages = [
     {
@@ -1315,7 +1338,7 @@ async function generateGroq303Reply(phone = "", userText = "") {
   // Gemini can consume the same history later, so switching back does not reset context.
   saveGemini303History(phone, [
     ...previous,
-    { role: "user", parts: [{ text: cleanText }] },
+    { role: "user", parts: [{ text: memoryText }] },
     { role: "model", parts: [{ text: reply }] }
   ]);
 
@@ -1326,7 +1349,7 @@ function getShared303HistoryAsCloudflareMessages(phone = "") {
   return getShared303HistoryAsGroqMessages(phone);
 }
 
-async function generateCloudflare303Reply(phone = "", userText = "") {
+async function generateCloudflare303Reply(phone = "", userText = "", memoryUserText = "") {
   const cleanText = (userText || "").toString().trim();
   if (!CLOUDFLARE_AI_303_ENABLED) throw new Error("Cloudflare AI 303 fallback is disabled");
   if (!CLOUDFLARE_AI_API_TOKEN) throw new Error("CLOUDFLARE_AI_API_TOKEN is missing");
@@ -1334,6 +1357,7 @@ async function generateCloudflare303Reply(phone = "", userText = "") {
   if (!cleanText) throw new Error("Cloudflare AI 303 received empty text input");
 
   const previous = getGemini303History(phone);
+  const memoryText = (memoryUserText || cleanText).toString().trim() || cleanText;
   const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(CLOUDFLARE_ACCOUNT_ID)}/ai/v1/chat/completions`;
   const messages = [
     {
@@ -1395,16 +1419,284 @@ async function generateCloudflare303Reply(phone = "", userText = "") {
   // Gemini/Groq turn continues the same conversation without a reset.
   saveGemini303History(phone, [
     ...previous,
-    { role: "user", parts: [{ text: cleanText }] },
+    { role: "user", parts: [{ text: memoryText }] },
     { role: "model", parts: [{ text: reply }] }
   ]);
 
   return reply;
 }
 
+
+function normalizeSearchIntentText303(value = "") {
+  return (value || "")
+    .toString()
+    .toLowerCase()
+    .replace(/[ـًٌٍَُِّْ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function detectTavilySearchIntent303(value = "") {
+  const text = normalizeSearchIntentText303(value);
+  if (!text || !TAVILY_303_ENABLED || !TAVILY_API_KEY) {
+    return { shouldSearch: false, reason: !TAVILY_API_KEY ? "not_configured" : "disabled_or_empty", topic: "general" };
+  }
+
+  const suppressSearch = /(?:لا\s*(?:تبحث|تدور|تفتش)|بدون\s*(?:بحث|نت|ويب)|ما\s*(?:تبحث|تدور|تفتش)|don'?t\s+search|without\s+(?:web|search)|no\s+(?:web|search))/i.test(text);
+  if (suppressSearch) {
+    return { shouldSearch: false, reason: "user_suppressed", topic: "general" };
+  }
+
+  const explicitSearch = /(?:ابحث(?:لي)?|دور(?:لي|\s+لي)?|فتش(?:لي|\s+لي)?|شوف(?:لي|\s+لي)?\s+(?:عالنت|على\s+النت|بالنت|بالويب|على\s+الويب)|بحث\s+(?:بالنت|بالويب|على\s+النت|على\s+الويب)|search\s+(?:the\s+)?(?:web|internet)|look\s+it\s+up|google\s+it)/i.test(text);
+  const sourceOrLink = /(?:رابط|لينك|الموقع\s+الرسمي|مصدر|مصادر|هات\s+المصدر|source|sources|official\s+(?:site|website)|\blink\b|\burl\b)/i.test(text);
+  const freshness = /(?:اليوم|هلق|هلأ|الان|الآن|حاليا|حاليًا|اخر|آخر|احدث|أحدث|الجديد|مؤخرا|مؤخرًا|امبارح|أمس|بكرا|غدا|غدًا|هذا\s+الاسبوع|هذا\s+الأسبوع|today|right\s+now|currently|current|latest|recent|recently|yesterday|tomorrow|this\s+week)/i.test(text);
+  const newsIntent = /(?:اخبار|أخبار|خبر|news|breaking|تطورات|مستجدات)/i.test(text);
+  const inherentlyLive = /(?:الطقس|طقس|weather|نتيجة\s+(?:المباراة|الماتش)|score|(?:كم|قديش|شو)\s+سعر|what\s+is\s+the\s+price|سعر\s+(?:السهم|الذهب|البيتكوين|bitcoin|btc)|بورصة|stock\s+price|exchange\s+rate|سعر\s+الصرف|(?:متى|موعد)\s+(?:مباراة|المباراة|الماتش)|مين\s+(?:الرئيس|المدير\s+التنفيذي)|who\s+is\s+(?:the\s+)?(?:president|ceo))/i.test(text);
+
+  const shouldSearch = Boolean(explicitSearch || sourceOrLink || freshness || newsIntent || inherentlyLive);
+  return {
+    shouldSearch,
+    reason: explicitSearch
+      ? "explicit"
+      : sourceOrLink
+        ? "source_or_link"
+        : newsIntent
+          ? "news"
+          : inherentlyLive
+            ? "live_fact"
+            : freshness
+              ? "freshness"
+              : "none",
+    topic: newsIntent ? "news" : "general"
+  };
+}
+
+function buildTavilySearchQuery303(value = "") {
+  return (value || "").toString().trim().slice(0, 380);
+}
+
+async function runTavily303Search(query = "", topic = "general") {
+  const cleanQuery = buildTavilySearchQuery303(query);
+  if (!TAVILY_303_ENABLED) throw new Error("Tavily 303 search is disabled");
+  if (!TAVILY_API_KEY) throw new Error("TAVILY_API_KEY is missing");
+  if (!cleanQuery) throw new Error("Tavily 303 received empty search query");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TAVILY_303_TIMEOUT_MS);
+
+  try {
+    const response = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TAVILY_API_KEY}`
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        query: cleanQuery,
+        topic: topic === "news" ? "news" : "general",
+        search_depth: "basic",
+        include_answer: false,
+        include_raw_content: false,
+        include_images: false,
+        max_results: TAVILY_303_MAX_RESULTS
+      })
+    });
+
+    const raw = await response.text();
+    let payload = {};
+    try {
+      payload = raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      payload = {};
+    }
+
+    if (!response.ok) {
+      const message = payload?.detail?.error ||
+        payload?.error?.message ||
+        payload?.message ||
+        raw ||
+        `HTTP ${response.status}`;
+      const error = new Error(`Tavily API error: ${message}`);
+      error.status = response.status;
+      error.tavilyPayload = payload;
+      const retryAfterHeader = Number(response.headers.get("retry-after") || 0);
+      if (Number.isFinite(retryAfterHeader) && retryAfterHeader > 0) {
+        error.retryAfterMs = retryAfterHeader * 1000 + 1000;
+      }
+      throw error;
+    }
+
+    const results = (Array.isArray(payload?.results) ? payload.results : [])
+      .map((item) => ({
+        title: (item?.title || "").toString().trim(),
+        url: (item?.url || "").toString().trim(),
+        content: (item?.content || "").toString().trim().slice(0, TAVILY_303_MAX_SNIPPET_CHARS),
+        score: Number(item?.score || 0),
+        publishedDate: (item?.published_date || item?.publishedDate || "").toString().trim()
+      }))
+      .filter((item) => /^https?:\/\//i.test(item.url) && (item.title || item.content))
+      .slice(0, TAVILY_303_MAX_RESULTS);
+
+    return {
+      query: (payload?.query || cleanQuery).toString().trim(),
+      results,
+      responseTime: Number(payload?.response_time || 0),
+      credits: Number(payload?.usage?.credits || 0),
+      requestId: (payload?.request_id || "").toString().trim()
+    };
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      const timeoutError = new Error(`Tavily search timed out after ${TAVILY_303_TIMEOUT_MS}ms`);
+      timeoutError.status = 408;
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function buildTavilyGroundedPrompt303(originalText = "", search = null) {
+  const question = (originalText || "").toString().trim();
+  const results = Array.isArray(search?.results) ? search.results : [];
+
+  const sources = results.map((item, index) => {
+    return [
+      `[${index + 1}] ${item.title || "Source"}`,
+      `URL: ${item.url}`,
+      item.publishedDate ? `Published: ${item.publishedDate}` : "",
+      item.content ? `Snippet: ${item.content}` : ""
+    ].filter(Boolean).join("\n");
+  }).join("\n\n");
+
+  return [
+    "WEB SEARCH GROUNDING RULES:",
+    "- This turn has live web-search results supplied by the server.",
+    "- For current or web-dependent facts, use ONLY the supplied source snippets.",
+    "- If the sources do not verify a claim, say that the search did not verify it; do not guess.",
+    "- Never invent, alter, shorten, or manufacture a URL.",
+    "- Do not add a separate sources list or URLs in your answer; the server appends the exact source URLs.",
+    "- Reply naturally and concisely in Arabic, matching Osama's dialect when practical.",
+    "",
+    `USER QUESTION: ${question}`,
+    "",
+    "LIVE SEARCH RESULTS:",
+    sources || "(No usable results returned.)"
+  ].join("\n");
+}
+
+function appendTavilySources303(reply = "", search = null) {
+  const cleanReply = (reply || "").toString().trim();
+  const results = Array.isArray(search?.results) ? search.results : [];
+  if (!results.length) return cleanReply;
+
+  const seen = new Set();
+  const sourceLines = [];
+
+  for (const item of results) {
+    const url = (item?.url || "").toString().trim();
+    if (!/^https?:\/\//i.test(url) || seen.has(url)) continue;
+    seen.add(url);
+    const title = (item?.title || "").toString().trim();
+    sourceLines.push(`${sourceLines.length + 1}. ${title || "مصدر"}\n${url}`);
+    if (sourceLines.length >= 3) break;
+  }
+
+  if (!sourceLines.length) return cleanReply;
+  return `${cleanReply}\n\n🔎 المصادر:\n${sourceLines.join("\n")}`.trim();
+}
+
+async function prepareTavilySearchFor303Task(task = {}) {
+  if (task.tavilyPrepared) return task.tavilySearch || null;
+  task.tavilyPrepared = true;
+
+  const intent = detectTavilySearchIntent303(task.inputText || "");
+  task.tavilyIntent = intent;
+
+  if (!intent.shouldSearch) {
+    console.log("[303 Search] web search not needed", {
+      phone: task.phone,
+      reason: intent.reason
+    });
+    return null;
+  }
+
+  console.log("[303 Search] Tavily search started", {
+    phone: task.phone,
+    reason: intent.reason,
+    topic: intent.topic,
+    query: buildTavilySearchQuery303(task.inputText || "")
+  });
+
+  try {
+    const search = await runTavily303Search(task.inputText || "", intent.topic);
+    task.tavilySearch = search;
+
+    console.log("[303 Search] Tavily search succeeded", {
+      phone: task.phone,
+      reason: intent.reason,
+      topic: intent.topic,
+      resultCount: search.results.length,
+      credits: search.credits,
+      responseTime: search.responseTime,
+      requestId: search.requestId
+    });
+
+    return search;
+  } catch (error) {
+    task.tavilyError = error;
+    console.warn("[303 Search] Tavily search failed; ungrounded current answer blocked", {
+      phone: task.phone,
+      reason: intent.reason,
+      status: Number(error?.status || 0) || null,
+      message: error?.message || String(error)
+    });
+    return null;
+  }
+}
+
 async function generate303ReplyWithFailover(task = {}) {
   const hasMedia = Boolean(task.mediaInput?.data && task.mediaInput?.mimeType);
   const textOnly = !hasMedia;
+
+  // Search is text-only in V7. Image/audio behavior remains unchanged.
+  let tavilySearch = null;
+  if (textOnly) {
+    tavilySearch = await prepareTavilySearchFor303Task(task);
+
+    if (task.tavilyIntent?.shouldSearch && task.tavilyError) {
+      return {
+        reply: "ما قدرت أوصل للبحث على الويب هلق، وما بدي أخمّن بمعلومة حديثة أو أعطيك رابط غير موثوق. جرّب نفس السؤال بعد شوي.",
+        provider: "tavily-unavailable",
+        model: "web-search"
+      };
+    }
+
+    if (task.tavilyIntent?.shouldSearch && (!tavilySearch || !tavilySearch.results?.length)) {
+      return {
+        reply: "بحثت على الويب، بس ما لقيت مصادر واضحة تكفيني حتى أعطيك جواب موثوق. إذا بدك، صيّغلي السؤال بشكل أدق.",
+        provider: "tavily-no-results",
+        model: "web-search"
+      };
+    }
+  }
+
+  const originalInputText = (task.inputText || "").toString().trim();
+  const providerInputText = tavilySearch
+    ? buildTavilyGroundedPrompt303(originalInputText, tavilySearch)
+    : originalInputText;
+
+  const finalizeResult = (result = {}) => {
+    if (!result?.reply) return result;
+    return {
+      ...result,
+      reply: tavilySearch ? appendTavilySources303(result.reply, tavilySearch) : result.reply,
+      webSearch: Boolean(tavilySearch),
+      webSearchResults: tavilySearch?.results?.length || 0
+    };
+  };
+
   let geminiError = null;
   let geminiRetryMs = 0;
   let groqError = null;
@@ -1424,10 +1716,10 @@ async function generate303ReplyWithFailover(task = {}) {
   if (GEMINI_303_ENABLED && GEMINI_API_KEY && cooldownRemaining <= 0) {
     try {
       await waitForGemini303TrafficSlot();
-      const reply = await generateGemini303Reply(task.phone, task.inputText, null);
+      const reply = await generateGemini303Reply(task.phone, providerInputText, null, originalInputText);
       gemini303ConsecutiveRateLimits = 0;
       gemini303GlobalCooldownUntil = 0;
-      return { reply, provider: "gemini", model: GEMINI_MODEL };
+      return finalizeResult({ reply, provider: "gemini", model: GEMINI_MODEL });
     } catch (error) {
       geminiError = error;
       geminiRetryMs = markGemini303TemporarilyUnavailable(error);
@@ -1454,13 +1746,13 @@ async function generate303ReplyWithFailover(task = {}) {
 
   if (GROQ_303_ENABLED && GROQ_API_KEY) {
     try {
-      const reply = await generateGroq303Reply(task.phone, task.inputText);
+      const reply = await generateGroq303Reply(task.phone, providerInputText, originalInputText);
       console.log("[303 Failover] Groq fallback succeeded", {
         phone: task.phone,
         model: GROQ_MODEL,
         geminiCooldownRemainingMs: getGemini303CooldownRemainingMs()
       });
-      return { reply, provider: "groq", model: GROQ_MODEL };
+      return finalizeResult({ reply, provider: "groq", model: GROQ_MODEL });
     } catch (error) {
       groqError = error;
       groqRetryMs = getTemporaryAiProviderRetryMs303(
@@ -1484,13 +1776,13 @@ async function generate303ReplyWithFailover(task = {}) {
 
   if (CLOUDFLARE_AI_303_ENABLED && CLOUDFLARE_AI_API_TOKEN && CLOUDFLARE_ACCOUNT_ID) {
     try {
-      const reply = await generateCloudflare303Reply(task.phone, task.inputText);
+      const reply = await generateCloudflare303Reply(task.phone, providerInputText, originalInputText);
       console.log("[303 Failover] Cloudflare fallback succeeded", {
         phone: task.phone,
         model: CLOUDFLARE_AI_MODEL,
         geminiCooldownRemainingMs: getGemini303CooldownRemainingMs()
       });
-      return { reply, provider: "cloudflare", model: CLOUDFLARE_AI_MODEL };
+      return finalizeResult({ reply, provider: "cloudflare", model: CLOUDFLARE_AI_MODEL });
     } catch (error) {
       cloudflareError = error;
       cloudflareRetryMs = getTemporaryAiProviderRetryMs303(
@@ -1725,7 +2017,7 @@ async function processGemini303Queue(phone = "") {
   }
 }
 
-async function generateGemini303Reply(phone = "", userText = "", mediaInput = null) {
+async function generateGemini303Reply(phone = "", userText = "", mediaInput = null, memoryUserText = "") {
   const cleanText = (userText || "").toString().trim();
   const hasMedia = Boolean(mediaInput?.data && mediaInput?.mimeType);
   if (!GEMINI_303_ENABLED) throw new Error("Gemini 303 bridge is disabled");
@@ -1800,9 +2092,10 @@ async function generateGemini303Reply(phone = "", userText = "", mediaInput = nu
 
   // Keep only a compact text marker in memory for media turns so Base64 media is not
   // resent on every later message. The model reply remains in history as context.
+  const memoryText = (memoryUserText || cleanText).toString().trim() || cleanText;
   const historyUserText = hasMedia
     ? `[${mediaInput.kind === "audio" ? "رسالة صوتية" : "صورة"}] ${promptText}`.trim()
-    : cleanText;
+    : memoryText;
 
   saveGemini303History(phone, [
     ...previous,
