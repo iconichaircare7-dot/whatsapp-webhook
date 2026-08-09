@@ -516,6 +516,7 @@ const smartRulePendingOutcomeByConversation = new Map();
 const smartUnknownLearningQueue = new Map();
 const smartUnknownPersistTimers = new Map();
 const smartMemoryInvalidSnapshotFingerprints = new Set();
+const smartUnknownInvalidSnapshotFingerprints = new Set();
 const BOT_HEADER_IMAGE_URL = (process.env.BOT_HEADER_IMAGE_URL || "https://iconichaircare.com/wp-content/uploads/2026/05/BE6F2E6E-357D-486A-ADC3-0A8F70D22A26.jpg").toString().trim();
 // V60.3.1.0: Force Details to use the new WordPress explanation video and upload it to WhatsApp as video/mp4 before using it as an interactive video header.
 const DETAILS_VIDEO_URL = "https://iconichaircare.com/wp-content/uploads/2026/05/iconic-details-video-v2-compressed.mp4";
@@ -5836,16 +5837,49 @@ function encodeSmartUnknownLearningEvent(event = {}) {
   return `${SMART_UNKNOWN_SNAPSHOT_MARKER}${payload}`;
 }
 
+function logSmartUnknownSnapshotDecodeFailureOnce(body = "", reason = "invalid_snapshot") {
+  const fingerprint = crypto
+    .createHash("sha256")
+    .update((body || "").toString())
+    .digest("hex")
+    .slice(0, 16);
+
+  if (smartUnknownInvalidSnapshotFingerprints.has(fingerprint)) return;
+  smartUnknownInvalidSnapshotFingerprints.add(fingerprint);
+
+  if (smartUnknownInvalidSnapshotFingerprints.size > 500) {
+    const oldest = smartUnknownInvalidSnapshotFingerprints.values().next().value;
+    if (oldest) smartUnknownInvalidSnapshotFingerprints.delete(oldest);
+  }
+
+  console.log(`[Unknown Learning V11] skipped invalid snapshot fingerprint=${fingerprint} reason=${reason}`);
+}
+
 function decodeSmartUnknownLearningEvent(body = "") {
-  const value = (body || "").toString();
+  const value = (body || "").toString().trim();
   if (!value.startsWith(SMART_UNKNOWN_SNAPSHOT_MARKER)) return null;
+
+  const encoded = value.slice(SMART_UNKNOWN_SNAPSHOT_MARKER.length).replace(/\s+/g, "");
+  if (!encoded || encoded.length < 12 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) {
+    logSmartUnknownSnapshotDecodeFailureOnce(value, "invalid_base64");
+    return null;
+  }
+
   try {
-    const decoded = Buffer.from(value.slice(SMART_UNKNOWN_SNAPSHOT_MARKER.length), "base64").toString("utf8");
+    const decoded = Buffer.from(encoded, "base64").toString("utf8").trim();
+
+    // Older Google Sheet rows can contain truncated learning snapshots. Skip
+    // those safely and log each unique bad row only once per process.
+    if (!decoded.startsWith("{") || !decoded.endsWith("}")) {
+      logSmartUnknownSnapshotDecodeFailureOnce(value, "truncated_json");
+      return null;
+    }
+
     const event = JSON.parse(decoded);
     if (!event?.id || !event?.fingerprint) return null;
     return event;
   } catch (error) {
-    console.log("[Unknown Learning V11] snapshot decode failed", error?.message || error);
+    logSmartUnknownSnapshotDecodeFailureOnce(value, error?.message || "json_parse_failed");
     return null;
   }
 }
