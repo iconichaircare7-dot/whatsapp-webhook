@@ -543,7 +543,7 @@ const GEMINI_303_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.GEMINI_303_ENABLED || "true").toString().trim().toLowerCase()
 );
 
-// V7 Multi-AI failover + grounded web search for the private 303 owner route.
+// V10 Multi-AI failover + grounded web search for the private 303 owner route.
 // Gemini stays primary. Groq is second and Cloudflare Workers AI is third for TEXT turns.
 // Shared conversation memory remains in
 // this service, so switching providers does not reset the conversation.
@@ -570,7 +570,7 @@ const CLOUDFLARE_AI_303_TEMPORARY_FAILURE_FALLBACK_MS = Math.max(
   Number(process.env.CLOUDFLARE_AI_303_TEMPORARY_FAILURE_FALLBACK_MS || 30000)
 );
 
-// V7 grounded web search for the private 303 owner route.
+// V10 grounded web search for the private 303 owner route.
 // Search is local-rule triggered first, then Tavily returns real web sources.
 // The final AI provider receives only those search snippets for current/web facts,
 // and the server appends the exact returned source URLs after the answer.
@@ -579,9 +579,15 @@ const TAVILY_303_ENABLED = !["false", "0", "no", "off"].includes(
   (process.env.TAVILY_303_ENABLED || "true").toString().trim().toLowerCase()
 );
 const TAVILY_303_MAX_RESULTS = Math.min(
-  5,
-  Math.max(2, Number(process.env.TAVILY_303_MAX_RESULTS || 4))
+  10,
+  Math.max(3, Number(process.env.TAVILY_303_MAX_RESULTS || 8))
 );
+const TAVILY_303_NEWS_MIN_SCORE = Math.min(1, Math.max(0, Number(process.env.TAVILY_303_NEWS_MIN_SCORE || 0.5)));
+const TAVILY_303_GENERAL_MIN_SCORE = Math.min(1, Math.max(0, Number(process.env.TAVILY_303_GENERAL_MIN_SCORE || 0.3)));
+const TAVILY_303_NEWS_EXCLUDE_DOMAINS = [
+  "instagram.com", "facebook.com", "tiktok.com", "x.com", "twitter.com",
+  "youtube.com", "youtu.be", "threads.net"
+];
 const TAVILY_303_TIMEOUT_MS = Math.min(
   20000,
   Math.max(4000, Number(process.env.TAVILY_303_TIMEOUT_MS || 12000))
@@ -1532,12 +1538,50 @@ function detectTavilySearchIntent303(value = "") {
   };
 }
 
-function buildTavilySearchQuery303(value = "") {
-  return (value || "").toString().trim().slice(0, 380);
+function buildTavilySearchQuery303(value = "", topic = "general") {
+  const raw = (value || "").toString().trim().slice(0, 380);
+  if (!raw) return "";
+
+  // For news queries containing a clear Latin brand/entity (OpenAI, Apple, NVIDIA, etc.),
+  // strip conversational command/freshness filler so Tavily ranks the entity itself.
+  if (topic === "news") {
+    const anchors = extractTavilyLatinTopicAnchors303(raw);
+    if (anchors.length) return `${anchors.slice(0, 4).join(" ")} news`.slice(0, 380);
+  }
+  return raw;
+}
+
+function extractTavilyLatinTopicAnchors303(value = "") {
+  const stop = new Set([
+    "search", "web", "internet", "google", "latest", "recent", "recently", "today",
+    "current", "currently", "news", "source", "sources", "link", "links", "about",
+    "please", "find", "look", "the", "for", "from", "this", "week", "now", "right"
+  ]);
+  const tokens = ((value || "").toString().match(/[A-Za-z][A-Za-z0-9._+-]{2,}/g) || [])
+    .map((token) => token.trim())
+    .filter((token) => token && !stop.has(token.toLowerCase()));
+  return [...new Set(tokens.map((token) => token.toLowerCase()))].map((lower) => {
+    return tokens.find((token) => token.toLowerCase() === lower) || lower;
+  });
+}
+
+function isTavilyNewsSocialDomain303(url = "") {
+  try {
+    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+    return TAVILY_303_NEWS_EXCLUDE_DOMAINS.some((domain) => host === domain || host.endsWith(`.${domain}`));
+  } catch (_) {
+    return false;
+  }
+}
+
+function tavilyResultMatchesLatinAnchors303(item = {}, anchors = []) {
+  if (!anchors.length) return true;
+  const haystack = `${item.title || ""} ${item.content || ""} ${item.url || ""}`.toLowerCase();
+  return anchors.some((anchor) => haystack.includes(anchor.toLowerCase()));
 }
 
 async function runTavily303Search(query = "", topic = "general", freshness = {}) {
-  const cleanQuery = buildTavilySearchQuery303(query);
+  const cleanQuery = buildTavilySearchQuery303(query, topic);
   if (!TAVILY_303_ENABLED) throw new Error("Tavily 303 search is disabled");
   if (!TAVILY_API_KEY) throw new Error("TAVILY_API_KEY is missing");
   if (!cleanQuery) throw new Error("Tavily 303 received empty search query");
@@ -1553,7 +1597,8 @@ async function runTavily303Search(query = "", topic = "general", freshness = {})
       include_answer: false,
       include_raw_content: false,
       include_images: false,
-      max_results: TAVILY_303_MAX_RESULTS
+      max_results: TAVILY_303_MAX_RESULTS,
+      ...(topic === "news" ? { exclude_domains: TAVILY_303_NEWS_EXCLUDE_DOMAINS } : {})
     };
 
     const validTimeRange = ["day", "week", "month", "year"].includes(
@@ -1618,6 +1663,17 @@ async function runTavily303Search(query = "", topic = "general", freshness = {})
       }))
       .filter((item) => /^https?:\/\//i.test(item.url) && (item.title || item.content));
 
+    // Quality gate: Tavily exposes relevance scores. For news, reject low-score results
+    // and social-media posts so a same-day but irrelevant reel/post cannot masquerade as news.
+    const minScore = topic === "news" ? TAVILY_303_NEWS_MIN_SCORE : TAVILY_303_GENERAL_MIN_SCORE;
+    const latinAnchors = topic === "news" ? extractTavilyLatinTopicAnchors303(query) : [];
+    results = results.filter((item) => {
+      if (Number.isFinite(item.score) && item.score < minScore) return false;
+      if (topic === "news" && isTavilyNewsSocialDomain303(item.url)) return false;
+      if (topic === "news" && !tavilyResultMatchesLatinAnchors303(item, latinAnchors)) return false;
+      return true;
+    });
+
     // For strict calendar-day requests (today / yesterday), do not let an older
     // undated or out-of-range article masquerade as current news.
     if (freshness?.strictFreshness && freshness?.startDate) {
@@ -1677,6 +1733,7 @@ function buildTavilyGroundedPrompt303(originalText = "", search = null) {
     "WEB SEARCH GROUNDING RULES:",
     "- This turn has live web-search results supplied by the server.",
     "- For current or web-dependent facts, use ONLY the supplied source snippets.",
+    "- Treat relevance as mandatory: if the supplied sources are not actually about the entity/topic asked, say the search did not find a relevant verified result.",
     search?.freshness?.freshnessLabel ? `- The server applied a freshness filter: ${search.freshness.freshnessLabel}${search.freshness.startDate ? ` starting ${search.freshness.startDate}` : ""}. Do not describe older material as current.` : "",
     "- If the sources do not verify a claim, say that the search did not verify it; do not guess.",
     "- Never invent, alter, shorten, or manufacture a URL.",
@@ -1735,7 +1792,7 @@ async function prepareTavilySearchFor303Task(task = {}) {
     startDate: intent.startDate || null,
     endDate: intent.endDate || null,
     strictFreshness: Boolean(intent.strictFreshness),
-    query: buildTavilySearchQuery303(task.inputText || "")
+    query: buildTavilySearchQuery303(task.inputText || "", intent.topic)
   });
 
   try {
@@ -1750,6 +1807,7 @@ async function prepareTavilySearchFor303Task(task = {}) {
       startDate: intent.startDate || null,
       strictFreshness: Boolean(intent.strictFreshness),
       resultCount: search.results.length,
+      minScore: intent.topic === "news" ? TAVILY_303_NEWS_MIN_SCORE : TAVILY_303_GENERAL_MIN_SCORE,
       credits: search.credits,
       responseTime: search.responseTime,
       requestId: search.requestId
