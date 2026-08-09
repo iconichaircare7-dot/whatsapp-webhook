@@ -605,7 +605,7 @@ const PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 = Math.min(
   Math.max(5000, Number(process.env.PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 || 15000))
 );
 
-// V17.2 — keeps V17.1 intact and hardens mixed-language understanding so embedded/quoted foreign text is treated as content, not as a reason to deny language support or switch incorrectly.
+// V17.3 — keeps V17.2 intact and adds deterministic translation-intent routing for colloquial / typo-heavy requests so clear translation tasks are answered directly instead of being bounced back for clarification.
 // Existing-image requests use Tavily image search; create/edit requests use Gemini Image then Cloudflare FLUX.2 fallback.
 // The last image context is persisted as a lightweight Google Sheet snapshot (media id / source URL / prompt),
 // so follow-up commands like "اعمل منها بوستر" can continue the same visual context when possible.
@@ -806,6 +806,65 @@ function build303ResponseLanguageInstruction(phone = "", currentUserText = "") {
 
 const CONTEXTUAL_REFERENCE_LINK_RULE_303 =
   "For contextual references such as 'this video', 'this link', 'this image', 'that file', or their Arabic equivalents, use the supplied conversation history. If the exact target or URL is not present, ask one brief clarification instead of searching the web or inventing a URL.";
+
+function detect303TranslationTarget(value = "") {
+  const text = (value || "").toString().trim().toLowerCase();
+  if (!text) return { code: "", label: "" };
+
+  const targets = [
+    {
+      code: "en",
+      label: "English",
+      re: /(?:بال?\s*(?:ا|إ|أ)?نكليزي|بال?\s*(?:ا|إ|أ)?نجليزي|بالإنجليزية|بالانجليزية|لل?(?:ا|إ|أ)?نكليزي|لل?(?:ا|إ|أ)?نجليزي|إلى\s*(?:ال)?(?:إنكليزي|انكليزي|إنجليزي|انجليزي)|الى\s*(?:ال)?(?:انكليزي|انجليزي)|في\s+(?:ال)?(?:انكليزي|الإنكليزي|انجليزي|الانجليزي)|\b(?:to|into|in)\s+english\b)/i
+    },
+    {
+      code: "ar",
+      label: "Arabic",
+      re: /(?:بالعربي|بالعربية|للعربي|للعربية|إلى\s*(?:ال)?عربي|الى\s*(?:ال)?عربي|\b(?:to|into|in)\s+arabic\b)/i
+    },
+    {
+      code: "fr",
+      label: "French",
+      re: /(?:بالفرنسي|بالفرنسية|للفرنسي|للفرنسية|إلى\s*(?:ال)?فرنسي|الى\s*(?:ال)?فرنسي|\b(?:to|into|in)\s+french\b|\ben\s+fran[cç]ais\b)/i
+    },
+    {
+      code: "es",
+      label: "Spanish",
+      re: /(?:بالاسباني|بالإسباني|بالاسبانية|بالإسبانية|لل(?:ا|إ)?سباني|لل(?:ا|إ)?سبانية|إلى\s*(?:ال)?(?:إسباني|اسباني)|الى\s*(?:ال)?اسباني|\b(?:to|into|in)\s+spanish\b|\ben\s+espa[nñ]ol\b)/i
+    }
+  ];
+
+  const found = targets.find((item) => item.re.test(text));
+  return found ? { code: found.code, label: found.label } : { code: "", label: "" };
+}
+
+function looksLikeTranslationRequest303(value = "") {
+  const text = (value || "").toString().trim();
+  if (!text) return false;
+
+  const explicitTranslation = /(?:\btranslate\b|\btranslation\b|ترجم(?:لي|ها|هالي|لي)?|ترجمة|ترجمه|شو\s+معن(?:ى|ا)|ما\s+معن(?:ى|ا)|what\s+does\s+.+\s+mean)/i.test(text);
+  const howDoISay = /(?:كيف\s+(?:بقول|بكتب|بنحكي|بحكي)|شو\s+(?:بقول|بحكي)|how\s+do\s+i\s+say|how\s+can\s+i\s+say)/i.test(text);
+  const giveMeInLanguage = /(?:عطيني|اعطيني|أعطيني|اكتبلي|اكتب\s+لي|قلي|قوللي|قول\s+لي|بدي)[\s\S]{0,28}(?:بال?\s*(?:ا|إ|أ)?نكليزي|بال?\s*(?:ا|إ|أ)?نجليزي|بالعربي|بالعربية|بالفرنسي|بالفرنسية|بالاسباني|بالإسباني|in\s+english|in\s+arabic|in\s+french|in\s+spanish)/i.test(text);
+  const target = detect303TranslationTarget(text);
+
+  return Boolean(explicitTranslation || howDoISay || (giveMeInLanguage && target.code));
+}
+
+function build303TranslationTaskPrompt(originalText = "") {
+  const source = (originalText || "").toString().trim();
+  if (!looksLikeTranslationRequest303(source)) return source;
+
+  const target = detect303TranslationTarget(source);
+  return [
+    "TRANSLATION TASK — answer the user's translation request directly.",
+    target.label ? `Target language: ${target.label}.` : "Target language: infer it from the user's request; if truly absent, ask only for the target language.",
+    "The user's wording may be colloquial Arabic, code-switched, typo-heavy, or missing punctuation. Identify the actual sentence/phrase they want translated from the message and translate that content instead of asking them to restate it.",
+    "If a meaningful source phrase or sentence is present, do not ask a clarification merely because the surrounding request is informal or imperfectly written.",
+    "Return the translation first and keep the answer concise. Do not add pronunciation audio unless the original user message explicitly asks for pronunciation/read-aloud.",
+    "Preserve names, technical abbreviations, numbers, URLs, and proper nouns exactly when practical.",
+    `ORIGINAL USER MESSAGE: ${source}`
+  ].join("\n");
+}
 
 
 // 303 Gemini traffic manager — owner/test messages only.
@@ -4146,9 +4205,19 @@ async function generate303ReplyWithFailover(task = {}) {
   }
 
   const originalInputText = (task.inputText || "").toString().trim();
+  const translationIntent = textOnly && !tavilySearch && looksLikeTranslationRequest303(originalInputText);
   const providerInputText = tavilySearch
     ? buildTavilyGroundedPrompt303(originalInputText, tavilySearch)
-    : originalInputText;
+    : (translationIntent ? build303TranslationTaskPrompt(originalInputText) : originalInputText);
+
+  if (translationIntent) {
+    const target = detect303TranslationTarget(originalInputText);
+    console.log("[303 Translation] deterministic translation intent detected", {
+      phone: task.phone,
+      target: target.code || "unspecified",
+      pronunciationRequested: looksLikePronunciationRequest303(originalInputText)
+    });
+  }
 
   const finalizeResult = (result = {}) => {
     if (!result?.reply) return result;
