@@ -534,6 +534,16 @@ const OFFICIAL_INBOX_REDIRECT_ENABLED = !["false", "0", "no", "off"].includes(
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 
+// Private Gemini bridge for the owner/test number only.
+// The webhook guard below ensures non-test numbers never reach Gemini.
+const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || "").toString().trim();
+const GEMINI_MODEL = (process.env.GEMINI_MODEL || "gemini-3.5-flash-lite").toString().trim();
+const GEMINI_303_ENABLED = !["false", "0", "no", "off"].includes(
+  (process.env.GEMINI_303_ENABLED || "true").toString().trim().toLowerCase()
+);
+const GEMINI_303_HISTORY_TURNS = Math.min(10, Math.max(2, Number(process.env.GEMINI_303_HISTORY_TURNS || 6)));
+const gemini303HistoryByPhone = new Map();
+
 // Dedicated 303 AI service identity:
 // PHONE_NUMBER_ID on this Render service is the Coexistence line +971 50 338 2303.
 // Dubai and Abu Dhabi IDs remain explicit so this branch never re-labels 303 as Dubai.
@@ -910,6 +920,88 @@ function buildRealSendDisabledResult(action = "WhatsApp send", phoneNumberId = "
     status: 423,
     result
   };
+}
+
+function getGemini303History(phone = "") {
+  const key = normalizePhoneDigits(phone);
+  if (!key) return [];
+  const history = gemini303HistoryByPhone.get(key);
+  return Array.isArray(history) ? history : [];
+}
+
+function saveGemini303History(phone = "", history = []) {
+  const key = normalizePhoneDigits(phone);
+  if (!key) return;
+  const maxItems = Math.max(4, GEMINI_303_HISTORY_TURNS * 2);
+  gemini303HistoryByPhone.set(key, history.slice(-maxItems));
+}
+
+function extractGemini303Text(payload = {}) {
+  const parts = payload?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return "";
+  return parts
+    .map((part) => (part?.text || "").toString())
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
+async function generateGemini303Reply(phone = "", userText = "") {
+  const cleanText = (userText || "").toString().trim();
+  if (!GEMINI_303_ENABLED) throw new Error("Gemini 303 bridge is disabled");
+  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is missing");
+  if (!cleanText) throw new Error("Gemini 303 received empty text");
+
+  const previous = getGemini303History(phone);
+  const contents = [
+    ...previous,
+    { role: "user", parts: [{ text: cleanText }] }
+  ];
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": GEMINI_API_KEY
+    },
+    body: JSON.stringify({
+      systemInstruction: {
+        parts: [{
+          text: [
+            "You are Osama's private WhatsApp assistant on the 303 line.",
+            "Reply naturally and concisely in Arabic, matching the user's dialect when practical.",
+            "Do not claim you are ChatGPT or OpenAI; you are the private 303 assistant powered by Gemini.",
+            "If you do not know something, say so clearly instead of inventing facts."
+          ].join(" ")
+        }]
+      },
+      contents
+    })
+  });
+
+  const raw = await response.text();
+  let payload = {};
+  try {
+    payload = raw ? JSON.parse(raw) : {};
+  } catch (_) {
+    payload = {};
+  }
+
+  if (!response.ok) {
+    const message = payload?.error?.message || raw || `HTTP ${response.status}`;
+    throw new Error(`Gemini API error: ${message}`);
+  }
+
+  const reply = extractGemini303Text(payload);
+  if (!reply) throw new Error("Gemini API returned no text");
+
+  saveGemini303History(phone, [
+    ...contents,
+    { role: "model", parts: [{ text: reply }] }
+  ]);
+
+  return reply;
 }
 
 function normalizeWhatsAppRecipientDigits(value) {
@@ -48091,6 +48183,60 @@ app.post("/webhook", async (req, res) => {
           statusOverride: "Test Mode"
         }
       );
+
+      return res.sendStatus(200);
+    }
+
+    // Private Gemini route for the configured 303 owner/test number.
+    // IMPORTANT: this runs after the V15.5 test-number gate and returns immediately,
+    // so the legacy bot never handles the owner's message. If Gemini fails, we still
+    // stop here rather than falling back to the old bot.
+    if (AI_303_TEST_MODE && isAi303TestNumberAllowed(from) && GEMINI_303_ENABLED) {
+      const geminiInputText = (
+        suppressedInternalText ||
+        getIncomingMessageText(message) ||
+        ""
+      ).toString().trim();
+
+      console.log("[303 Gemini] owner/test message accepted", {
+        from,
+        phoneNumberId: incomingPhoneNumberId,
+        model: GEMINI_MODEL,
+        hasText: Boolean(geminiInputText)
+      });
+
+      if (!geminiInputText) {
+        console.log("[303 Gemini] non-text/empty message skipped without legacy bot fallback");
+        return res.sendStatus(200);
+      }
+
+      try {
+        await showBotTypingBeforeReply({
+          to: from,
+          incomingMessageId: message.id || "",
+          phoneNumberId: incomingPhoneNumberId,
+          fromInternalNumber: true
+        });
+
+        const geminiReply = await generateGemini303Reply(from, geminiInputText);
+        const sendResult = await sendWhatsAppMessage(
+          from,
+          geminiReply,
+          incomingPhoneNumberId,
+          { skipAutoLanguage: true }
+        );
+
+        console.log("[303 Gemini] reply processed", {
+          from,
+          model: GEMINI_MODEL,
+          sendOk: Boolean(sendResult?.ok),
+          sendSkipped: Boolean(sendResult?.skipped),
+          sendDisabled: Boolean(sendResult?.disabled)
+        });
+      } catch (error) {
+        console.error("[303 Gemini] failed; legacy bot fallback intentionally blocked:");
+        console.error(error);
+      }
 
       return res.sendStatus(200);
     }
