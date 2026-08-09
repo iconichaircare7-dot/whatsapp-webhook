@@ -1436,6 +1436,61 @@ function normalizeSearchIntentText303(value = "") {
     .trim();
 }
 
+function getDubaiCalendarDate303(offsetDays = 0) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Dubai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(new Date()).map((part) => [part.type, part.value]));
+  const base = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day) + Number(offsetDays || 0), 12, 0, 0));
+  const year = base.getUTCFullYear();
+  const month = String(base.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(base.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function detectTavilyFreshnessFilter303(value = "") {
+  const text = normalizeSearchIntentText303(value);
+  const today = /(?:اليوم|هلق|هلأ|الان|الآن|today|right\s+now)/i.test(text);
+  const yesterday = /(?:امبارح|أمس|امس|yesterday)/i.test(text);
+  const thisWeek = /(?:هذا\s+الاسبوع|هذا\s+الأسبوع|this\s+week)/i.test(text);
+  const latest = /(?:اخر|آخر|احدث|أحدث|الجديد|مؤخرا|مؤخرًا|حاليا|حاليًا|latest|recent|recently|currently|current)/i.test(text);
+
+  if (today) {
+    return {
+      timeRange: "day",
+      startDate: getDubaiCalendarDate303(0),
+      endDate: "",
+      strictFreshness: true,
+      freshnessLabel: "today"
+    };
+  }
+
+  if (yesterday) {
+    return {
+      timeRange: "",
+      startDate: getDubaiCalendarDate303(-1),
+      endDate: getDubaiCalendarDate303(0),
+      strictFreshness: true,
+      freshnessLabel: "yesterday"
+    };
+  }
+
+  if (thisWeek || latest) {
+    return {
+      timeRange: "week",
+      startDate: "",
+      endDate: "",
+      strictFreshness: false,
+      freshnessLabel: thisWeek ? "this_week" : "latest"
+    };
+  }
+
+  return { timeRange: "", startDate: "", endDate: "", strictFreshness: false, freshnessLabel: "" };
+}
+
 function detectTavilySearchIntent303(value = "") {
   const text = normalizeSearchIntentText303(value);
   if (!text || !TAVILY_303_ENABLED || !TAVILY_API_KEY) {
@@ -1453,6 +1508,7 @@ function detectTavilySearchIntent303(value = "") {
   const newsIntent = /(?:اخبار|أخبار|خبر|news|breaking|تطورات|مستجدات)/i.test(text);
   const inherentlyLive = /(?:الطقس|طقس|weather|نتيجة\s+(?:المباراة|الماتش)|score|(?:كم|قديش|شو)\s+سعر|what\s+is\s+the\s+price|سعر\s+(?:السهم|الذهب|البيتكوين|bitcoin|btc)|بورصة|stock\s+price|exchange\s+rate|سعر\s+الصرف|(?:متى|موعد)\s+(?:مباراة|المباراة|الماتش)|مين\s+(?:الرئيس|المدير\s+التنفيذي)|who\s+is\s+(?:the\s+)?(?:president|ceo))/i.test(text);
 
+  const freshnessFilter = detectTavilyFreshnessFilter303(text);
   const shouldSearch = Boolean(explicitSearch || sourceOrLink || freshness || newsIntent || inherentlyLive);
   return {
     shouldSearch,
@@ -1467,7 +1523,12 @@ function detectTavilySearchIntent303(value = "") {
             : freshness
               ? "freshness"
               : "none",
-    topic: newsIntent ? "news" : "general"
+    topic: newsIntent ? "news" : "general",
+    timeRange: freshnessFilter.timeRange,
+    startDate: freshnessFilter.startDate,
+    endDate: freshnessFilter.endDate,
+    strictFreshness: freshnessFilter.strictFreshness,
+    freshnessLabel: freshnessFilter.freshnessLabel
   };
 }
 
@@ -1475,7 +1536,7 @@ function buildTavilySearchQuery303(value = "") {
   return (value || "").toString().trim().slice(0, 380);
 }
 
-async function runTavily303Search(query = "", topic = "general") {
+async function runTavily303Search(query = "", topic = "general", freshness = {}) {
   const cleanQuery = buildTavilySearchQuery303(query);
   if (!TAVILY_303_ENABLED) throw new Error("Tavily 303 search is disabled");
   if (!TAVILY_API_KEY) throw new Error("TAVILY_API_KEY is missing");
@@ -1485,6 +1546,26 @@ async function runTavily303Search(query = "", topic = "general") {
   const timer = setTimeout(() => controller.abort(), TAVILY_303_TIMEOUT_MS);
 
   try {
+    const requestBody = {
+      query: cleanQuery,
+      topic: topic === "news" ? "news" : "general",
+      search_depth: "basic",
+      include_answer: false,
+      include_raw_content: false,
+      include_images: false,
+      max_results: TAVILY_303_MAX_RESULTS
+    };
+
+    if (["day", "week", "month", "year"].includes((freshness?.timeRange || "").toString())) {
+      requestBody.time_range = freshness.timeRange;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test((freshness?.startDate || "").toString())) {
+      requestBody.start_date = freshness.startDate;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test((freshness?.endDate || "").toString())) {
+      requestBody.end_date = freshness.endDate;
+    }
+
     const response = await fetch("https://api.tavily.com/search", {
       method: "POST",
       headers: {
@@ -1492,15 +1573,7 @@ async function runTavily303Search(query = "", topic = "general") {
         "Authorization": `Bearer ${TAVILY_API_KEY}`
       },
       signal: controller.signal,
-      body: JSON.stringify({
-        query: cleanQuery,
-        topic: topic === "news" ? "news" : "general",
-        search_depth: "basic",
-        include_answer: false,
-        include_raw_content: false,
-        include_images: false,
-        max_results: TAVILY_303_MAX_RESULTS
-      })
+      body: JSON.stringify(requestBody)
     });
 
     const raw = await response.text();
@@ -1527,7 +1600,7 @@ async function runTavily303Search(query = "", topic = "general") {
       throw error;
     }
 
-    const results = (Array.isArray(payload?.results) ? payload.results : [])
+    let results = (Array.isArray(payload?.results) ? payload.results : [])
       .map((item) => ({
         title: (item?.title || "").toString().trim(),
         url: (item?.url || "").toString().trim(),
@@ -1535,15 +1608,37 @@ async function runTavily303Search(query = "", topic = "general") {
         score: Number(item?.score || 0),
         publishedDate: (item?.published_date || item?.publishedDate || "").toString().trim()
       }))
-      .filter((item) => /^https?:\/\//i.test(item.url) && (item.title || item.content))
-      .slice(0, TAVILY_303_MAX_RESULTS);
+      .filter((item) => /^https?:\/\//i.test(item.url) && (item.title || item.content));
+
+    // For strict calendar-day requests (today / yesterday), do not let an older
+    // undated or out-of-range article masquerade as current news.
+    if (freshness?.strictFreshness && freshness?.startDate) {
+      const startMs = Date.parse(`${freshness.startDate}T00:00:00Z`);
+      const endMs = freshness?.endDate
+        ? Date.parse(`${freshness.endDate}T00:00:00Z`)
+        : Date.parse(`${freshness.startDate}T23:59:59Z`) + 1;
+
+      results = results.filter((item) => {
+        const publishedMs = Date.parse(item.publishedDate || "");
+        return Number.isFinite(publishedMs) && publishedMs >= startMs && publishedMs < endMs;
+      });
+    }
+
+    results = results.slice(0, TAVILY_303_MAX_RESULTS);
 
     return {
       query: (payload?.query || cleanQuery).toString().trim(),
       results,
       responseTime: Number(payload?.response_time || 0),
       credits: Number(payload?.usage?.credits || 0),
-      requestId: (payload?.request_id || "").toString().trim()
+      requestId: (payload?.request_id || "").toString().trim(),
+      freshness: {
+        timeRange: freshness?.timeRange || "",
+        startDate: freshness?.startDate || "",
+        endDate: freshness?.endDate || "",
+        strictFreshness: Boolean(freshness?.strictFreshness),
+        freshnessLabel: freshness?.freshnessLabel || ""
+      }
     };
   } catch (error) {
     if (error?.name === "AbortError") {
@@ -1574,6 +1669,7 @@ function buildTavilyGroundedPrompt303(originalText = "", search = null) {
     "WEB SEARCH GROUNDING RULES:",
     "- This turn has live web-search results supplied by the server.",
     "- For current or web-dependent facts, use ONLY the supplied source snippets.",
+    search?.freshness?.freshnessLabel ? `- The server applied a freshness filter: ${search.freshness.freshnessLabel}${search.freshness.startDate ? ` starting ${search.freshness.startDate}` : ""}. Do not describe older material as current.` : "",
     "- If the sources do not verify a claim, say that the search did not verify it; do not guess.",
     "- Never invent, alter, shorten, or manufacture a URL.",
     "- Do not add a separate sources list or URLs in your answer; the server appends the exact source URLs.",
@@ -1599,7 +1695,8 @@ function appendTavilySources303(reply = "", search = null) {
     if (!/^https?:\/\//i.test(url) || seen.has(url)) continue;
     seen.add(url);
     const title = (item?.title || "").toString().trim();
-    sourceLines.push(`${sourceLines.length + 1}. ${title || "مصدر"}\n${url}`);
+    const dateText = (item?.publishedDate || "").toString().trim();
+    sourceLines.push(`${sourceLines.length + 1}. ${title || "مصدر"}${dateText ? ` — ${dateText}` : ""}\n${url}`);
     if (sourceLines.length >= 3) break;
   }
 
@@ -1626,17 +1723,24 @@ async function prepareTavilySearchFor303Task(task = {}) {
     phone: task.phone,
     reason: intent.reason,
     topic: intent.topic,
+    timeRange: intent.timeRange || null,
+    startDate: intent.startDate || null,
+    endDate: intent.endDate || null,
+    strictFreshness: Boolean(intent.strictFreshness),
     query: buildTavilySearchQuery303(task.inputText || "")
   });
 
   try {
-    const search = await runTavily303Search(task.inputText || "", intent.topic);
+    const search = await runTavily303Search(task.inputText || "", intent.topic, intent);
     task.tavilySearch = search;
 
     console.log("[303 Search] Tavily search succeeded", {
       phone: task.phone,
       reason: intent.reason,
       topic: intent.topic,
+      timeRange: intent.timeRange || null,
+      startDate: intent.startDate || null,
+      strictFreshness: Boolean(intent.strictFreshness),
       resultCount: search.results.length,
       credits: search.credits,
       responseTime: search.responseTime,
