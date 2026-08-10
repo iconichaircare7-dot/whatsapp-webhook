@@ -2877,6 +2877,107 @@ function looksLikeExistingImageSearchRequest303(value = "") {
   return text.length <= 140;
 }
 
+// V18.1: image-only context helpers. These deliberately stay inside the image tool path so
+// ordinary chat/language routing remains untouched.
+function looksLikeLastImageQuestion303(value = "", hasImageContext = false) {
+  if (!hasImageContext) return false;
+  const text = (value || "").toString().trim();
+  if (!text) return false;
+
+  // Questions/commands that ask us to inspect the image we just sent, not to search for a new one.
+  // Examples: "هي صورة مين؟", "مين بالصورة؟", "شو هاي الصورة؟", "حلل هالصورة".
+  return /(?:^(?:هي|هاي|هيدي|هذه|هاد|هذا)?\s*(?:صورة|الصورة)?\s*(?:مين|من|شو|ماذا|ما)(?:\s|[؟?!.،,:؛;]|$)|(?:مين|من|شو|ماذا|ما)\s+(?:هو|هي|في|به|بـ)?\s*(?:هالصورة|هاي\s+الصورة|هذه\s+الصورة|هاد\s+الصورة|هذا\s+الصورة|الصورة)|(?:حلل|حلّل|اشرح|وصف|اوصف|اقرأ|اقرا)\s*(?:لي)?\s*(?:هالصورة|هاي\s+الصورة|هذه\s+الصورة|الصورة)|\b(?:who|what)\s+(?:is|are)\s+(?:in\s+)?(?:this|that|the)\s+(?:image|photo|picture)\b|\b(?:who|what)\s+(?:is|are)\s+(?:this|that)\b|\b(?:describe|analy[sz]e|explain)\s+(?:this|that|the)\s+(?:image|photo|picture)\b)/iu.test(text);
+}
+
+function looksLikeContextualImageReference303(value = "") {
+  const text = (value || "").toString().trim();
+  if (!text || !looksLikeExistingImageSearchRequest303(text)) return false;
+
+  // Keep this narrow: only explicit image-search requests whose subject is a conversational pronoun.
+  // This avoids bringing back global language/intent regex routing.
+  return /(?:صورة|صوره|صور)\s*(?:إلو|الو|إله|له|لها|إلها|عنه|عنها|تبعه|تبعها)(?:\s|[؟?!.،,:؛;]|$)|(?:image|photo|picture)\s+(?:of\s+)?(?:him|her|it|that\s+one|the\s+same\s+person)\b/iu.test(text);
+}
+
+function getRecentAssistantText303(phone = "") {
+  const history = getGemini303History(phone);
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    if (history[i]?.role !== "model") continue;
+    const text = (history[i]?.parts || [])
+      .map((part) => (part?.text || "").toString())
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function cleanImageContextEntity303(value = "") {
+  return (value || "")
+    .toString()
+    .replace(/[\*_`~]/g, " ")
+    .replace(/^[\s:،,؛;.!?؟-]+|[\s:،,؛;.!?؟-]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
+}
+
+function extractLikelyImageEntityFromAssistant303(value = "") {
+  const text = (value || "").toString().trim();
+  if (!text) return "";
+
+  // 1) A transliterated/Latin proper name in parentheses is usually the cleanest search entity.
+  const parenthesized = [...text.matchAll(/\(([^()\n]{2,100})\)/g)]
+    .map((match) => cleanImageContextEntity303(match[1]))
+    .filter((candidate) => /[A-Za-zÀ-ÖØ-öø-ÿĀ-žİıŞşĞğÇçÖöÜü]/u.test(candidate) && candidate.split(/\s+/).length <= 8);
+  if (parenthesized.length) return parenthesized[parenthesized.length - 1];
+
+  // 2) Common natural-answer shapes: "هو نجات إشلر", "هي X", "is Lionel Messi".
+  const identityPatterns = [
+    /(?:^|[.!؟?\n]\s*)(?:هو|هي|اسمه|اسمها)\s+([^.!؟?\n()]{2,100})/iu,
+    /(?:^|[.!?\n]\s*)(?:it\s+is|he\s+is|she\s+is|that\s+is|is)\s+([^.!?\n()]{2,100})/iu
+  ];
+  for (const pattern of identityPatterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      const candidate = cleanImageContextEntity303(match[1]);
+      if (candidate && candidate.split(/\s+/).length <= 10) return candidate;
+    }
+  }
+
+  // 3) WhatsApp emphasis often wraps the entity itself. Ignore long explanatory spans.
+  const emphasized = [...text.matchAll(/\*([^*\n]{2,100})\*/g)]
+    .map((match) => cleanImageContextEntity303(match[1]))
+    .filter((candidate) => candidate && candidate.split(/\s+/).length <= 8);
+  if (emphasized.length) return emphasized[emphasized.length - 1];
+
+  // 4) If the previous answer is essentially just a short name/label, use it directly.
+  const plain = cleanImageContextEntity303(text);
+  if (plain && plain.length <= 80 && plain.split(/\s+/).length <= 8) return plain;
+  return "";
+}
+
+function resolveContextualImageSearchText303(phone = "", value = "") {
+  const original = (value || "").toString().trim();
+  if (!looksLikeContextualImageReference303(original)) return original;
+
+  const assistantText = getRecentAssistantText303(phone);
+  const entity = extractLikelyImageEntityFromAssistant303(assistantText);
+  if (entity) {
+    console.log("[303 Image] contextual image subject resolved", { phone, entity });
+    return `عطيني صورة ${entity}`;
+  }
+
+  // Safe fallback: enrich Tavily with the previous assistant answer rather than inventing an entity.
+  // The query remains inside image search only.
+  if (assistantText) {
+    const compactContext = assistantText.replace(/\s+/g, " ").trim().slice(0, 320);
+    console.log("[303 Image] contextual image subject enriched from history", { phone });
+    return `${original} ${compactContext}`;
+  }
+  return original;
+}
+
 function imageSearchPrefersPhotography303(value = "") {
   const text = (value || "").toString().trim();
   if (!text) return false;
@@ -2990,6 +3091,11 @@ function detectImage303Route(task = {}) {
   }
   if (hasLast && looksLikeImageEditFollowUp303(text, true)) {
     return { route: "edit", reason: "last_image_followup" };
+  }
+  if (looksLikeLastImageQuestion303(text, true)) {
+    return hasLast
+      ? { route: "inspect_last", reason: "last_image_question" }
+      : { route: "none", reason: "last_image_question_without_context" };
   }
   if (looksLikeExplicitImageGeneration303(text)) {
     return { route: hasLast ? "generate_or_edit" : "generate", reason: "explicit_creation" };
@@ -3476,12 +3582,17 @@ async function maybeHandle303ImageRouter(task = {}) {
 
   try {
     if (route.route === "search") {
-      const query = buildImageSearchQuery303(userText);
-      console.log("[303 Image] real image search started", { phone: task.phone, query });
+      const resolvedSearchText = resolveContextualImageSearchText303(task.phone, userText);
+      const query = buildImageSearchQuery303(resolvedSearchText);
+      console.log("[303 Image] real image search started", {
+        phone: task.phone,
+        query,
+        contextualResolution: resolvedSearchText !== userText
+      });
       const found = await getUsableImageFromTavily303(query);
       const dataUrl = `data:${found.media.mimeType};base64,${found.media.data}`;
       const filename = `search-image-${Date.now()}.${found.media.mimeType === "image/png" ? "png" : found.media.mimeType === "image/webp" ? "webp" : "jpg"}`;
-      const caption = buildImageSearchCaption303(userText);
+      const caption = buildImageSearchCaption303(resolvedSearchText);
       const sendResult = await sendWhatsAppImageMessage(task.phone, dataUrl, caption, filename, phoneNumberId);
       if (!sendResult?.ok) {
         const error = new Error(`WhatsApp image send failed (${sendResult?.status || "unknown"})`);
@@ -3508,6 +3619,42 @@ async function maybeHandle303ImageRouter(task = {}) {
         sendOk: true
       });
       return { handled: true, ok: true, route: "search" };
+    }
+
+    if (route.route === "inspect_last") {
+      const context = getLastImage303Context(task.phone);
+      const referenceMedia = await loadImage303ReferenceFromContext(task.phone);
+      if (!referenceMedia?.data) {
+        await sendWhatsAppMessage(
+          task.phone,
+          "ما قدرت أرجّع آخر صورة نفسها هلق. ابعتها إلي مرة ثانية وبحللها مباشرة.",
+          phoneNumberId,
+          { skipAutoLanguage: true }
+        );
+        return { handled: true, ok: false, route: "inspect_last_no_reference" };
+      }
+
+      const contextHint = [
+        context?.query ? `سياق البحث الذي أُرسلت منه الصورة: ${context.query}` : "",
+        context?.sourceTitle ? `وصف مصدر الصورة: ${context.sourceTitle}` : "",
+        "افحص الصورة نفسها أولاً. لا تفترض هوية شخص إذا لم تكن واضحة؛ إذا لم تتأكد قل ذلك بصراحة."
+      ].filter(Boolean).join("\n");
+
+      const inspectTask = {
+        ...task,
+        mediaKind: "image",
+        mediaInput: referenceMedia,
+        inputText: [userText, contextHint].filter(Boolean).join("\n\n")
+      };
+      const aiResult = await generate303ReplyWithFailover(inspectTask);
+      const visibleReply = sanitize303AiVisibleReply(aiResult.reply);
+      await sendWhatsAppMessage(task.phone, visibleReply, phoneNumberId, { skipAutoLanguage: true });
+      console.log("[303 Image] last image inspected", {
+        phone: task.phone,
+        provider: aiResult.provider || "unknown",
+        model: aiResult.model || "unknown"
+      });
+      return { handled: true, ok: true, route: "inspect_last" };
     }
 
     let referenceMedia = null;
@@ -4076,7 +4223,7 @@ async function generate303ReplyWithFailover(task = {}) {
   const textOnly = !hasMedia;
   const originalInputText = (task.inputText || "").toString().trim();
 
-  // V18 CLEAN: ordinary chat, translation, multilingual messages, and conversational
+  // V18.1 CLEAN + IMAGE CONTEXT FIX: ordinary chat, translation, multilingual messages, and conversational
   // intent go to the AI untouched. Tavily is only attached when the stricter web router
   // identifies an explicit/current-information need.
   let tavilySearch = null;
