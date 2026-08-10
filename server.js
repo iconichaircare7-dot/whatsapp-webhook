@@ -605,7 +605,9 @@ const PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 = Math.min(
   Math.max(5000, Number(process.env.PRONUNCIATION_FFMPEG_TIMEOUT_MS_303 || 15000))
 );
 
-// V17.4 — keeps V17.3 intact and fixes translation priority: clear translation/meaning requests bypass Tavily unless the user explicitly asks for web search, and quoted foreign phrases no longer switch the conversation language.
+// V18 CLEAN AI ROUTER — removes deterministic language/translation micro-routing that made normal chat feel like a rule bot.
+// Only explicit tool actions stay deterministic (reminders, personal memory, pronunciation, image search/generation/editing).
+// Ordinary conversation, translation, multilingual/code-switched chat, and intent interpretation go directly to the active AI provider with shared history.
 // Existing-image requests use Tavily image search; create/edit requests use Gemini Image then Cloudflare FLUX.2 fallback.
 // The last image context is persisted as a lightweight Google Sheet snapshot (media id / source URL / prompt),
 // so follow-up commands like "اعمل منها بوستر" can continue the same visual context when possible.
@@ -729,184 +731,25 @@ const GEMINI_303_INLINE_MEDIA_MAX_BYTES = Math.min(
 );
 const gemini303HistoryByPhone = new Map();
 
-const responseLanguageOverride303ByPhone = new Map();
-
-function detectExplicitResponseLanguage303(value = "") {
-  const text = (value || "").toString().trim().toLowerCase();
-  if (!text) return "";
-
-  if (/(?:same\s+language\s+as\s+me|reply\s+in\s+my\s+language|respond\s+in\s+my\s+language|حسب\s+لغة\s+رسالتي|نفس\s+لغة\s+رسالتي|رد\s+بنفس\s+لغتي)/i.test(text)) {
-    return "__auto__";
-  }
-
-  const patterns = [
-    {
-      code: "en",
-      re: /(?:\b(?:speak|talk|reply|respond|answer|write)\b[\s\S]{0,32}\benglish\b|\bcan\s+you\s+speak\s+english\b|(?:احكي|حكي|تكلم|تكلّم|جاوب|رد)(?:لي| معي| معى)?[\s\S]{0,20}(?:بال)?(?:انكليزي|إنكليزي|انجليزي|إنجليزي|الانكليزية|الإنكليزية|الانجليزية|الإنجليزية))/i
-    },
-    {
-      code: "ar",
-      re: /(?:\b(?:speak|talk|reply|respond|answer|write)\b[\s\S]{0,32}\barabic\b|\bcan\s+you\s+speak\s+arabic\b|(?:احكي|حكي|تكلم|تكلّم|جاوب|رد)(?:لي| معي| معى)?[\s\S]{0,20}(?:بال)?(?:عربي|العربي|العربية))/i
-    },
-    {
-      code: "fr",
-      re: /(?:\b(?:speak|talk|reply|respond|answer|write)\b[\s\S]{0,32}\bfrench\b|\bcan\s+you\s+speak\s+french\b|\b(?:parle|parlez|réponds|reponds|répondez|repondez)\b[\s\S]{0,24}\bfran[cç]ais\b|(?:احكي|حكي|تكلم|تكلّم|جاوب|رد)(?:لي| معي| معى)?[\s\S]{0,20}(?:بال)?(?:فرنسي|الفرنسي|الفرنسية))/i
-    },
-    {
-      code: "es",
-      re: /(?:\b(?:speak|talk|reply|respond|answer|write)\b[\s\S]{0,32}\bspanish\b|\bcan\s+you\s+speak\s+spanish\b|\b(?:habla|hable|responde|contesta)\b[\s\S]{0,24}\b(?:espa[nñ]ol|spanish)\b|(?:احكي|حكي|تكلم|تكلّم|جاوب|رد)(?:لي| معي| معى)?[\s\S]{0,20}(?:بال)?(?:اسباني|إسباني|الاسباني|الإسباني|الاسبانية|الإسبانية))/i
-    }
-  ];
-
-  const found = patterns.find((item) => item.re.test(text));
-  return found?.code || "";
-}
-
-function getResponseLanguageLabel303(code = "") {
-  if (code === "en") return "English";
-  if (code === "ar") return "Arabic";
-  if (code === "fr") return "French";
-  if (code === "es") return "Spanish";
-  return "";
-}
-
+// V18: language and translation are model responsibilities, not regex/session-state responsibilities.
+// This is intentionally stateless. The current message + shared history tell the model how to reply.
 function build303ResponseLanguageInstruction(phone = "", currentUserText = "") {
-  const key = normalizePhoneDigits(phone);
-  // V17.4: a phrase such as "Can you speak English with me?" may be the TEXT BEING
-  // translated (for example: "شو معنى هالجملة؟ Can you speak English with me?").
-  // In that case it must not silently switch the session language.
-  const translationLike = looksLikeTranslationRequest303(currentUserText);
-  const explicit = translationLike ? "" : detectExplicitResponseLanguage303(currentUserText);
-
-  if (key && explicit === "__auto__") {
-    responseLanguageOverride303ByPhone.delete(key);
-  } else if (key && explicit) {
-    responseLanguageOverride303ByPhone.set(key, explicit);
-  }
-
-  const active = key ? (responseLanguageOverride303ByPhone.get(key) || "") : "";
-  const activeLabel = getResponseLanguageLabel303(active);
-
-  if (activeLabel) {
-    return [
-      `The user explicitly selected ${activeLabel} for this conversation.`,
-      `Reply naturally and concisely in ${activeLabel} unless the current message explicitly asks for translation or output in another language.`,
-      "Mixed-language rule: treat quoted or embedded foreign-language text as content to interpret, translate, pronounce, or discuss; do not treat it by itself as a request to switch the conversation language.",
-      "Never claim that you cannot speak or understand Arabic, English, French, Spanish, or another supported language merely because the message mixes languages. If the request is understandable, answer it directly.",
-      "Preserve technical abbreviations, names, URLs, and proper nouns exactly when practical."
-    ].join(" ");
-  }
-
   return [
-    "Reply naturally and concisely in the same primary language as the user's current instruction or voice note.",
-    "If the user explicitly asks for another language or a translation target, comply immediately.",
-    "Mixed-language rule: identify which part is the user's instruction and which parts are quoted, embedded, named, or being translated. Foreign words or phrases inside an otherwise different-language instruction are content, not automatic evidence that the reply language should switch.",
-    "For translation requests, translate the requested content into the requested target language; if a brief explanation is useful, keep that explanation in the language of the user's instruction unless the user asks otherwise.",
-    "Never claim that you cannot speak or understand Arabic, English, French, Spanish, or another supported language merely because one message mixes languages. If the request is understandable, answer it directly.",
-    "For a server-generated web-search wrapper, choose the language of the embedded USER QUESTION, not the wrapper text.",
-    "Preserve technical abbreviations, names, URLs, and proper nouns exactly when practical."
+    "Act like a natural multilingual assistant, not a rules bot.",
+    "Understand the user's actual intent from the current message and the supplied conversation history before deciding how to answer.",
+    "Normally reply in the primary language of the user's current instruction. If the user explicitly asks you to use another language, comply.",
+    "For mixed-language messages, distinguish the instruction from quoted, embedded, named, or discussed foreign text. A foreign phrase inside a message is content; it does not automatically switch the reply language.",
+    "Do not translate ordinary conversation merely because it contains more than one language. Translate only when the user actually asks for a translation, meaning, or how to say something in another language.",
+    "When the user asks for a translation or meaning, give the requested translation/meaning first and keep it concise unless they ask for explanation.",
+    "When the user is simply chatting, answer conversationally instead of rewriting or translating their message.",
+    "Never claim that you cannot speak or understand a language merely because the message mixes languages. If the request is understandable, answer it directly.",
+    "Preserve technical abbreviations, names, URLs, numbers, and proper nouns exactly when practical.",
+    "For a server-generated web-search wrapper, follow the language and intent inside USER QUESTION rather than the wrapper text."
   ].join(" ");
 }
 
 const CONTEXTUAL_REFERENCE_LINK_RULE_303 =
-  "For contextual references such as 'this video', 'this link', 'this image', 'that file', or their Arabic equivalents, use the supplied conversation history. If the exact target or URL is not present, ask one brief clarification instead of searching the web or inventing a URL.";
-
-function detect303TranslationTarget(value = "") {
-  const text = (value || "").toString().trim().toLowerCase();
-  if (!text) return { code: "", label: "" };
-
-  const targets = [
-    {
-      code: "en",
-      label: "English",
-      re: /(?:بال?\s*(?:ا|إ|أ)?نكليزي|بال?\s*(?:ا|إ|أ)?نجليزي|بالإنجليزية|بالانجليزية|لل?(?:ا|إ|أ)?نكليزي|لل?(?:ا|إ|أ)?نجليزي|إلى\s*(?:ال)?(?:إنكليزي|انكليزي|إنجليزي|انجليزي)|الى\s*(?:ال)?(?:انكليزي|انجليزي)|في\s+(?:ال)?(?:انكليزي|الإنكليزي|انجليزي|الانجليزي)|\b(?:to|into|in)\s+english\b)/i
-    },
-    {
-      code: "ar",
-      label: "Arabic",
-      re: /(?:بالعربي|بالعربية|للعربي|للعربية|إلى\s*(?:ال)?عربي|الى\s*(?:ال)?عربي|\b(?:to|into|in)\s+arabic\b)/i
-    },
-    {
-      code: "fr",
-      label: "French",
-      re: /(?:بالفرنسي|بالفرنسية|للفرنسي|للفرنسية|إلى\s*(?:ال)?فرنسي|الى\s*(?:ال)?فرنسي|\b(?:to|into|in)\s+french\b|\ben\s+fran[cç]ais\b)/i
-    },
-    {
-      code: "es",
-      label: "Spanish",
-      re: /(?:بالاسباني|بالإسباني|بالاسبانية|بالإسبانية|لل(?:ا|إ)?سباني|لل(?:ا|إ)?سبانية|إلى\s*(?:ال)?(?:إسباني|اسباني)|الى\s*(?:ال)?اسباني|\b(?:to|into|in)\s+spanish\b|\ben\s+espa[nñ]ol\b)/i
-    }
-  ];
-
-  const found = targets.find((item) => item.re.test(text));
-  return found ? { code: found.code, label: found.label } : { code: "", label: "" };
-}
-
-function looksLikeTranslationRequest303(value = "") {
-  const text = (value || "").toString().trim();
-  if (!text) return false;
-
-  const explicitTranslation = /(?:\btranslate\b|\btranslation\b|ترجم(?:لي|ها|هالي|لي)?|ترجمة|ترجمه|شو\s+معن(?:ى|ا)|ما\s+معن(?:ى|ا)|ماذا\s+تعني|what\s+does\s+.+\s+mean|what\s+.+\s+mean|que\s+veut\s+dire|qu['’]est[-\s]?ce\s+que[\s\S]{0,80}veut\s+dire|qué\s+significa|que\s+significa)/i.test(text);
-  const howDoISay = /(?:كيف\s+(?:بقول|بكتب|بنحكي|بحكي)|شو\s+(?:بقول|بحكي)|how\s+do\s+i\s+say|how\s+can\s+i\s+say)/i.test(text);
-  const giveMeInLanguage = /(?:عطيني|اعطيني|أعطيني|اكتبلي|اكتب\s+لي|قلي|قوللي|قول\s+لي|بدي)[\s\S]{0,28}(?:بال?\s*(?:ا|إ|أ)?نكليزي|بال?\s*(?:ا|إ|أ)?نجليزي|بالعربي|بالعربية|بالفرنسي|بالفرنسية|بالاسباني|بالإسباني|in\s+english|in\s+arabic|in\s+french|in\s+spanish)/i.test(text);
-  const target = detect303TranslationTarget(text);
-
-  return Boolean(explicitTranslation || howDoISay || (giveMeInLanguage && target.code));
-}
-
-function infer303TranslationTarget303(value = "") {
-  const explicit = detect303TranslationTarget(value);
-  if (explicit.code) return explicit;
-
-  const text = (value || "").toString().trim();
-  if (!text) return { code: "", label: "" };
-
-  const hasArabic = /[\u0600-\u06FF]/.test(text);
-  const hasLatin = /[A-Za-zÀ-ÖØ-öø-ÿ]/.test(text);
-
-  // Meaning questions normally want the answer in the language of the instruction.
-  // This also handles mixed messages such as:
-  //   شو معنى هالجملة؟ Can you speak English with me?
-  if (/(?:شو\s+معن(?:ى|ا)|ما\s+معن(?:ى|ا)|ماذا\s+تعني)/i.test(text) && hasLatin) {
-    return { code: "ar", label: "Arabic" };
-  }
-  if (/(?:\bwhat\s+does\b[\s\S]{0,120}\bmean\b|\bwhat\b[\s\S]{0,120}\bmean\b)/i.test(text) && hasArabic) {
-    return { code: "en", label: "English" };
-  }
-  if (/(?:que\s+veut\s+dire|qu['’]est[-\s]?ce\s+que[\s\S]{0,80}veut\s+dire)/i.test(text)) {
-    return { code: "fr", label: "French" };
-  }
-  if (/(?:qué\s+significa|que\s+significa)/i.test(text)) {
-    return { code: "es", label: "Spanish" };
-  }
-
-  return { code: "", label: "" };
-}
-
-function hasExplicitWebSearchRequest303(value = "") {
-  const text = normalizeSearchIntentText303(value);
-  return /(?:ابحث(?:لي)?|دور(?:لي|\s+لي)?|فتش(?:لي|\s+لي)?|بحث\s+(?:بالنت|بالويب|على\s+النت|على\s+الويب)|search\s+(?:the\s+)?(?:web|internet)|look\s+it\s+up|google\s+it)/i.test(text);
-}
-
-function build303TranslationTaskPrompt(originalText = "") {
-  const source = (originalText || "").toString().trim();
-  if (!looksLikeTranslationRequest303(source)) return source;
-
-  const target = infer303TranslationTarget303(source);
-  return [
-    "TRANSLATION TASK — answer the user's translation request directly.",
-    target.label ? `Target language: ${target.label}.` : "Target language: infer it from the user's request; if truly absent, ask only for the target language.",
-    "The user's wording may be colloquial Arabic, code-switched, typo-heavy, or missing punctuation. Identify the actual sentence/phrase they want translated from the message and translate that content instead of asking them to restate it.",
-    "Treat quoted or embedded foreign text as the translation SOURCE, not as a command to switch the conversation language. Do not translate the surrounding instruction itself.",
-    "If the user asks in Arabic what an embedded foreign phrase means and does not name a target language, translate that phrase into Arabic. If the user asks in English what embedded Arabic means and gives no target, translate it into English.",
-    "For patterns such as 'عطيني ترجمة بالإنكليزي لجملة ...' or 'عطيني بالإنكليزي: ...', the content after 'جملة', 'عبارة', or ':' is the source text whenever present.",
-    "If a meaningful source phrase or sentence is present, do not ask a clarification merely because the surrounding request is informal or imperfectly written.",
-    "Return the translation first and keep the answer concise. Do not add pronunciation audio unless the original user message explicitly asks for pronunciation/read-aloud.",
-    "Preserve names, technical abbreviations, numbers, URLs, and proper nouns exactly when practical.",
-    `ORIGINAL USER MESSAGE: ${source}`
-  ].join("\n");
-}
-
+  "For contextual references such as 'this video', 'this link', 'this image', 'that file', or their Arabic equivalents, use the supplied conversation history first. If the exact target or URL is not present, ask one brief clarification instead of searching the web or inventing a URL.";
 
 // 303 Gemini traffic manager — owner/test messages only.
 // Keeps Gemini chat turns in order, spaces rapid requests proactively, deduplicates
@@ -2179,18 +2022,27 @@ function detectTavilySearchIntent303(value = "") {
     return { shouldSearch: false, reason: "user_suppressed", topic: "general" };
   }
 
+  // V18: search only when the user clearly asks for the web/current facts. Bare words
+  // such as "today", "current", or "link" are not enough on their own; this prevents
+  // normal chat and translation source text from being hijacked by Tavily.
   const explicitSearch = /(?:ابحث(?:لي)?|دور(?:لي|\s+لي)?|فتش(?:لي|\s+لي)?|شوف(?:لي|\s+لي)?\s+(?:عالنت|على\s+النت|بالنت|بالويب|على\s+الويب)|بحث\s+(?:بالنت|بالويب|على\s+النت|على\s+الويب)|search\s+(?:the\s+)?(?:web|internet)|look\s+it\s+up|google\s+it)/i.test(text);
 
-  // V17.1: contextual references should use chat history first instead of
-  // launching an unrelated search merely because the word "link" is present.
   const contextualReference = /(?:\b(?:this|that|previous|last|above)\s+(?:video|image|photo|picture|file|page|post|message|link|website)\b|(?:هالفيديو|هاد\s+الفيديو|هذا\s+الفيديو|الفيديو\s+هاد|هالصورة|هاي\s+الصورة|هذه\s+الصورة|هاد\s+الملف|هذا\s+الملف|هالرابط|هاد\s+الرابط|هذا\s+الرابط|هالصفحة|هذه\s+الصفحة|هاد\s+الموقع|هذا\s+الموقع))/i.test(text);
-  const sourceOrLink = !contextualReference && /(?:رابط|لينك|الموقع\s+الرسمي|مصدر|مصادر|هات\s+المصدر|source|sources|official\s+(?:site|website)|\blink\b|\burl\b)/i.test(text);
-  const freshness = /(?:اليوم|هلق|هلأ|الان|الآن|حاليا|حاليًا|اخر|آخر|احدث|أحدث|الجديد|مؤخرا|مؤخرًا|امبارح|أمس|بكرا|غدا|غدًا|هذا\s+الاسبوع|هذا\s+الأسبوع|today|right\s+now|currently|current|latest|recent|recently|yesterday|tomorrow|this\s+week)/i.test(text);
-  const newsIntent = /(?:اخبار|أخبار|خبر|news|breaking|تطورات|مستجدات)/i.test(text);
+
+  // Links/sources are web work only when they are clearly external targets, not vague
+  // contextual references like "send me the link for this video".
+  const sourceOrLink = !contextualReference && /(?:الموقع\s+الرسمي|الرابط\s+الرسمي|رابط\s+رسمي|هات\s+(?:لي\s+)?(?:المصدر|الرابط)|اعطيني\s+(?:المصدر|الرابط)|أعطيني\s+(?:المصدر|الرابط)|مصدر|مصادر|official\s+(?:site|website|link)|source|sources|give\s+me\s+(?:the\s+)?(?:source|official\s+link)|send\s+me\s+(?:the\s+)?official\s+link)/i.test(text);
+
+  const newsIntent = /(?:اخبار|أخبار|خبر|news|breaking|تطورات|مستجدات|تحديثات|updates?|what\s+happened|شو\s+صار|ماذا\s+حدث)/i.test(text);
   const inherentlyLive = /(?:الطقس|طقس|weather|نتيجة\s+(?:المباراة|الماتش)|score|(?:كم|قديش|شو)\s+سعر|what\s+is\s+the\s+price|سعر\s+(?:السهم|الذهب|البيتكوين|bitcoin|btc)|بورصة|stock\s+price|exchange\s+rate|سعر\s+الصرف|(?:متى|موعد)\s+(?:مباراة|المباراة|الماتش)|مين\s+(?:الرئيس|المدير\s+التنفيذي)|who\s+is\s+(?:the\s+)?(?:president|ceo))/i.test(text);
 
+  // Strong freshness words are enough to justify current web data. Softer clock words
+  // such as "today" / "هلق" are NOT sufficient alone because they commonly appear in
+  // ordinary conversation or source text being translated.
+  const strongFreshness = /(?:حاليا|حاليًا|اخر|آخر|احدث|أحدث|مؤخرا|مؤخرًا|currently|current|latest|recent|recently)/i.test(text);
+
   const freshnessFilter = detectTavilyFreshnessFilter303(text);
-  const shouldSearch = Boolean(explicitSearch || sourceOrLink || freshness || newsIntent || inherentlyLive);
+  const shouldSearch = Boolean(explicitSearch || sourceOrLink || newsIntent || inherentlyLive || strongFreshness);
   return {
     shouldSearch,
     reason: explicitSearch
@@ -2201,8 +2053,8 @@ function detectTavilySearchIntent303(value = "") {
           ? "news"
           : inherentlyLive
             ? "live_fact"
-            : freshness
-              ? "freshness"
+            : strongFreshness
+              ? "strong_freshness"
               : "none",
     topic: newsIntent ? "news" : "general",
     timeRange: freshnessFilter.timeRange,
@@ -3745,8 +3597,8 @@ function looksLikePronunciationRequest303(value = "") {
   const text = (value || "").toString().trim();
   if (!text || !PRONUNCIATION_VOICE_303_ENABLED) return false;
 
-  // V17.1: translation/meaning requests remain text-only.
-  // Audio is opt-in only when the user explicitly asks for pronunciation / read-aloud.
+  // V18: pronunciation remains an explicit tool action. Normal translation/meaning requests stay text-only;
+  // audio is opt-in only when the user explicitly asks for pronunciation / read-aloud.
   return /(?:كيف\s*(?:بتنلفظ|تنلفظ|تِنلفظ|بنلفظ|تلفظ)|(?:لفظ|لفّظ|انطق|إنطق|نطق)(?:لي|ها|هالي|ليلي)?|شو\s+(?:لفظ|نطق)|طريقة\s+(?:لفظ|نطق)|pronounc(?:e|iation)|how\s+(?:do|can)\s+you\s+pronounce|how\s+is\s+.+\s+pronounced|say\s+(?:it|this)\s+out\s+loud|read\s+(?:it|this)\s+aloud)/i.test(text);
 }
 
@@ -4224,16 +4076,11 @@ async function generate303ReplyWithFailover(task = {}) {
   const textOnly = !hasMedia;
   const originalInputText = (task.inputText || "").toString().trim();
 
-  // V17.4: translation has routing priority over freshness/link heuristics.
-  // Example: "عطيني ترجمة بالإنكليزي لجملة أنا في اجتماع اليوم" contains "اليوم",
-  // but "اليوم" is SOURCE TEXT to translate, not a request for live web data.
-  const translationIntent = textOnly && looksLikeTranslationRequest303(originalInputText);
-  const translationExplicitWebSearch = translationIntent && hasExplicitWebSearchRequest303(originalInputText);
-
-  // Tavily search remains text-only. Clear translation tasks bypass Tavily unless the
-  // user explicitly asked to search the web as part of the same request.
+  // V18 CLEAN: ordinary chat, translation, multilingual messages, and conversational
+  // intent go to the AI untouched. Tavily is only attached when the stricter web router
+  // identifies an explicit/current-information need.
   let tavilySearch = null;
-  if (textOnly && (!translationIntent || translationExplicitWebSearch)) {
+  if (textOnly) {
     tavilySearch = await prepareTavilySearchFor303Task(task);
 
     if (task.tavilyIntent?.shouldSearch && task.tavilyError) {
@@ -4251,23 +4098,11 @@ async function generate303ReplyWithFailover(task = {}) {
         model: "web-search"
       };
     }
-  } else if (translationIntent) {
-    task.tavilyIntent = { shouldSearch: false, reason: "translation_priority", topic: "general" };
-    task.tavilyError = null;
-    console.log("[303 Translation] web search suppressed for translation task", { phone: task.phone });
   }
+
   const providerInputText = tavilySearch
     ? buildTavilyGroundedPrompt303(originalInputText, tavilySearch)
-    : (translationIntent ? build303TranslationTaskPrompt(originalInputText) : originalInputText);
-
-  if (translationIntent) {
-    const target = infer303TranslationTarget303(originalInputText);
-    console.log("[303 Translation] deterministic translation intent detected", {
-      phone: task.phone,
-      target: target.code || "unspecified",
-      pronunciationRequested: looksLikePronunciationRequest303(originalInputText)
-    });
-  }
+    : originalInputText;
 
   const finalizeResult = (result = {}) => {
     if (!result?.reply) return result;
