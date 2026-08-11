@@ -12,33 +12,67 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Inspect exact webhook verification route without secrets
+      - name: Inspect addInboxMessage and conversation-state side effects
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
-          lines = Path('server.js').read_text(encoding='utf-8', errors='replace').splitlines()
-          targets = [i for i,l in enumerate(lines, start=1) if 'hub.verify_token' in l or 'hub.challenge' in l]
-          if not targets:
-              raise SystemExit('webhook verification route not found')
+          src = Path('server.js').read_text(encoding='utf-8', errors='replace')
+          lines = src.splitlines()
 
-          start = max(1, min(targets) - 8)
-          end = min(len(lines), max(targets) + 8)
+          patterns = [
+              r'addInboxMessage',
+              r'Google Sheet log saved',
+              r'waitingState',
+              r'saveConversationStateToGoogleSheetFromServer',
+              r'SHEET_WEBHOOK_URL',
+          ]
 
-          out = ['# Webhook Verify Route Diagnostic', '', f'lines={start}-{end}', '']
-          for n in range(start, end + 1):
-              line = lines[n-1]
-              # Source code only. Do not resolve or print environment values.
-              out.append(f'{n}: {line}')
+          hits = []
+          for i, line in enumerate(lines, start=1):
+              if any(re.search(p, line, re.I) for p in patterns):
+                  hits.append(i)
 
-          Path('WEBHOOK_VERIFY_ROUTE.md').write_text('\n'.join(out) + '\n', encoding='utf-8')
-          print(f'wrote source lines {start}-{end}; no secret values resolved')
+          if not hits:
+              raise SystemExit('No relevant logging/state symbols found')
+
+          # Merge readable source windows around every relevant hit.
+          windows = []
+          for n in hits:
+              a = max(1, n - 35)
+              b = min(len(lines), n + 55)
+              if windows and a <= windows[-1][1] + 1:
+                  windows[-1] = (windows[-1][0], max(windows[-1][1], b))
+              else:
+                  windows.append((a, b))
+
+          out = [
+              '# 811 Passive Logger Diagnostic',
+              '',
+              'Source-only diagnostic. No environment-variable values are resolved or printed.',
+              '',
+              '## Hit lines',
+          ]
+          out.extend(str(n) for n in hits)
+
+          for a, b in windows:
+              out += ['', f'## Source lines {a}-{b}', '```javascript']
+              for n in range(a, b + 1):
+                  line = lines[n-1]
+                  # Redact obvious hard-coded bearer/token literals if any exist in nearby source.
+                  line = re.sub(r'(?i)(bearer\s+)[A-Za-z0-9._~+/-]{20,}', r'\1[REDACTED]', line)
+                  out.append(f'{n}: {line}')
+              out.append('```')
+
+          Path('ADD_INBOX_MESSAGE_DIAGNOSTIC.md').write_text('\n'.join(out) + '\n', encoding='utf-8')
+          print(f'wrote {len(windows)} source windows from {len(hits)} matching lines')
           PY
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add WEBHOOK_VERIFY_ROUTE.md
-          git commit -m "Record webhook verification route diagnostic" || true
+          git add ADD_INBOX_MESSAGE_DIAGNOSTIC.md
+          git commit -m "Record passive logger diagnostic" || true
           git push
