@@ -1,134 +1,64 @@
 name: Inspect V60 Targets
 
 on:
-  push:
-    paths:
-      - ".inspect-v60-trigger.txt"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Apply byte-preserving 811 observer gate
+      - name: Inspect webhook verification wiring without secrets
         shell: bash
         run: |
           set -euo pipefail
-
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
-          path = Path("server.js")
-          data = path.read_bytes()
-          marker = b"[811 Observer] inbound captured; no automation executed"
+          text = Path('server.js').read_text(encoding='utf-8', errors='replace')
+          lines = text.splitlines()
 
-          if marker in data:
-              print("811 observer already present")
-          else:
-              nl = b"\r\n" if b"\r\n" in data else b"\n"
+          targets = []
+          for i, line in enumerate(lines, start=1):
+              low = line.lower()
+              if 'hub.verify_token' in low or 'hub.challenge' in low or ('app.get' in low and 'webhook' in low):
+                  targets.append(i)
 
-              anchor_lines = [
-                  b"    // Status webhooks do not include a customer message. They can still report",
-                  b"    // that a staff text notification failed later with 131047, after Graph API",
-                  b"    // initially accepted it. In that case, send the approved staff template.",
-              ]
-              anchor = nl.join(anchor_lines) + nl
+          print('=== WEBHOOK VERIFY DIAGNOSTIC (NO SECRET VALUES) ===')
+          print('target_line_count=' + str(len(targets)))
+          print('target_lines=' + ','.join(map(str, targets[:30])))
 
-              count = data.count(anchor)
-              if count != 1:
-                  raise SystemExit(f"811 observer anchor expected once, found {count}")
+          windows = []
+          for n in targets:
+              start = max(1, n - 40)
+              end = min(len(lines), n + 40)
+              windows.extend(lines[start-1:end])
+          window_text = '\n'.join(windows)
 
-              block_lines = [
-                  b"    // 811 Dubai observer-only bridge.",
-                  b"    // Capture inbound customer messages for Google Sheet / Team Inbox logging,",
-                  b"    // but never execute bot replies, Flows, staff notifications, reminders,",
-                  b"    // or status-event automation for this line.",
-                  b"    const is811ObserverWebhook =",
-                  b"      webhookPhoneNumberId === \"1058100107394390\" ||",
-                  b"      normalizePhoneDigits(webhookDisplayPhoneNumber).endsWith(\"971503424811\") ||",
-                  b"      normalizePhoneDigits(webhookDisplayPhoneNumber).endsWith(\"503424811\");",
-                  b"",
-                  b"    if (is811ObserverWebhook) {",
-                  b"      if (!message) {",
-                  b"        console.log(\"[811 Observer] non-message webhook acknowledged without automation\", {",
-                  b"          phoneNumberId: webhookPhoneNumberId,",
-                  b"          displayPhoneNumber: webhookDisplayPhoneNumber",
-                  b"        });",
-                  b"        return res.sendStatus(200);",
-                  b"      }",
-                  b"",
-                  b"      const observerFrom = message.from;",
-                  b"      const observerPhoneNumberId = webhookPhoneNumberId || \"1058100107394390\";",
-                  b"      const observerProfileName = getWhatsAppCustomerName(value?.contacts?.[0]);",
-                  b"      const observerText = getIncomingMessageText(message);",
-                  b"",
-                  b"      conversationPhoneNumberId[observerFrom] = observerPhoneNumberId;",
-                  b"",
-                  b"      addInboxMessage(",
-                  b"        observerFrom,",
-                  b"        \"customer\",",
-                  b"        buildPausedAutomationInboxBody(message, observerProfileName, observerText),",
-                  b"        \"811 Observer\",",
-                  b"        observerPhoneNumberId,",
-                  b"        {",
-                  b"          customerName: observerProfileName,",
-                  b"          messageType: \"Customer Message - 811 Observer\",",
-                  b"          statusOverride: \"811 Observer\"",
-                  b"        }",
-                  b"      );",
-                  b"",
-                  b"      console.log(\"[811 Observer] inbound captured; no automation executed\", {",
-                  b"        from: observerFrom,",
-                  b"        phoneNumberId: observerPhoneNumberId,",
-                  b"        displayPhoneNumber: webhookDisplayPhoneNumber,",
-                  b"        messageType: message?.type || \"\"",
-                  b"      });",
-                  b"",
-                  b"      return res.sendStatus(200);",
-                  b"    }",
-              ]
+          env_names = sorted(set(re.findall(r'process\.env\.([A-Z][A-Z0-9_]*)', window_text)))
+          print('nearby_process_env_names=' + (','.join(env_names) if env_names else 'NONE'))
 
-              block = nl.join(block_lines) + nl + nl
-              path.write_bytes(data.replace(anchor, block + anchor, 1))
-              print("811 observer inserted")
+          whole_env_verify = sorted(set(
+              name for name in re.findall(r'process\.env\.([A-Z][A-Z0-9_]*)', text)
+              if 'VERIFY' in name or 'WEBHOOK' in name or 'TOKEN' in name
+          ))
+          print('verify_related_env_names_anywhere=' + (','.join(whole_env_verify) if whole_env_verify else 'NONE'))
+
+          identifiers = set()
+          for line in windows:
+              if 'verify_token' in line.lower() or 'verifytoken' in line.lower():
+                  for ident in re.findall(r'\b[A-Za-z_$][A-Za-z0-9_$]*\b', line):
+                      if 'verify' in ident.lower() or 'token' in ident.lower():
+                          identifiers.add(ident)
+          print('verify_identifiers=' + (','.join(sorted(identifiers)) if identifiers else 'NONE'))
+
+          print('has_hub_verify_token=' + str('hub.verify_token' in text).lower())
+          print('has_hub_challenge=' + str('hub.challenge' in text).lower())
+          print('has_get_webhook=' + str(bool(re.search(r'app\.get\s*\(\s*[\'\"]\/webhook[\'\"]', text))).lower())
+          print('=== END ===')
           PY
-
-          node --check server.js
-          git -c core.whitespace=cr-at-eol diff --check
-
-          NUMSTAT="$(git diff --numstat -- server.js)"
-          echo "server.js numstat: $NUMSTAT"
-          ADDS="$(printf '%s' "$NUMSTAT" | awk '{print $1}')"
-          DELS="$(printf '%s' "$NUMSTAT" | awk '{print $2}')"
-
-          test -n "$ADDS"
-          test -n "$DELS"
-          test "$ADDS" -le 80
-          test "$DELS" -le 5
-
-          grep -q 'webhookPhoneNumberId === "1058100107394390"' server.js
-          grep -q 'Customer Message - 811 Observer' server.js
-          grep -q '\[811 Observer\] inbound captured; no automation executed' server.js
-
-          {
-            echo "# 811 Observer Staging Check"
-            echo
-            echo "node_check=passed"
-            echo "server_additions=$ADDS"
-            echo "server_deletions=$DELS"
-            echo "phone_number_id=1058100107394390"
-            echo "mode=observer_only"
-          } > 811_OBSERVER_RUN_STATUS.md
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add server.js 811_OBSERVER_RUN_STATUS.md
-          git commit -m "Add 811 observer-only webhook gate on staging"
-          git push
