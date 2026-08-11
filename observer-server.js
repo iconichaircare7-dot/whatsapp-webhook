@@ -1,10 +1,19 @@
 const express = require("express");
+const fetch = require("node-fetch");
 
 const app = express();
 app.use(express.json({ limit: "2mb" }));
 
 const PORT = Number(process.env.PORT || 10000);
 const VERIFY_TOKEN = (process.env.VERIFY_TOKEN || "").toString().trim();
+
+const OBSERVER_SHEET_WEBAPP_URL = (
+  process.env.OBSERVER_SHEET_WEBAPP_URL || ""
+).toString().trim();
+
+const OBSERVER_API_KEY = (
+  process.env.OBSERVER_API_KEY || ""
+).toString().trim();
 
 // Observer-only WhatsApp lines.
 // Render ENV can override these values without changing code.
@@ -29,9 +38,14 @@ const LEAD_STATUS = {
   CONSULTATION: "consultation-AUG"
 };
 
-// DRY RUN state only. This Map is intentionally temporary and resets on deploy/restart.
-// Persistent state will later live in Google Sheets.
-const dryRunLeadState = new Map();
+const SOURCE_LABEL = "عميل جديد من الإعلانات";
+const CACHE_TTL_MS = 60 * 60 * 1000;
+
+// Cache reduces Google Apps Script reads. Persistent truth remains Google Sheets.
+const leadStateCache = new Map();
+
+// Serialize processing per customer to avoid races when two webhook requests arrive together.
+const leadQueues = new Map();
 
 function normalizeText(value) {
   return String(value || "")
@@ -71,7 +85,8 @@ function isDubaiAdStarter(text, referral) {
 function classify811Intent(text, referral) {
   const normalized = normalizeText(text);
 
-  // Always check the ad starter first. It contains "consultation" but is not a booking.
+  // IMPORTANT: ad/referral starter is checked first because it may contain
+  // "consultation" without representing a real booking request.
   if (isDubaiAdStarter(normalized, referral)) {
     return {
       matched: true,
@@ -267,7 +282,7 @@ function classify811Intent(text, referral) {
     };
   }
 
-  // A substantive message that is not one of the strong intents still means the lead is engaging.
+  // A substantive message that is not one of the strong intents still means engagement.
   if (normalized.length >= 4) {
     return {
       matched: true,
@@ -286,7 +301,7 @@ function classify811Intent(text, referral) {
 function transition811State(previousStatus, intent) {
   const previous = previousStatus || "";
 
-  // Consultation is the strongest state. Do not downgrade it on ordinary follow-up messages.
+  // Consultation is the strongest state and is sticky on ordinary follow-up.
   if (previous === LEAD_STATUS.CONSULTATION) {
     return {
       status: LEAD_STATUS.CONSULTATION,
@@ -295,7 +310,6 @@ function transition811State(previousStatus, intent) {
   }
 
   if (intent === "new_lead") {
-    // A new ad starter opens Pending only if we do not already have a stronger real state.
     if (!previous || previous === LEAD_STATUS.NO_REPLY || previous === LEAD_STATUS.PENDING) {
       return { status: LEAD_STATUS.PENDING, reason: "new_ad_lead_pending" };
     }
@@ -315,19 +329,14 @@ function transition811State(previousStatus, intent) {
   }
 
   if (intent === "weak_reply" || intent === "other_engagement") {
-    // Key business rule:
-    // If the customer asked about price and then replies again (OK / thanks / anything else),
-    // they are no longer classified as a price-only stop. Move them to Interested.
     if (previous === LEAD_STATUS.PRICE) {
       return { status: LEAD_STATUS.INTERESTED, reason: "continued_after_price" };
     }
 
-    // A customer who was previously No Reply has now actually replied.
     if (previous === LEAD_STATUS.NO_REPLY) {
       return { status: LEAD_STATUS.INTERESTED, reason: "reengaged_after_no_reply" };
     }
 
-    // Weak acknowledgement immediately after the ad starter remains Pending until intent is clearer.
     if (previous === LEAD_STATUS.PENDING || !previous) {
       if (intent === "other_engagement") {
         return { status: LEAD_STATUS.INTERESTED, reason: "substantive_engagement_after_pending" };
@@ -341,38 +350,382 @@ function transition811State(previousStatus, intent) {
   return { status: previous || LEAD_STATUS.PENDING, reason: "no_state_change" };
 }
 
-function apply811DryRunState({ phoneNumberId, from, text, referral }) {
-  const key = getLeadKey(phoneNumberId, from);
-  const previous = dryRunLeadState.get(key) || null;
-  const intentResult = classify811Intent(text, referral);
-  const transition = transition811State(previous?.status || "", intentResult.intent);
-  const now = new Date().toISOString();
+function sheetIntegrationConfigured() {
+  return Boolean(OBSERVER_SHEET_WEBAPP_URL && OBSERVER_API_KEY);
+}
 
-  const next = {
-    status: transition.status,
-    firstSeenAt: previous?.firstSeenAt || now,
-    lastCustomerMessageAt: now,
-    lastIntent: intentResult.intent,
-    language: detectLanguage(text),
-    lastText: String(text || "").slice(0, 500),
-    noReplyDueAt:
-      transition.status === LEAD_STATUS.PENDING
-        ? previous?.noReplyDueAt || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-        : ""
-  };
+async function callObserverSheetApi(action, payload = {}) {
+  if (!sheetIntegrationConfigured()) {
+    throw new Error("observer_sheet_not_configured");
+  }
 
-  dryRunLeadState.set(key, next);
+  const response = await fetch(OBSERVER_SHEET_WEBAPP_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...payload,
+      action,
+      apiKey: OBSERVER_API_KEY
+    }),
+    redirect: "follow",
+    timeout: 8000
+  });
+
+  const raw = await response.text();
+  let data;
+
+  try {
+    data = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`observer_sheet_invalid_json_http_${response.status}`);
+  }
+
+  if (!response.ok || !data || data.ok !== true) {
+    const message = data?.error || `http_${response.status}`;
+    throw new Error(`observer_sheet_${message}`);
+  }
+
+  return data;
+}
+
+function normalizePersistentLead(lead) {
+  if (!lead) return null;
 
   return {
-    matched: intentResult.matched,
-    intent: intentResult.intent,
-    intentReason: intentResult.reason,
-    previousStatus: previous?.status || "",
-    status: next.status,
-    transitionReason: transition.reason,
-    language: next.language,
-    noReplyDueAt: next.noReplyDueAt
+    status: String(lead.currentStatus || "").trim(),
+    firstSeenAt: String(lead.firstSeenAt || "").trim(),
+    noReplyDueAt: String(lead.noReplyDueAt || "").trim(),
+    language: String(lead.language || "").trim(),
+    customerName: String(lead.customerName || "").trim()
   };
+}
+
+function applyPendingExpiryLocally(state) {
+  if (!state || state.status !== LEAD_STATUS.PENDING || !state.noReplyDueAt) {
+    return state;
+  }
+
+  const dueMs = new Date(state.noReplyDueAt).getTime();
+  if (!Number.isFinite(dueMs) || dueMs > Date.now()) {
+    return state;
+  }
+
+  return {
+    ...state,
+    status: LEAD_STATUS.NO_REPLY,
+    noReplyDueAt: ""
+  };
+}
+
+async function load811LeadState(phoneNumberId, from) {
+  const key = getLeadKey(phoneNumberId, from);
+  const cached = leadStateCache.get(key);
+
+  if (cached && Date.now() - cached.loadedAt < CACHE_TTL_MS) {
+    const state = applyPendingExpiryLocally(cached.state);
+    if (state !== cached.state) {
+      leadStateCache.set(key, { state, loadedAt: cached.loadedAt, found: true });
+    }
+    return { ok: true, found: cached.found, state, source: "cache" };
+  }
+
+  if (!sheetIntegrationConfigured()) {
+    return { ok: false, found: false, state: null, source: "not_configured" };
+  }
+
+  try {
+    const data = await callObserverSheetApi("get_lead", { phone: from });
+    const state = applyPendingExpiryLocally(normalizePersistentLead(data.lead));
+
+    leadStateCache.set(key, {
+      state,
+      found: Boolean(data.found),
+      loadedAt: Date.now()
+    });
+
+    return {
+      ok: true,
+      found: Boolean(data.found),
+      state,
+      source: "sheet"
+    };
+  } catch (error) {
+    console.error("[811 Sheet] read failed", {
+      from,
+      error: error.message
+    });
+
+    return { ok: false, found: false, state: null, source: "error" };
+  }
+}
+
+function shouldPersistTransition({ found, previousStatus, nextStatus, intent }) {
+  if (!found) {
+    return intent === "new_lead";
+  }
+
+  return previousStatus !== nextStatus;
+}
+
+function update811Cache(phoneNumberId, from, state, found = true) {
+  leadStateCache.set(getLeadKey(phoneNumberId, from), {
+    state,
+    found,
+    loadedAt: Date.now()
+  });
+}
+
+async function persist811Lead({
+  phoneNumberId,
+  from,
+  customerName,
+  branch,
+  text,
+  referral,
+  language,
+  intentResult,
+  transition,
+  previousState
+}) {
+  const now = new Date().toISOString();
+  const noReplyDueAt =
+    transition.status === LEAD_STATUS.PENDING
+      ? previousState?.noReplyDueAt || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      : "";
+
+  const payload = {
+    phone: from,
+    customerName,
+    branch,
+    staffNumber: "811",
+    phoneNumberId,
+    language,
+    sourceLabel: SOURCE_LABEL,
+    entrySource: referral ? "Referral" : "Starter",
+    referralSourceId: referral?.source_id || "",
+    firstMessage: text,
+    firstSeenAt: previousState?.firstSeenAt || now,
+    lastMessage: text,
+    lastCustomerMessageAt: now,
+    currentStatus: transition.status,
+    lastIntent: intentResult.intent,
+    transitionReason: transition.reason,
+    noReplyDueAt
+  };
+
+  const result = await callObserverSheetApi("upsert_lead", payload);
+
+  const nextState = {
+    status: transition.status,
+    firstSeenAt: previousState?.firstSeenAt || now,
+    noReplyDueAt,
+    language,
+    customerName
+  };
+
+  update811Cache(phoneNumberId, from, nextState, true);
+
+  return {
+    result: result.result || {},
+    state: nextState
+  };
+}
+
+async function process811Message({
+  phoneNumberId,
+  from,
+  customerName,
+  branch,
+  textBody,
+  referral
+}) {
+  const language = detectLanguage(textBody);
+  const intentResult = classify811Intent(textBody, referral);
+  const loaded = await load811LeadState(phoneNumberId, from);
+
+  // Do not guess a previous persistent state if the Sheet read failed.
+  // The one safe exception is a brand-new ad/referral starter: upsert is deduplicated by phone.
+  if (!loaded.ok && intentResult.intent !== "new_lead") {
+    console.log("[811 State Machine][SHEET] skipped: persistent state unavailable", {
+      from,
+      intent: intentResult.intent
+    });
+    return;
+  }
+
+  // Only ad/referral leads are admitted to the persistent lead sheet.
+  // Existing organic/customer conversations are observed but not labeled as advertising leads.
+  if (loaded.ok && !loaded.found && intentResult.intent !== "new_lead") {
+    console.log("[811 State Machine][SHEET] ignored untracked conversation", {
+      from,
+      text: textBody,
+      intent: intentResult.intent,
+      reason: "no_existing_ad_lead"
+    });
+    return;
+  }
+
+  const previousState = loaded.state || null;
+  const previousStatus = previousState?.status || "";
+  const transition = transition811State(previousStatus, intentResult.intent);
+  const persist = shouldPersistTransition({
+    found: loaded.found,
+    previousStatus,
+    nextStatus: transition.status,
+    intent: intentResult.intent
+  });
+
+  console.log("[811 State Machine][SHEET]", {
+    from,
+    text: textBody,
+    language,
+    intent: intentResult.intent,
+    previousStatus,
+    status: transition.status,
+    intentReason: intentResult.reason,
+    transitionReason: transition.reason,
+    stateSource: loaded.source,
+    persist
+  });
+
+  if (!persist) {
+    // Same-state messages stay in memory only; this avoids a Google Sheet write per message.
+    const memoryState = {
+      ...(previousState || {}),
+      status: transition.status,
+      language: language || previousState?.language || "",
+      customerName: customerName || previousState?.customerName || "",
+      noReplyDueAt:
+        transition.status === LEAD_STATUS.PENDING
+          ? previousState?.noReplyDueAt || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          : ""
+    };
+
+    update811Cache(phoneNumberId, from, memoryState, loaded.found);
+    return;
+  }
+
+  try {
+    const saved = await persist811Lead({
+      phoneNumberId,
+      from,
+      customerName,
+      branch,
+      text: textBody,
+      referral,
+      language,
+      intentResult,
+      transition,
+      previousState
+    });
+
+    console.log("[811 Sheet] persisted", {
+      from,
+      created: Boolean(saved.result.created),
+      row: saved.result.row || "",
+      status: saved.state.status,
+      noReplyDueAt: saved.state.noReplyDueAt
+    });
+  } catch (error) {
+    console.error("[811 Sheet] write failed", {
+      from,
+      status: transition.status,
+      error: error.message
+    });
+  }
+}
+
+function enqueueLeadTask(key, task) {
+  const previous = leadQueues.get(key) || Promise.resolve();
+  const next = previous
+    .catch(() => {})
+    .then(task)
+    .finally(() => {
+      if (leadQueues.get(key) === next) {
+        leadQueues.delete(key);
+      }
+    });
+
+  leadQueues.set(key, next);
+  return next;
+}
+
+async function processWebhookBody(body) {
+  const entries = Array.isArray(body?.entry) ? body.entry : [];
+
+  for (const entry of entries) {
+    const changes = Array.isArray(entry?.changes) ? entry.changes : [];
+
+    for (const change of changes) {
+      const value = change?.value || {};
+      const phoneNumberId = String(value?.metadata?.phone_number_id || "").trim();
+      const displayPhoneNumber = String(value?.metadata?.display_phone_number || "").trim();
+      const branch = OBSERVER_LINES.get(phoneNumberId);
+
+      if (!branch) {
+        console.log("[Observer] ignored unknown phone number", {
+          phoneNumberId,
+          displayPhoneNumber
+        });
+        continue;
+      }
+
+      const messages = Array.isArray(value.messages) ? value.messages : [];
+      const statuses = Array.isArray(value.statuses) ? value.statuses : [];
+
+      // Delivery/read/status callbacks are acknowledged only. No Sheet call.
+      if (!messages.length && statuses.length) {
+        console.log("[Observer] status acknowledged", {
+          branch,
+          phoneNumberId,
+          statuses: statuses.map((item) => item?.status || "").filter(Boolean)
+        });
+        continue;
+      }
+
+      for (const message of messages) {
+        const contact = Array.isArray(value.contacts) ? value.contacts[0] || {} : {};
+        const from = String(message?.from || contact?.wa_id || "").trim();
+        const customerName = String(contact?.profile?.name || "").trim();
+        const messageType = String(message?.type || "").trim();
+        const textBody = String(message?.text?.body || "").trim();
+        const referral = message?.referral || null;
+
+        console.log("[Observer] inbound captured", {
+          branch,
+          phoneNumberId,
+          displayPhoneNumber,
+          from,
+          customerName,
+          messageType,
+          text: textBody,
+          hasReferral: Boolean(referral),
+          referralSourceId: referral?.source_id || ""
+        });
+
+        if (phoneNumberId === OBSERVER_811_PHONE_NUMBER_ID) {
+          const key = getLeadKey(phoneNumberId, from);
+          enqueueLeadTask(key, () =>
+            process811Message({
+              phoneNumberId,
+              from,
+              customerName,
+              branch,
+              textBody,
+              referral
+            })
+          ).catch((error) => {
+            console.error("[811 Processor] unexpected error", {
+              from,
+              error: error.message
+            });
+          });
+        } else if (phoneNumberId === OBSERVER_616_PHONE_NUMBER_ID) {
+          console.log("[616 Observer] classification not enabled yet", { from });
+        }
+      }
+    }
+  }
 }
 
 app.get("/", (req, res) => {
@@ -380,7 +733,8 @@ app.get("/", (req, res) => {
     ok: true,
     service: "ICONIC WhatsApp Observer",
     mode: "observer_only",
-    classifier: "811_state_machine_dry_run_v3",
+    classifier: "811_state_machine_sheet_v1",
+    sheetIntegration: sheetIntegrationConfigured() ? "configured" : "missing_env",
     lines: ["811", "616"]
   });
 });
@@ -390,8 +744,10 @@ app.get("/api/health", (req, res) => {
     ok: true,
     service: "ICONIC WhatsApp Observer",
     mode: "observer_only",
-    classifier: "811_state_machine_dry_run_v3",
-    dryRunLeadCount: dryRunLeadState.size,
+    classifier: "811_state_machine_sheet_v1",
+    sheetIntegration: sheetIntegrationConfigured() ? "configured" : "missing_env",
+    cachedLeads: leadStateCache.size,
+    queuedLeads: leadQueues.size,
     time: new Date().toISOString()
   });
 });
@@ -412,98 +768,23 @@ app.get("/webhook", (req, res) => {
 // Observer-only webhook receiver.
 // IMPORTANT: this endpoint never sends WhatsApp messages and never calls Team Inbox automation.
 app.post("/webhook", (req, res) => {
-  try {
-    const body = req.body || {};
-    const entries = Array.isArray(body.entry) ? body.entry : [];
+  const body = req.body || {};
 
-    for (const entry of entries) {
-      const changes = Array.isArray(entry?.changes) ? entry.changes : [];
+  // Acknowledge Meta immediately so Sheet latency never causes webhook retries.
+  res.sendStatus(200);
 
-      for (const change of changes) {
-        const value = change?.value || {};
-        const phoneNumberId = String(value?.metadata?.phone_number_id || "").trim();
-        const displayPhoneNumber = String(value?.metadata?.display_phone_number || "").trim();
-        const branch = OBSERVER_LINES.get(phoneNumberId);
-
-        if (!branch) {
-          console.log("[Observer] ignored unknown phone number", {
-            phoneNumberId,
-            displayPhoneNumber
-          });
-          continue;
-        }
-
-        const messages = Array.isArray(value.messages) ? value.messages : [];
-        const statuses = Array.isArray(value.statuses) ? value.statuses : [];
-
-        // Delivery/read/status callbacks are acknowledged only.
-        if (!messages.length && statuses.length) {
-          console.log("[Observer] status acknowledged", {
-            branch,
-            phoneNumberId,
-            statuses: statuses.map((item) => item?.status || "").filter(Boolean)
-          });
-          continue;
-        }
-
-        for (const message of messages) {
-          const contact = Array.isArray(value.contacts) ? value.contacts[0] || {} : {};
-          const from = String(message?.from || contact?.wa_id || "").trim();
-          const customerName = String(contact?.profile?.name || "").trim();
-          const messageType = String(message?.type || "").trim();
-          const textBody = String(message?.text?.body || "").trim();
-          const referral = message?.referral || null;
-
-          console.log("[Observer] inbound captured", {
-            branch,
-            phoneNumberId,
-            displayPhoneNumber,
-            from,
-            customerName,
-            messageType,
-            text: textBody,
-            hasReferral: Boolean(referral),
-            referralSourceId: referral?.source_id || ""
-          });
-
-          // Phase 2C: bilingual 811 STATE MACHINE DRY RUN only.
-          // Still no Google Sheet write and no WhatsApp outbound action.
-          if (phoneNumberId === OBSERVER_811_PHONE_NUMBER_ID) {
-            const classification = apply811DryRunState({
-              phoneNumberId,
-              from,
-              text: textBody,
-              referral
-            });
-
-            console.log("[811 State Machine][DRY RUN]", {
-              from,
-              text: textBody,
-              language: classification.language,
-              intent: classification.intent,
-              previousStatus: classification.previousStatus,
-              status: classification.status,
-              intentReason: classification.intentReason,
-              transitionReason: classification.transitionReason,
-              noReplyDueAt: classification.noReplyDueAt
-            });
-          } else if (phoneNumberId === OBSERVER_616_PHONE_NUMBER_ID) {
-            console.log("[616 Observer] classification not enabled yet", { from });
-          }
-        }
-      }
-    }
-
-    return res.sendStatus(200);
-  } catch (error) {
-    console.error("[Observer] webhook error", error);
-    // Return 200 so Meta does not retry endlessly while we are in observer-only testing.
-    return res.sendStatus(200);
-  }
+  setImmediate(() => {
+    processWebhookBody(body).catch((error) => {
+      console.error("[Observer] webhook processing error", error);
+    });
+  });
 });
 
 app.listen(PORT, () => {
   console.log(`ICONIC WhatsApp Observer running on port ${PORT}`);
   console.log("Mode: observer_only");
-  console.log("Classifier: 811_state_machine_dry_run_v3");
+  console.log("Classifier: 811_state_machine_sheet_v1");
+  console.log(
+    `Sheet integration: ${sheetIntegrationConfigured() ? "configured" : "missing_env"}`
+  );
 });
