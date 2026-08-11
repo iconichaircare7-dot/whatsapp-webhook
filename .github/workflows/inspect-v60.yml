@@ -101,7 +101,7 @@ jobs:
           PY
 
           node --check server.js
-          git diff --check
+          git -c core.whitespace=cr-at-eol diff --check
 
           NUMSTAT="$(git diff --numstat -- server.js)"
           echo "server.js numstat: $NUMSTAT"
