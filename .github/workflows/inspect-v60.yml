@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   inspect:
@@ -12,53 +12,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Inspect webhook verification wiring without secrets
+      - name: Inspect exact webhook verification route without secrets
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
-          text = Path('server.js').read_text(encoding='utf-8', errors='replace')
-          lines = text.splitlines()
+          lines = Path('server.js').read_text(encoding='utf-8', errors='replace').splitlines()
+          targets = [i for i,l in enumerate(lines, start=1) if 'hub.verify_token' in l or 'hub.challenge' in l]
+          if not targets:
+              raise SystemExit('webhook verification route not found')
 
-          targets = []
-          for i, line in enumerate(lines, start=1):
-              low = line.lower()
-              if 'hub.verify_token' in low or 'hub.challenge' in low or ('app.get' in low and 'webhook' in low):
-                  targets.append(i)
+          start = max(1, min(targets) - 8)
+          end = min(len(lines), max(targets) + 8)
 
-          print('=== WEBHOOK VERIFY DIAGNOSTIC (NO SECRET VALUES) ===')
-          print('target_line_count=' + str(len(targets)))
-          print('target_lines=' + ','.join(map(str, targets[:30])))
+          out = ['# Webhook Verify Route Diagnostic', '', f'lines={start}-{end}', '']
+          for n in range(start, end + 1):
+              line = lines[n-1]
+              # Source code only. Do not resolve or print environment values.
+              out.append(f'{n}: {line}')
 
-          windows = []
-          for n in targets:
-              start = max(1, n - 40)
-              end = min(len(lines), n + 40)
-              windows.extend(lines[start-1:end])
-          window_text = '\n'.join(windows)
-
-          env_names = sorted(set(re.findall(r'process\.env\.([A-Z][A-Z0-9_]*)', window_text)))
-          print('nearby_process_env_names=' + (','.join(env_names) if env_names else 'NONE'))
-
-          whole_env_verify = sorted(set(
-              name for name in re.findall(r'process\.env\.([A-Z][A-Z0-9_]*)', text)
-              if 'VERIFY' in name or 'WEBHOOK' in name or 'TOKEN' in name
-          ))
-          print('verify_related_env_names_anywhere=' + (','.join(whole_env_verify) if whole_env_verify else 'NONE'))
-
-          identifiers = set()
-          for line in windows:
-              if 'verify_token' in line.lower() or 'verifytoken' in line.lower():
-                  for ident in re.findall(r'\b[A-Za-z_$][A-Za-z0-9_$]*\b', line):
-                      if 'verify' in ident.lower() or 'token' in ident.lower():
-                          identifiers.add(ident)
-          print('verify_identifiers=' + (','.join(sorted(identifiers)) if identifiers else 'NONE'))
-
-          print('has_hub_verify_token=' + str('hub.verify_token' in text).lower())
-          print('has_hub_challenge=' + str('hub.challenge' in text).lower())
-          print('has_get_webhook=' + str(bool(re.search(r'app\.get\s*\(\s*[\'\"]\/webhook[\'\"]', text))).lower())
-          print('=== END ===')
+          Path('WEBHOOK_VERIFY_ROUTE.md').write_text('\n'.join(out) + '\n', encoding='utf-8')
+          print(f'wrote source lines {start}-{end}; no secret values resolved')
           PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add WEBHOOK_VERIFY_ROUTE.md
+          git commit -m "Record webhook verification route diagnostic" || true
+          git push
