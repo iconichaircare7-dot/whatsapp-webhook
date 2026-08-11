@@ -1,1 +1,1 @@
-inspect v60 patch check
+refresh staging inspection
