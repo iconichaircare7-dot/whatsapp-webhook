@@ -357,8 +357,8 @@ function apply811DryRunState({ phoneNumberId, from, text, referral }) {
     lastText: String(text || "").slice(0, 500),
     noReplyDueAt:
       transition.status === LEAD_STATUS.PENDING
-        ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-        : previous?.noReplyDueAt || ""
+        ? previous?.noReplyDueAt || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        : ""
   };
 
   dryRunLeadState.set(key, next);
@@ -380,7 +380,7 @@ app.get("/", (req, res) => {
     ok: true,
     service: "ICONIC WhatsApp Observer",
     mode: "observer_only",
-    classifier: "811_state_machine_dry_run_v2",
+    classifier: "811_state_machine_dry_run_v3",
     lines: ["811", "616"]
   });
 });
@@ -390,7 +390,7 @@ app.get("/api/health", (req, res) => {
     ok: true,
     service: "ICONIC WhatsApp Observer",
     mode: "observer_only",
-    classifier: "811_state_machine_dry_run_v2",
+    classifier: "811_state_machine_dry_run_v3",
     dryRunLeadCount: dryRunLeadState.size,
     time: new Date().toISOString()
   });
@@ -466,7 +466,7 @@ app.post("/webhook", (req, res) => {
             referralSourceId: referral?.source_id || ""
           });
 
-          // Phase 2B: bilingual 811 STATE MACHINE DRY RUN only.
+          // Phase 2C: bilingual 811 STATE MACHINE DRY RUN only.
           // Still no Google Sheet write and no WhatsApp outbound action.
           if (phoneNumberId === OBSERVER_811_PHONE_NUMBER_ID) {
             const classification = apply811DryRunState({
@@ -505,5 +505,5 @@ app.post("/webhook", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ICONIC WhatsApp Observer running on port ${PORT}`);
   console.log("Mode: observer_only");
-  console.log("Classifier: 811_state_machine_dry_run_v2");
+  console.log("Classifier: 811_state_machine_dry_run_v3");
 });
