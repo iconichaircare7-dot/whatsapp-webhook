@@ -40365,6 +40365,54 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+    // 811 Dubai observer-only bridge.
+    // Capture inbound customer messages for Google Sheet / Team Inbox logging,
+    // but never execute bot replies, Flows, staff notifications, reminders,
+    // or status-event automation for this line.
+    const is811ObserverWebhook =
+      webhookPhoneNumberId === "1058100107394390" ||
+      normalizePhoneDigits(webhookDisplayPhoneNumber).endsWith("971503424811") ||
+      normalizePhoneDigits(webhookDisplayPhoneNumber).endsWith("503424811");
+
+    if (is811ObserverWebhook) {
+      if (!message) {
+        console.log("[811 Observer] non-message webhook acknowledged without automation", {
+          phoneNumberId: webhookPhoneNumberId,
+          displayPhoneNumber: webhookDisplayPhoneNumber
+        });
+        return res.sendStatus(200);
+      }
+
+      const observerFrom = message.from;
+      const observerPhoneNumberId = webhookPhoneNumberId || "1058100107394390";
+      const observerProfileName = getWhatsAppCustomerName(value?.contacts?.[0]);
+      const observerText = getIncomingMessageText(message);
+
+      conversationPhoneNumberId[observerFrom] = observerPhoneNumberId;
+
+      addInboxMessage(
+        observerFrom,
+        "customer",
+        buildPausedAutomationInboxBody(message, observerProfileName, observerText),
+        "811 Observer",
+        observerPhoneNumberId,
+        {
+          customerName: observerProfileName,
+          messageType: "Customer Message - 811 Observer",
+          statusOverride: "811 Observer"
+        }
+      );
+
+      console.log("[811 Observer] inbound captured; no automation executed", {
+        from: observerFrom,
+        phoneNumberId: observerPhoneNumberId,
+        displayPhoneNumber: webhookDisplayPhoneNumber,
+        messageType: message?.type || ""
+      });
+
+      return res.sendStatus(200);
+    }
+
     // Status webhooks do not include a customer message. They can still report
     // that a staff text notification failed later with 131047, after Graph API
     // initially accepted it. In that case, send the approved staff template.
