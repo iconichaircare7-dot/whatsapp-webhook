@@ -22,22 +22,39 @@ const OBSERVER_LINES = new Map([
 ]);
 
 const LEAD_STATUS = {
+  PENDING: "Pending",
   NO_REPLY: "No reply-Aug",
   INTERESTED: "interested-AUG",
   PRICE: "the price - AUG",
   CONSULTATION: "consultation-AUG"
 };
 
+// DRY RUN state only. This Map is intentionally temporary and resets on deploy/restart.
+// Persistent state will later live in Google Sheets.
+const dryRunLeadState = new Map();
+
 function normalizeText(value) {
   return String(value || "")
     .toLowerCase()
     .replace(/[’‘`´]/g, "'")
+    .replace(/[إأآ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/[ًٌٍَُِّْـ]/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 function containsAny(text, terms) {
-  return terms.some((term) => text.includes(term));
+  return terms.some((term) => text.includes(normalizeText(term)));
+}
+
+function detectLanguage(text) {
+  return /[\u0600-\u06FF]/.test(String(text || "")) ? "AR" : "EN";
+}
+
+function getLeadKey(phoneNumberId, from) {
+  return `${String(phoneNumberId || "").trim()}|${String(from || "").trim()}`;
 }
 
 function isDubaiAdStarter(text, referral) {
@@ -51,21 +68,20 @@ function isDubaiAdStarter(text, referral) {
   );
 }
 
-function classify811Message(text, referral) {
+function classify811Intent(text, referral) {
   const normalized = normalizeText(text);
 
-  // IMPORTANT: check the ad starter BEFORE keyword rules.
-  // The starter contains the word "consultation" but is not a real booking request.
+  // Always check the ad starter first. It contains "consultation" but is not a booking.
   if (isDubaiAdStarter(normalized, referral)) {
     return {
       matched: true,
-      status: LEAD_STATUS.NO_REPLY,
-      reason: referral ? "ad_referral_or_starter" : "known_ad_starter"
+      intent: "new_lead",
+      reason: referral ? "ad_referral" : "known_ad_starter"
     };
   }
 
   if (!normalized) {
-    return { matched: false, status: "", reason: "empty_or_non_text_message" };
+    return { matched: false, intent: "non_text", reason: "empty_or_non_text_message" };
   }
 
   const consultationTerms = [
@@ -86,19 +102,35 @@ function classify811Message(text, referral) {
     "appointment today",
     "available appointment",
     "available today",
+    "can i come today",
+    "can i come tomorrow",
+    "i want to visit",
     "احجز",
+    "اريد احجز",
+    "اريد حجز",
+    "بدي احجز",
+    "بدي حجز",
     "حجز",
     "موعد",
+    "بدي موعد",
+    "اريد موعد",
+    "في موعد",
     "متى اجي",
-    "متى أجي",
-    "اي ساعة",
-    "أي ساعة"
+    "متى فيني اجي",
+    "امتى اجي",
+    "امتى فيني اجي",
+    "اي ساعه",
+    "الساعه كم",
+    "بقدر اجي اليوم",
+    "بقدر اجي بكرا",
+    "ممكن اجي اليوم",
+    "ممكن اجي بكرا"
   ];
 
   if (containsAny(normalized, consultationTerms)) {
     return {
       matched: true,
-      status: LEAD_STATUS.CONSULTATION,
+      intent: "consultation",
       reason: "booking_or_visit_intent"
     };
   }
@@ -111,41 +143,27 @@ function classify811Message(text, referral) {
     "how much for",
     "how much is",
     "how much does",
+    "pricing",
     "سعر",
     "السعر",
     "اسعار",
-    "أسعار",
-    "تكلفة",
+    "الاسعار",
+    "تكلفه",
+    "التكلفه",
     "كم السعر",
-    "بكم"
+    "كم سعر",
+    "قديش السعر",
+    "شو السعر",
+    "بكم",
+    "كم بيكلف",
+    "كم يكلف"
   ];
 
   if (containsAny(normalized, priceTerms)) {
     return {
       matched: true,
-      status: LEAD_STATUS.PRICE,
+      intent: "price",
       reason: "price_intent"
-    };
-  }
-
-  // "Yes / Yes pls" alone is intentionally NOT promoted to interested.
-  const weakOnlyReplies = new Set([
-    "yes",
-    "yes pls",
-    "yes please",
-    "ok",
-    "okay",
-    "sure",
-    "نعم",
-    "اي",
-    "ايوه"
-  ]);
-
-  if (weakOnlyReplies.has(normalized)) {
-    return {
-      matched: false,
-      status: "",
-      reason: "weak_reply_wait_for_detail"
     };
   }
 
@@ -167,32 +185,193 @@ function classify811Message(text, referral) {
     "hair patches",
     "types of hair",
     "what types",
+    "how long",
+    "duration",
     "الموقع",
     "وين",
     "العنوان",
     "لوكيشن",
     "معلومات",
+    "بدي معلومات",
     "تفاصيل",
-    "العملية",
-    "الطريقة",
-    "الصيانة",
+    "العمليه",
+    "الطريقه",
+    "الصيانه",
     "انواع",
-    "أنواع",
-    "كيف"
+    "شو الانواع",
+    "كيف",
+    "كيف النظام",
+    "كيف بيشتغل",
+    "قديش بيدوم",
+    "كم بيدوم",
+    "مده"
   ];
 
   if (containsAny(normalized, interestedTerms)) {
     return {
       matched: true,
-      status: LEAD_STATUS.INTERESTED,
+      intent: "interested",
       reason: "general_interest_or_information"
+    };
+  }
+
+  const weakReplies = new Set([
+    "yes",
+    "yes pls",
+    "yes please",
+    "ok",
+    "okay",
+    "ok thanks",
+    "thanks",
+    "thank you",
+    "sure",
+    "fine",
+    "alright",
+    "نعم",
+    "اي",
+    "ايوه",
+    "اوك",
+    "اوكي",
+    "تمام",
+    "طيب",
+    "شكرا",
+    "شكرا لك",
+    "ماشي"
+  ].map(normalizeText));
+
+  if (weakReplies.has(normalized)) {
+    return {
+      matched: true,
+      intent: "weak_reply",
+      reason: "weak_acknowledgement"
+    };
+  }
+
+  const greetingOnly = new Set([
+    "hi",
+    "hello",
+    "hey",
+    "good morning",
+    "good evening",
+    "مرحبا",
+    "مرحبا بكم",
+    "السلام عليكم",
+    "هلا"
+  ].map(normalizeText));
+
+  if (greetingOnly.has(normalized)) {
+    return {
+      matched: true,
+      intent: "weak_reply",
+      reason: "greeting_only"
+    };
+  }
+
+  // A substantive message that is not one of the strong intents still means the lead is engaging.
+  if (normalized.length >= 4) {
+    return {
+      matched: true,
+      intent: "other_engagement",
+      reason: "substantive_unclassified_reply"
     };
   }
 
   return {
     matched: false,
-    status: "",
+    intent: "unknown",
     reason: "no_classification_rule_matched"
+  };
+}
+
+function transition811State(previousStatus, intent) {
+  const previous = previousStatus || "";
+
+  // Consultation is the strongest state. Do not downgrade it on ordinary follow-up messages.
+  if (previous === LEAD_STATUS.CONSULTATION) {
+    return {
+      status: LEAD_STATUS.CONSULTATION,
+      reason: "consultation_is_terminal_priority"
+    };
+  }
+
+  if (intent === "new_lead") {
+    // A new ad starter opens Pending only if we do not already have a stronger real state.
+    if (!previous || previous === LEAD_STATUS.NO_REPLY || previous === LEAD_STATUS.PENDING) {
+      return { status: LEAD_STATUS.PENDING, reason: "new_ad_lead_pending" };
+    }
+    return { status: previous, reason: "repeat_ad_starter_keep_existing_state" };
+  }
+
+  if (intent === "consultation") {
+    return { status: LEAD_STATUS.CONSULTATION, reason: "promote_to_consultation" };
+  }
+
+  if (intent === "price") {
+    return { status: LEAD_STATUS.PRICE, reason: "price_intent" };
+  }
+
+  if (intent === "interested") {
+    return { status: LEAD_STATUS.INTERESTED, reason: "information_intent" };
+  }
+
+  if (intent === "weak_reply" || intent === "other_engagement") {
+    // Key business rule:
+    // If the customer asked about price and then replies again (OK / thanks / anything else),
+    // they are no longer classified as a price-only stop. Move them to Interested.
+    if (previous === LEAD_STATUS.PRICE) {
+      return { status: LEAD_STATUS.INTERESTED, reason: "continued_after_price" };
+    }
+
+    // A customer who was previously No Reply has now actually replied.
+    if (previous === LEAD_STATUS.NO_REPLY) {
+      return { status: LEAD_STATUS.INTERESTED, reason: "reengaged_after_no_reply" };
+    }
+
+    // Weak acknowledgement immediately after the ad starter remains Pending until intent is clearer.
+    if (previous === LEAD_STATUS.PENDING || !previous) {
+      if (intent === "other_engagement") {
+        return { status: LEAD_STATUS.INTERESTED, reason: "substantive_engagement_after_pending" };
+      }
+      return { status: LEAD_STATUS.PENDING, reason: "weak_reply_keep_pending" };
+    }
+
+    return { status: previous || LEAD_STATUS.INTERESTED, reason: "keep_existing_engaged_state" };
+  }
+
+  return { status: previous || LEAD_STATUS.PENDING, reason: "no_state_change" };
+}
+
+function apply811DryRunState({ phoneNumberId, from, text, referral }) {
+  const key = getLeadKey(phoneNumberId, from);
+  const previous = dryRunLeadState.get(key) || null;
+  const intentResult = classify811Intent(text, referral);
+  const transition = transition811State(previous?.status || "", intentResult.intent);
+  const now = new Date().toISOString();
+
+  const next = {
+    status: transition.status,
+    firstSeenAt: previous?.firstSeenAt || now,
+    lastCustomerMessageAt: now,
+    lastIntent: intentResult.intent,
+    language: detectLanguage(text),
+    lastText: String(text || "").slice(0, 500),
+    noReplyDueAt:
+      transition.status === LEAD_STATUS.PENDING
+        ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        : previous?.noReplyDueAt || ""
+  };
+
+  dryRunLeadState.set(key, next);
+
+  return {
+    matched: intentResult.matched,
+    intent: intentResult.intent,
+    intentReason: intentResult.reason,
+    previousStatus: previous?.status || "",
+    status: next.status,
+    transitionReason: transition.reason,
+    language: next.language,
+    noReplyDueAt: next.noReplyDueAt
   };
 }
 
@@ -201,7 +380,7 @@ app.get("/", (req, res) => {
     ok: true,
     service: "ICONIC WhatsApp Observer",
     mode: "observer_only",
-    classifier: "811_dry_run",
+    classifier: "811_state_machine_dry_run_v2",
     lines: ["811", "616"]
   });
 });
@@ -211,7 +390,8 @@ app.get("/api/health", (req, res) => {
     ok: true,
     service: "ICONIC WhatsApp Observer",
     mode: "observer_only",
-    classifier: "811_dry_run",
+    classifier: "811_state_machine_dry_run_v2",
+    dryRunLeadCount: dryRunLeadState.size,
     time: new Date().toISOString()
   });
 });
@@ -245,7 +425,6 @@ app.post("/webhook", (req, res) => {
         const displayPhoneNumber = String(value?.metadata?.display_phone_number || "").trim();
         const branch = OBSERVER_LINES.get(phoneNumberId);
 
-        // Ignore every WhatsApp line except the two observer lines.
         if (!branch) {
           console.log("[Observer] ignored unknown phone number", {
             phoneNumberId,
@@ -287,18 +466,26 @@ app.post("/webhook", (req, res) => {
             referralSourceId: referral?.source_id || ""
           });
 
-          // Phase 2A: 811 classification DRY RUN only.
-          // We deliberately do NOT write to Google Sheets yet.
-          // This lets us validate classification against real WhatsApp traffic first.
+          // Phase 2B: bilingual 811 STATE MACHINE DRY RUN only.
+          // Still no Google Sheet write and no WhatsApp outbound action.
           if (phoneNumberId === OBSERVER_811_PHONE_NUMBER_ID) {
-            const classification = classify811Message(textBody, referral);
-
-            console.log("[811 Classifier][DRY RUN]", {
+            const classification = apply811DryRunState({
+              phoneNumberId,
               from,
               text: textBody,
-              matched: classification.matched,
+              referral
+            });
+
+            console.log("[811 State Machine][DRY RUN]", {
+              from,
+              text: textBody,
+              language: classification.language,
+              intent: classification.intent,
+              previousStatus: classification.previousStatus,
               status: classification.status,
-              reason: classification.reason
+              intentReason: classification.intentReason,
+              transitionReason: classification.transitionReason,
+              noReplyDueAt: classification.noReplyDueAt
             });
           } else if (phoneNumberId === OBSERVER_616_PHONE_NUMBER_ID) {
             console.log("[616 Observer] classification not enabled yet", { from });
@@ -318,5 +505,5 @@ app.post("/webhook", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ICONIC WhatsApp Observer running on port ${PORT}`);
   console.log("Mode: observer_only");
-  console.log("Classifier: 811_dry_run");
+  console.log("Classifier: 811_state_machine_dry_run_v2");
 });
