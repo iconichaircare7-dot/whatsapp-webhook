@@ -14,56 +14,121 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check V60 patch and write output
+        with:
+          fetch-depth: 0
+
+      - name: Apply byte-preserving 811 observer gate
+        shell: bash
         run: |
-          OUT="V60_INSPECTION_OUTPUT.md"
-          ERR="V60_PATCH_ERROR.md"
-          rm -f "$OUT" "$ERR"
+          set -euo pipefail
 
-          if ! grep -q v31-5-8-59 server.js; then
-            git apply v59.patch
-          fi
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("server.js")
+          data = path.read_bytes()
+          marker = b"[811 Observer] inbound captured; no automation executed"
+
+          if marker in data:
+              print("811 observer already present")
+          else:
+              nl = b"\r\n" if b"\r\n" in data else b"\n"
+
+              anchor_lines = [
+                  b"    // Status webhooks do not include a customer message. They can still report",
+                  b"    // that a staff text notification failed later with 131047, after Graph API",
+                  b"    // initially accepted it. In that case, send the approved staff template.",
+              ]
+              anchor = nl.join(anchor_lines) + nl
+
+              count = data.count(anchor)
+              if count != 1:
+                  raise SystemExit(f"811 observer anchor expected once, found {count}")
+
+              block_lines = [
+                  b"    // 811 Dubai observer-only bridge.",
+                  b"    // Capture inbound customer messages for Google Sheet / Team Inbox logging,",
+                  b"    // but never execute bot replies, Flows, staff notifications, reminders,",
+                  b"    // or status-event automation for this line.",
+                  b"    const is811ObserverWebhook =",
+                  b"      webhookPhoneNumberId === \"1058100107394390\" ||",
+                  b"      normalizePhoneDigits(webhookDisplayPhoneNumber).endsWith(\"971503424811\") ||",
+                  b"      normalizePhoneDigits(webhookDisplayPhoneNumber).endsWith(\"503424811\");",
+                  b"",
+                  b"    if (is811ObserverWebhook) {",
+                  b"      if (!message) {",
+                  b"        console.log(\"[811 Observer] non-message webhook acknowledged without automation\", {",
+                  b"          phoneNumberId: webhookPhoneNumberId,",
+                  b"          displayPhoneNumber: webhookDisplayPhoneNumber",
+                  b"        });",
+                  b"        return res.sendStatus(200);",
+                  b"      }",
+                  b"",
+                  b"      const observerFrom = message.from;",
+                  b"      const observerPhoneNumberId = webhookPhoneNumberId || \"1058100107394390\";",
+                  b"      const observerProfileName = getWhatsAppCustomerName(value?.contacts?.[0]);",
+                  b"      const observerText = getIncomingMessageText(message);",
+                  b"",
+                  b"      conversationPhoneNumberId[observerFrom] = observerPhoneNumberId;",
+                  b"",
+                  b"      addInboxMessage(",
+                  b"        observerFrom,",
+                  b"        \"customer\",",
+                  b"        buildPausedAutomationInboxBody(message, observerProfileName, observerText),",
+                  b"        \"811 Observer\",",
+                  b"        observerPhoneNumberId,",
+                  b"        {",
+                  b"          customerName: observerProfileName,",
+                  b"          messageType: \"Customer Message - 811 Observer\",",
+                  b"          statusOverride: \"811 Observer\"",
+                  b"        }",
+                  b"      );",
+                  b"",
+                  b"      console.log(\"[811 Observer] inbound captured; no automation executed\", {",
+                  b"        from: observerFrom,",
+                  b"        phoneNumberId: observerPhoneNumberId,",
+                  b"        displayPhoneNumber: webhookDisplayPhoneNumber,",
+                  b"        messageType: message?.type || \"\"",
+                  b"      });",
+                  b"",
+                  b"      return res.sendStatus(200);",
+                  b"    }",
+              ]
+
+              block = nl.join(block_lines) + nl + nl
+              path.write_bytes(data.replace(anchor, block + anchor, 1))
+              print("811 observer inserted")
+          PY
+
           node --check server.js
+          git diff --check
 
-          if git apply --check v60.patch 2> /tmp/v60_patch_error.txt; then
-            echo "V60 patch check passed" > "$ERR"
-          else
-            echo "# V60 Patch Error" > "$ERR"
-            echo >> "$ERR"
-            cat /tmp/v60_patch_error.txt >> "$ERR"
-          fi
+          NUMSTAT="$(git diff --numstat -- server.js)"
+          echo "server.js numstat: $NUMSTAT"
+          ADDS="$(printf '%s' "$NUMSTAT" | awk '{print $1}')"
+          DELS="$(printf '%s' "$NUMSTAT" | awk '{print $2}')"
+
+          test -n "$ADDS"
+          test -n "$DELS"
+          test "$ADDS" -le 80
+          test "$DELS" -le 5
+
+          grep -q 'webhookPhoneNumberId === "1058100107394390"' server.js
+          grep -q 'Customer Message - 811 Observer' server.js
+          grep -q '\[811 Observer\] inbound captured; no automation executed' server.js
 
           {
-            echo "# V60 Inspection Output"
+            echo "# 811 Observer Staging Check"
             echo
-            echo "Generated by GitHub Actions."
-            echo
-            echo "## BOT VERSION"
-            grep -n "BOT_VERSION" server.js || true
-            echo
-            echo "## FLOW BOOKING DATA"
-            line=$(grep -n "function getWhatsAppFlowBookingData" server.js | head -1 | cut -d: -f1 || true)
-            if [ -n "$line" ]; then sed -n "$((line-10)),$((line+80))p" server.js; fi
-            echo
-            echo "## HANDLE FLOW SUBMIT"
-            line=$(grep -n "async function handleWhatsAppFlowBookingSubmit" server.js | head -1 | cut -d: -f1 || true)
-            if [ -n "$line" ]; then sed -n "$((line)),$((line+110))p" server.js; fi
-            echo
-            echo "## STAFF HELPERS"
-            line=$(grep -n "function getStaffNotificationNumber" server.js | head -1 | cut -d: -f1 || true)
-            if [ -n "$line" ]; then sed -n "$((line-20)),$((line+80))p" server.js; fi
-            echo
-            echo "## TALK TO TEAM FUNCTIONS"
-            line=$(grep -n "function isTalkToTeamText" server.js | head -1 | cut -d: -f1 || true)
-            if [ -n "$line" ]; then sed -n "$((line-10)),$((line+80))p" server.js; fi
-            echo
-            echo "## WEBHOOK PAUSE GATE"
-            line=$(grep -n "const isOptInMessage" server.js | head -1 | cut -d: -f1 || true)
-            if [ -n "$line" ]; then sed -n "$((line-10)),$((line+80))p" server.js; fi
-          } > "$OUT"
+            echo "node_check=passed"
+            echo "server_additions=$ADDS"
+            echo "server_deletions=$DELS"
+            echo "phone_number_id=1058100107394390"
+            echo "mode=observer_only"
+          } > 811_OBSERVER_RUN_STATUS.md
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "$OUT" "$ERR"
-          git commit -m "Write V60 patch check output" || echo "No inspection changes"
+          git add server.js 811_OBSERVER_RUN_STATUS.md
+          git commit -m "Add 811 observer-only webhook gate on staging"
           git push
