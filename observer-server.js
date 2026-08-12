@@ -58,14 +58,10 @@ function getLeadKey(phoneNumberId, from) {
   return `${String(phoneNumberId || "").trim()}|${String(from || "").trim()}`;
 }
 
-function isDubaiAdStarter(text, referral) {
-  if (referral) return true;
-  const normalized = normalizeText(text);
-  return (
-    normalized.includes("hi, i'm interested in a hair system consultation in dubai") ||
-    normalized.includes("hi i'm interested in a hair system consultation in dubai") ||
-    normalized.includes("i'm interested in a hair system consultation in dubai")
-  );
+// Strict acquisition gate: a brand-new lead is admitted only when Meta itself
+// supplies a referral source ID. Matching the visible starter text is NOT enough.
+function hasConfirmedMetaAdReferral(referral) {
+  return Boolean(referral && String(referral.source_id || "").trim());
 }
 
 function isBookingScheduleReply(text) {
@@ -110,11 +106,14 @@ function isBookingScheduleReply(text) {
 function classify811Intent(text, referral) {
   const normalized = normalizeText(text);
 
-  if (isDubaiAdStarter(normalized, referral)) {
+  // New-lead admission is based only on confirmed Meta referral metadata.
+  // The same starter sentence without a referral is treated like any other
+  // untracked conversation and will NOT be added to the lead sheet.
+  if (hasConfirmedMetaAdReferral(referral)) {
     return {
       matched: true,
       intent: "new_lead",
-      reason: referral ? "ad_referral" : "known_ad_starter"
+      reason: "confirmed_meta_ad_referral"
     };
   }
 
@@ -341,7 +340,7 @@ async function persist811Lead({
     phoneNumberId,
     language,
     sourceLabel: SOURCE_LABEL,
-    entrySource: referral ? "Referral" : "Starter",
+    entrySource: referral ? "Referral" : "Existing Ad Lead",
     referralSourceId: referral?.source_id || "",
     firstMessage: text,
     firstSeenAt: previousState?.firstSeenAt || now,
@@ -377,9 +376,12 @@ async function process811Message({ phoneNumberId, from, customerName, branch, te
     return;
   }
 
+  // Once a phone is admitted by confirmed Meta referral, later messages may
+  // continue its classification timeline even though follow-ups carry no referral.
+  // Untracked/old/organic conversations never enter the sheet.
   if (loaded.ok && !loaded.found && intentResult.intent !== "new_lead") {
     console.log("[811 State Machine][SHEET] ignored untracked conversation", {
-      from, text: textBody, intent: intentResult.intent, reason: "no_existing_ad_lead"
+      from, text: textBody, intent: intentResult.intent, reason: "no_confirmed_ad_entry"
     });
     return;
   }
@@ -533,7 +535,7 @@ app.get("/", (req, res) => {
     ok: true,
     service: "ICONIC WhatsApp Observer",
     mode: "observer_only",
-    classifier: "811_state_machine_sheet_v1_2",
+    classifier: "811_state_machine_sheet_v1_3_referral_only",
     sheetIntegration: sheetIntegrationConfigured() ? "configured" : "missing_env",
     lines: ["811", "616"]
   });
@@ -544,7 +546,7 @@ app.get("/api/health", (req, res) => {
     ok: true,
     service: "ICONIC WhatsApp Observer",
     mode: "observer_only",
-    classifier: "811_state_machine_sheet_v1_2",
+    classifier: "811_state_machine_sheet_v1_3_referral_only",
     sheetIntegration: sheetIntegrationConfigured() ? "configured" : "missing_env",
     cachedLeads: leadStateCache.size,
     queuedLeads: leadQueues.size,
@@ -576,6 +578,6 @@ app.post("/webhook", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ICONIC WhatsApp Observer running on port ${PORT}`);
   console.log("Mode: observer_only");
-  console.log("Classifier: 811_state_machine_sheet_v1_2");
+  console.log("Classifier: 811_state_machine_sheet_v1_3_referral_only");
   console.log(`Sheet integration: ${sheetIntegrationConfigured() ? "configured" : "missing_env"}`);
 });
