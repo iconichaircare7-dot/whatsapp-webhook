@@ -59,9 +59,20 @@ function getLeadKey(phoneNumberId, from) {
 }
 
 // Strict acquisition gate: a brand-new lead is admitted only when Meta itself
-// supplies a referral source ID. Matching the visible starter text is NOT enough.
+// supplies a referral source ID. Matching visible message text is never enough.
 function hasConfirmedMetaAdReferral(referral) {
   return Boolean(referral && String(referral.source_id || "").trim());
+}
+
+// The common pre-filled ad starter contains the word "consultation", but it is
+// not a real booking request by itself. It should enter as Pending.
+function isKnownDubaiAdStarter(text) {
+  const normalized = normalizeText(text);
+  return (
+    normalized.includes("hi, i'm interested in a hair system consultation in dubai") ||
+    normalized.includes("hi i'm interested in a hair system consultation in dubai") ||
+    normalized.includes("i'm interested in a hair system consultation in dubai")
+  );
 }
 
 function isBookingScheduleReply(text) {
@@ -87,7 +98,6 @@ function isBookingScheduleReply(text) {
   if (dayNames.includes(normalized)) return true;
   if (dayNames.some((day) => normalized === `on ${day}` || normalized === `next ${day}`)) return true;
 
-  // Short appointment replies such as "Sunday 1pm", "at 4:00 pm", "16 August".
   if (/^(?:on\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?$/.test(normalized)) {
     return true;
   }
@@ -103,17 +113,16 @@ function isBookingScheduleReply(text) {
   return false;
 }
 
-function classify811Intent(text, referral) {
+function classify811Intent(text) {
   const normalized = normalizeText(text);
 
-  // New-lead admission is based only on confirmed Meta referral metadata.
-  // The same starter sentence without a referral is treated like any other
-  // untracked conversation and will NOT be added to the lead sheet.
-  if (hasConfirmedMetaAdReferral(referral)) {
+  // Important: source verification is handled separately. This function only
+  // classifies the customer's intent from the message itself.
+  if (isKnownDubaiAdStarter(normalized)) {
     return {
       matched: true,
       intent: "new_lead",
-      reason: "confirmed_meta_ad_referral"
+      reason: "known_ad_starter"
     };
   }
 
@@ -314,8 +323,9 @@ async function load811LeadState(phoneNumberId, from) {
   }
 }
 
-function shouldPersistTransition({ found, previousStatus, nextStatus, intent }) {
-  if (!found) return intent === "new_lead";
+function shouldPersistTransition({ found, previousStatus, nextStatus, confirmedAdEntry }) {
+  // A confirmed Meta referral is the only way a new row may be created.
+  if (!found) return confirmedAdEntry;
   return previousStatus !== nextStatus;
 }
 
@@ -366,20 +376,24 @@ async function persist811Lead({
 
 async function process811Message({ phoneNumberId, from, customerName, branch, textBody, referral }) {
   const language = detectLanguage(textBody);
-  const intentResult = classify811Intent(textBody, referral);
+  const confirmedAdEntry = hasConfirmedMetaAdReferral(referral);
+  const intentResult = classify811Intent(textBody);
   const loaded = await load811LeadState(phoneNumberId, from);
 
-  if (!loaded.ok && intentResult.intent !== "new_lead") {
+  // If persistent state cannot be read, only a message carrying a confirmed
+  // Meta referral may attempt a safe upsert; all other messages are skipped.
+  if (!loaded.ok && !confirmedAdEntry) {
     console.log("[811 State Machine][SHEET] skipped: persistent state unavailable", {
       from, intent: intentResult.intent
     });
     return;
   }
 
-  // Once a phone is admitted by confirmed Meta referral, later messages may
-  // continue its classification timeline even though follow-ups carry no referral.
-  // Untracked/old/organic conversations never enter the sheet.
-  if (loaded.ok && !loaded.found && intentResult.intent !== "new_lead") {
+  // Source verification and intent classification are separate:
+  // - referral/source_id proves acquisition from an ad;
+  // - message content determines Pending / Price / Interested / Consultation.
+  // Once admitted, later messages continue the timeline without referral metadata.
+  if (loaded.ok && !loaded.found && !confirmedAdEntry) {
     console.log("[811 State Machine][SHEET] ignored untracked conversation", {
       from, text: textBody, intent: intentResult.intent, reason: "no_confirmed_ad_entry"
     });
@@ -393,13 +407,14 @@ async function process811Message({ phoneNumberId, from, customerName, branch, te
     found: loaded.found,
     previousStatus,
     nextStatus: transition.status,
-    intent: intentResult.intent
+    confirmedAdEntry
   });
 
   console.log("[811 State Machine][SHEET]", {
     from,
     text: textBody,
     language,
+    confirmedAdEntry,
     intent: intentResult.intent,
     previousStatus,
     status: transition.status,
@@ -535,7 +550,7 @@ app.get("/", (req, res) => {
     ok: true,
     service: "ICONIC WhatsApp Observer",
     mode: "observer_only",
-    classifier: "811_state_machine_sheet_v1_3_referral_only",
+    classifier: "811_state_machine_sheet_v1_4_referral_intent",
     sheetIntegration: sheetIntegrationConfigured() ? "configured" : "missing_env",
     lines: ["811", "616"]
   });
@@ -546,7 +561,7 @@ app.get("/api/health", (req, res) => {
     ok: true,
     service: "ICONIC WhatsApp Observer",
     mode: "observer_only",
-    classifier: "811_state_machine_sheet_v1_3_referral_only",
+    classifier: "811_state_machine_sheet_v1_4_referral_intent",
     sheetIntegration: sheetIntegrationConfigured() ? "configured" : "missing_env",
     cachedLeads: leadStateCache.size,
     queuedLeads: leadQueues.size,
@@ -578,6 +593,6 @@ app.post("/webhook", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ICONIC WhatsApp Observer running on port ${PORT}`);
   console.log("Mode: observer_only");
-  console.log("Classifier: 811_state_machine_sheet_v1_3_referral_only");
+  console.log("Classifier: 811_state_machine_sheet_v1_4_referral_intent");
   console.log(`Sheet integration: ${sheetIntegrationConfigured() ? "configured" : "missing_env"}`);
 });
