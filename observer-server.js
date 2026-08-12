@@ -159,6 +159,17 @@ function classify811Intent(text, referral) {
     "how much is",
     "how much does",
     "pricing",
+    "charge",
+    "charges",
+    "charge for",
+    "charges for",
+    "what is the charge",
+    "what are the charges",
+    "how much charge",
+    "rate for",
+    "rates for",
+    "what is the rate",
+    "what are the rates",
     "سعر",
     "السعر",
     "اسعار",
@@ -733,7 +744,7 @@ app.get("/", (req, res) => {
     ok: true,
     service: "ICONIC WhatsApp Observer",
     mode: "observer_only",
-    classifier: "811_state_machine_sheet_v1",
+    classifier: "811_state_machine_sheet_v1_1",
     sheetIntegration: sheetIntegrationConfigured() ? "configured" : "missing_env",
     lines: ["811", "616"]
   });
@@ -744,7 +755,7 @@ app.get("/api/health", (req, res) => {
     ok: true,
     service: "ICONIC WhatsApp Observer",
     mode: "observer_only",
-    classifier: "811_state_machine_sheet_v1",
+    classifier: "811_state_machine_sheet_v1_1",
     sheetIntegration: sheetIntegrationConfigured() ? "configured" : "missing_env",
     cachedLeads: leadStateCache.size,
     queuedLeads: leadQueues.size,
@@ -783,7 +794,7 @@ app.post("/webhook", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ICONIC WhatsApp Observer running on port ${PORT}`);
   console.log("Mode: observer_only");
-  console.log("Classifier: 811_state_machine_sheet_v1");
+  console.log("Classifier: 811_state_machine_sheet_v1_1");
   console.log(
     `Sheet integration: ${sheetIntegrationConfigured() ? "configured" : "missing_env"}`
   );
