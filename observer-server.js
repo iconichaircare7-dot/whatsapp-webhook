@@ -17,8 +17,14 @@ const OBSERVER_616_PHONE_NUMBER_ID = String(
 ).trim();
 
 const OBSERVER_LINES = new Map([
-  [OBSERVER_811_PHONE_NUMBER_ID, "811 Dubai"],
-  [OBSERVER_616_PHONE_NUMBER_ID, "616 Abu Dhabi"]
+  [
+    OBSERVER_811_PHONE_NUMBER_ID,
+    { branch: "811 Dubai", staffNumber: "811", city: "Dubai" }
+  ],
+  [
+    OBSERVER_616_PHONE_NUMBER_ID,
+    { branch: "616 Abu Dhabi", staffNumber: "616", city: "Abu Dhabi" }
+  ]
 ]);
 
 const LEAD_STATUS = {
@@ -58,21 +64,30 @@ function getLeadKey(phoneNumberId, from) {
   return `${String(phoneNumberId || "").trim()}|${String(from || "").trim()}`;
 }
 
-// Strict acquisition gate: a brand-new lead is admitted only when Meta itself
-// supplies a referral source ID. Matching visible message text is never enough.
+// A brand-new row is admitted only when Meta itself supplies referral.source_id.
+// Visible message text alone never proves that a conversation came from an ad.
 function hasConfirmedMetaAdReferral(referral) {
   return Boolean(referral && String(referral.source_id || "").trim());
 }
 
-// The common pre-filled ad starter contains the word "consultation", but it is
-// not a real booking request by itself. It should enter as Pending.
-function isKnownDubaiAdStarter(text) {
+// The standard ad starter contains "consultation" but is not a booking request.
+// Keep the known Dubai and Abu Dhabi starters as Pending on first admission.
+function isKnownAdStarter(text, lineConfig) {
   const normalized = normalizeText(text);
-  return (
-    normalized.includes("hi, i'm interested in a hair system consultation in dubai") ||
-    normalized.includes("hi i'm interested in a hair system consultation in dubai") ||
-    normalized.includes("i'm interested in a hair system consultation in dubai")
-  );
+  const city = String(lineConfig?.city || "").toLowerCase();
+
+  if (city === "dubai") {
+    return normalized.includes("i'm interested in a hair system consultation in dubai");
+  }
+
+  if (city === "abu dhabi") {
+    return (
+      normalized.includes("i'm interested in a hair system consultation in abu dhabi") ||
+      normalized.includes("i'm interested in a hair system consultation in abudhabi")
+    );
+  }
+
+  return false;
 }
 
 function isBookingScheduleReply(text) {
@@ -91,12 +106,26 @@ function isBookingScheduleReply(text) {
     "today", "tomorrow", "day after tomorrow",
     "next sunday", "next monday", "next tuesday", "next wednesday", "next thursday", "next friday", "next saturday",
     "on next sunday", "on next monday", "on next tuesday", "on next wednesday", "on next thursday", "on next friday", "on next saturday",
-    "اليوم", "بكرا", "بكره", "غدا", "بعد بكرا", "الاحد القادم", "الاثنين القادم", "الثلاثاء القادم", "الاربعاء القادم", "الخميس القادم", "الجمعه القادمه", "السبت القادم"
+    "this sunday", "this monday", "this tuesday", "this wednesday", "this thursday", "this friday", "this saturday",
+    "on this sunday", "on this monday", "on this tuesday", "on this wednesday", "on this thursday", "on this friday", "on this saturday",
+    "اليوم", "بكرا", "بكره", "غدا", "بعد بكرا",
+    "الاحد القادم", "الاثنين القادم", "الثلاثاء القادم", "الاربعاء القادم", "الخميس القادم", "الجمعه القادمه", "السبت القادم"
   ];
 
   if (relativeDays.includes(normalized)) return true;
   if (dayNames.includes(normalized)) return true;
-  if (dayNames.some((day) => normalized === `on ${day}` || normalized === `next ${day}`)) return true;
+
+  if (
+    dayNames.some(
+      (day) =>
+        normalized === `on ${day}` ||
+        normalized === `next ${day}` ||
+        normalized === `this ${day}` ||
+        normalized === `on this ${day}`
+    )
+  ) {
+    return true;
+  }
 
   if (/^(?:on\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?$/.test(normalized)) {
     return true;
@@ -113,12 +142,11 @@ function isBookingScheduleReply(text) {
   return false;
 }
 
-function classify811Intent(text) {
+function classifyLeadIntent(text, lineConfig) {
   const normalized = normalizeText(text);
 
-  // Important: source verification is handled separately. This function only
-  // classifies the customer's intent from the message itself.
-  if (isKnownDubaiAdStarter(normalized)) {
+  // Source verification is handled separately. This function only classifies intent.
+  if (isKnownAdStarter(normalized, lineConfig)) {
     return {
       matched: true,
       intent: "new_lead",
@@ -201,7 +229,7 @@ function classify811Intent(text) {
   return { matched: false, intent: "unknown", reason: "no_classification_rule_matched" };
 }
 
-function transition811State(previousStatus, intent) {
+function transitionLeadState(previousStatus, intent) {
   const previous = previousStatus || "";
 
   if (previous === LEAD_STATUS.CONSULTATION) {
@@ -254,7 +282,9 @@ function sheetIntegrationConfigured() {
 }
 
 async function callObserverSheetApi(action, payload = {}) {
-  if (!sheetIntegrationConfigured()) throw new Error("observer_sheet_not_configured");
+  if (!sheetIntegrationConfigured()) {
+    throw new Error("observer_sheet_not_configured");
+  }
 
   const response = await fetch(OBSERVER_SHEET_WEBAPP_URL, {
     method: "POST",
@@ -266,6 +296,7 @@ async function callObserverSheetApi(action, payload = {}) {
 
   const raw = await response.text();
   let data;
+
   try {
     data = JSON.parse(raw);
   } catch (error) {
@@ -275,11 +306,13 @@ async function callObserverSheetApi(action, payload = {}) {
   if (!response.ok || !data || data.ok !== true) {
     throw new Error(`observer_sheet_${data?.error || `http_${response.status}`}`);
   }
+
   return data;
 }
 
 function normalizePersistentLead(lead) {
   if (!lead) return null;
+
   return {
     status: String(lead.currentStatus || "").trim(),
     firstSeenAt: String(lead.firstSeenAt || "").trim(),
@@ -290,21 +323,29 @@ function normalizePersistentLead(lead) {
 }
 
 function applyPendingExpiryLocally(state) {
-  if (!state || state.status !== LEAD_STATUS.PENDING || !state.noReplyDueAt) return state;
+  if (!state || state.status !== LEAD_STATUS.PENDING || !state.noReplyDueAt) {
+    return state;
+  }
+
   const dueMs = new Date(state.noReplyDueAt).getTime();
-  if (!Number.isFinite(dueMs) || dueMs > Date.now()) return state;
+  if (!Number.isFinite(dueMs) || dueMs > Date.now()) {
+    return state;
+  }
+
   return { ...state, status: LEAD_STATUS.NO_REPLY, noReplyDueAt: "" };
 }
 
-async function load811LeadState(phoneNumberId, from) {
+async function loadLeadState(phoneNumberId, from, staffNumber) {
   const key = getLeadKey(phoneNumberId, from);
   const cached = leadStateCache.get(key);
 
   if (cached && Date.now() - cached.loadedAt < CACHE_TTL_MS) {
     const state = applyPendingExpiryLocally(cached.state);
+
     if (state !== cached.state) {
       leadStateCache.set(key, { state, loadedAt: cached.loadedAt, found: true });
     }
+
     return { ok: true, found: cached.found, state, source: "cache" };
   }
 
@@ -313,12 +354,32 @@ async function load811LeadState(phoneNumberId, from) {
   }
 
   try {
-    const data = await callObserverSheetApi("get_lead", { phone: from });
+    // v2-line-key Apps Script requires BOTH phoneNumberId and customer phone.
+    const data = await callObserverSheetApi("get_lead", {
+      phoneNumberId,
+      phone: from
+    });
+
     const state = applyPendingExpiryLocally(normalizePersistentLead(data.lead));
-    leadStateCache.set(key, { state, found: Boolean(data.found), loadedAt: Date.now() });
-    return { ok: true, found: Boolean(data.found), state, source: "sheet" };
+    leadStateCache.set(key, {
+      state,
+      found: Boolean(data.found),
+      loadedAt: Date.now()
+    });
+
+    return {
+      ok: true,
+      found: Boolean(data.found),
+      state,
+      source: "sheet"
+    };
   } catch (error) {
-    console.error("[811 Sheet] read failed", { from, error: error.message });
+    console.error(`[${staffNumber} Sheet] read failed`, {
+      phoneNumberId,
+      from,
+      error: error.message
+    });
+
     return { ok: false, found: false, state: null, source: "error" };
   }
 }
@@ -329,28 +390,42 @@ function shouldPersistTransition({ found, previousStatus, nextStatus, confirmedA
   return previousStatus !== nextStatus;
 }
 
-function update811Cache(phoneNumberId, from, state, found = true) {
-  leadStateCache.set(getLeadKey(phoneNumberId, from), { state, found, loadedAt: Date.now() });
+function updateLeadCache(phoneNumberId, from, state, found = true) {
+  leadStateCache.set(getLeadKey(phoneNumberId, from), {
+    state,
+    found,
+    loadedAt: Date.now()
+  });
 }
 
-async function persist811Lead({
-  phoneNumberId, from, customerName, branch, text, referral,
-  language, intentResult, transition, previousState
+async function persistLead({
+  phoneNumberId,
+  from,
+  customerName,
+  lineConfig,
+  text,
+  referral,
+  language,
+  intentResult,
+  transition,
+  previousState
 }) {
   const now = new Date().toISOString();
-  const noReplyDueAt = transition.status === LEAD_STATUS.PENDING
-    ? previousState?.noReplyDueAt || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-    : "";
+  const noReplyDueAt =
+    transition.status === LEAD_STATUS.PENDING
+      ? previousState?.noReplyDueAt ||
+        new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      : "";
 
   const payload = {
     phone: from,
     customerName,
-    branch,
-    staffNumber: "811",
+    branch: lineConfig.branch,
+    staffNumber: lineConfig.staffNumber,
     phoneNumberId,
     language,
     sourceLabel: SOURCE_LABEL,
-    entrySource: referral ? "Referral" : "Existing Ad Lead",
+    entrySource: hasConfirmedMetaAdReferral(referral) ? "Referral" : "Existing Ad Lead",
     referralSourceId: referral?.source_id || "",
     firstMessage: text,
     firstSeenAt: previousState?.firstSeenAt || now,
@@ -363,6 +438,7 @@ async function persist811Lead({
   };
 
   const result = await callObserverSheetApi("upsert_lead", payload);
+
   const nextState = {
     status: transition.status,
     firstSeenAt: previousState?.firstSeenAt || now,
@@ -370,39 +446,56 @@ async function persist811Lead({
     language,
     customerName
   };
-  update811Cache(phoneNumberId, from, nextState, true);
-  return { result: result.result || {}, state: nextState };
+
+  updateLeadCache(phoneNumberId, from, nextState, true);
+
+  return {
+    result: result.result || {},
+    state: nextState
+  };
 }
 
-async function process811Message({ phoneNumberId, from, customerName, branch, textBody, referral }) {
+async function processLeadMessage({
+  phoneNumberId,
+  from,
+  customerName,
+  lineConfig,
+  textBody,
+  referral
+}) {
+  const staffNumber = lineConfig.staffNumber;
   const language = detectLanguage(textBody);
   const confirmedAdEntry = hasConfirmedMetaAdReferral(referral);
-  const intentResult = classify811Intent(textBody);
-  const loaded = await load811LeadState(phoneNumberId, from);
+  const intentResult = classifyLeadIntent(textBody, lineConfig);
+  const loaded = await loadLeadState(phoneNumberId, from, staffNumber);
 
   // If persistent state cannot be read, only a message carrying a confirmed
-  // Meta referral may attempt a safe upsert; all other messages are skipped.
+  // Meta referral may attempt a safe upsert. Other messages are skipped.
   if (!loaded.ok && !confirmedAdEntry) {
-    console.log("[811 State Machine][SHEET] skipped: persistent state unavailable", {
-      from, intent: intentResult.intent
+    console.log(`[${staffNumber} State Machine][SHEET] skipped: persistent state unavailable`, {
+      from,
+      intent: intentResult.intent
     });
     return;
   }
 
-  // Source verification and intent classification are separate:
-  // - referral/source_id proves acquisition from an ad;
-  // - message content determines Pending / Price / Interested / Consultation.
-  // Once admitted, later messages continue the timeline without referral metadata.
+  // Source verification and intent classification stay separate:
+  // referral/source_id proves ad acquisition; message content chooses the state.
+  // Once admitted, later messages continue the same branch timeline without referral.
   if (loaded.ok && !loaded.found && !confirmedAdEntry) {
-    console.log("[811 State Machine][SHEET] ignored untracked conversation", {
-      from, text: textBody, intent: intentResult.intent, reason: "no_confirmed_ad_entry"
+    console.log(`[${staffNumber} State Machine][SHEET] ignored untracked conversation`, {
+      from,
+      text: textBody,
+      intent: intentResult.intent,
+      reason: "no_confirmed_ad_entry"
     });
     return;
   }
 
   const previousState = loaded.state || null;
   const previousStatus = previousState?.status || "";
-  const transition = transition811State(previousStatus, intentResult.intent);
+  const transition = transitionLeadState(previousStatus, intentResult.intent);
+
   const persist = shouldPersistTransition({
     found: loaded.found,
     previousStatus,
@@ -410,7 +503,9 @@ async function process811Message({ phoneNumberId, from, customerName, branch, te
     confirmedAdEntry
   });
 
-  console.log("[811 State Machine][SHEET]", {
+  console.log(`[${staffNumber} State Machine][SHEET]`, {
+    branch: lineConfig.branch,
+    phoneNumberId,
     from,
     text: textBody,
     language,
@@ -430,20 +525,23 @@ async function process811Message({ phoneNumberId, from, customerName, branch, te
       status: transition.status,
       language: language || previousState?.language || "",
       customerName: customerName || previousState?.customerName || "",
-      noReplyDueAt: transition.status === LEAD_STATUS.PENDING
-        ? previousState?.noReplyDueAt || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-        : ""
+      noReplyDueAt:
+        transition.status === LEAD_STATUS.PENDING
+          ? previousState?.noReplyDueAt ||
+            new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          : ""
     };
-    update811Cache(phoneNumberId, from, memoryState, loaded.found);
+
+    updateLeadCache(phoneNumberId, from, memoryState, loaded.found);
     return;
   }
 
   try {
-    const saved = await persist811Lead({
+    const saved = await persistLead({
       phoneNumberId,
       from,
       customerName,
-      branch,
+      lineConfig,
       text: textBody,
       referral,
       language,
@@ -451,7 +549,9 @@ async function process811Message({ phoneNumberId, from, customerName, branch, te
       transition,
       previousState
     });
-    console.log("[811 Sheet] persisted", {
+
+    console.log(`[${staffNumber} Sheet] persisted`, {
+      phoneNumberId,
       from,
       created: Boolean(saved.result.created),
       row: saved.result.row || "",
@@ -459,20 +559,27 @@ async function process811Message({ phoneNumberId, from, customerName, branch, te
       noReplyDueAt: saved.state.noReplyDueAt
     });
   } catch (error) {
-    console.error("[811 Sheet] write failed", {
-      from, status: transition.status, error: error.message
+    console.error(`[${staffNumber} Sheet] write failed`, {
+      phoneNumberId,
+      from,
+      status: transition.status,
+      error: error.message
     });
   }
 }
 
 function enqueueLeadTask(key, task) {
   const previous = leadQueues.get(key) || Promise.resolve();
+
   const next = previous
     .catch(() => {})
     .then(task)
     .finally(() => {
-      if (leadQueues.get(key) === next) leadQueues.delete(key);
+      if (leadQueues.get(key) === next) {
+        leadQueues.delete(key);
+      }
     });
+
   leadQueues.set(key, next);
   return next;
 }
@@ -482,14 +589,18 @@ async function processWebhookBody(body) {
 
   for (const entry of entries) {
     const changes = Array.isArray(entry?.changes) ? entry.changes : [];
+
     for (const change of changes) {
       const value = change?.value || {};
       const phoneNumberId = String(value?.metadata?.phone_number_id || "").trim();
       const displayPhoneNumber = String(value?.metadata?.display_phone_number || "").trim();
-      const branch = OBSERVER_LINES.get(phoneNumberId);
+      const lineConfig = OBSERVER_LINES.get(phoneNumberId);
 
-      if (!branch) {
-        console.log("[Observer] ignored unknown phone number", { phoneNumberId, displayPhoneNumber });
+      if (!lineConfig) {
+        console.log("[Observer] ignored unknown phone number", {
+          phoneNumberId,
+          displayPhoneNumber
+        });
         continue;
       }
 
@@ -498,9 +609,11 @@ async function processWebhookBody(body) {
 
       if (!messages.length && statuses.length) {
         console.log("[Observer] status acknowledged", {
-          branch,
+          branch: lineConfig.branch,
           phoneNumberId,
-          statuses: statuses.map((item) => item?.status || "").filter(Boolean)
+          statuses: statuses
+            .map((item) => item?.status || "")
+            .filter(Boolean)
         });
         continue;
       }
@@ -514,7 +627,7 @@ async function processWebhookBody(body) {
         const referral = message?.referral || null;
 
         console.log("[Observer] inbound captured", {
-          branch,
+          branch: lineConfig.branch,
           phoneNumberId,
           displayPhoneNumber,
           from,
@@ -525,32 +638,37 @@ async function processWebhookBody(body) {
           referralSourceId: referral?.source_id || ""
         });
 
-        if (phoneNumberId === OBSERVER_811_PHONE_NUMBER_ID) {
-          const key = getLeadKey(phoneNumberId, from);
-          enqueueLeadTask(key, () => process811Message({
+        const key = getLeadKey(phoneNumberId, from);
+
+        enqueueLeadTask(key, () =>
+          processLeadMessage({
             phoneNumberId,
             from,
             customerName,
-            branch,
+            lineConfig,
             textBody,
             referral
-          })).catch((error) => {
-            console.error("[811 Processor] unexpected error", { from, error: error.message });
+          })
+        ).catch((error) => {
+          console.error(`[${lineConfig.staffNumber} Processor] unexpected error`, {
+            phoneNumberId,
+            from,
+            error: error.message
           });
-        } else if (phoneNumberId === OBSERVER_616_PHONE_NUMBER_ID) {
-          console.log("[616 Observer] classification not enabled yet", { from });
-        }
+        });
       }
     }
   }
 }
+
+const CLASSIFIER_VERSION = "811_616_state_machine_sheet_v1_5_line_key";
 
 app.get("/", (req, res) => {
   res.status(200).json({
     ok: true,
     service: "ICONIC WhatsApp Observer",
     mode: "observer_only",
-    classifier: "811_state_machine_sheet_v1_4_referral_intent",
+    classifier: CLASSIFIER_VERSION,
     sheetIntegration: sheetIntegrationConfigured() ? "configured" : "missing_env",
     lines: ["811", "616"]
   });
@@ -561,7 +679,7 @@ app.get("/api/health", (req, res) => {
     ok: true,
     service: "ICONIC WhatsApp Observer",
     mode: "observer_only",
-    classifier: "811_state_machine_sheet_v1_4_referral_intent",
+    classifier: CLASSIFIER_VERSION,
     sheetIntegration: sheetIntegrationConfigured() ? "configured" : "missing_env",
     cachedLeads: leadStateCache.size,
     queuedLeads: leadQueues.size,
@@ -577,12 +695,16 @@ app.get("/webhook", (req, res) => {
   if (mode === "subscribe" && VERIFY_TOKEN && token === VERIFY_TOKEN) {
     return res.status(200).send(challenge || "");
   }
+
   return res.sendStatus(403);
 });
 
 app.post("/webhook", (req, res) => {
   const body = req.body || {};
+
+  // Acknowledge Meta immediately. Processing remains observer-only and async.
   res.sendStatus(200);
+
   setImmediate(() => {
     processWebhookBody(body).catch((error) => {
       console.error("[Observer] webhook processing error", error);
@@ -593,6 +715,6 @@ app.post("/webhook", (req, res) => {
 app.listen(PORT, () => {
   console.log(`ICONIC WhatsApp Observer running on port ${PORT}`);
   console.log("Mode: observer_only");
-  console.log("Classifier: 811_state_machine_sheet_v1_4_referral_intent");
+  console.log(`Classifier: ${CLASSIFIER_VERSION}`);
   console.log(`Sheet integration: ${sheetIntegrationConfigured() ? "configured" : "missing_env"}`);
 });
