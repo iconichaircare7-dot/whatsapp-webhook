@@ -8,6 +8,7 @@ const PORT = Number(process.env.PORT || 10000);
 const VERIFY_TOKEN = String(process.env.VERIFY_TOKEN || "").trim();
 const OBSERVER_SHEET_WEBAPP_URL = String(process.env.OBSERVER_SHEET_WEBAPP_URL || "").trim();
 const OBSERVER_API_KEY = String(process.env.OBSERVER_API_KEY || "").trim();
+const GATEWAY_SHARED_SECRET = String(process.env.GATEWAY_SHARED_SECRET || "").trim();
 
 const OBSERVER_811_PHONE_NUMBER_ID = String(
   process.env.OBSERVER_811_PHONE_NUMBER_ID || "1058100107394390"
@@ -64,14 +65,10 @@ function getLeadKey(phoneNumberId, from) {
   return `${String(phoneNumberId || "").trim()}|${String(from || "").trim()}`;
 }
 
-// A brand-new row is admitted only when Meta itself supplies referral.source_id.
-// Visible message text alone never proves that a conversation came from an ad.
 function hasConfirmedMetaAdReferral(referral) {
   return Boolean(referral && String(referral.source_id || "").trim());
 }
 
-// The standard ad starter contains "consultation" but is not a booking request.
-// Keep the known Dubai and Abu Dhabi starters as Pending on first admission.
 function isKnownAdStarter(text, lineConfig) {
   const normalized = normalizeText(text);
   const city = String(lineConfig?.city || "").toLowerCase();
@@ -145,13 +142,8 @@ function isBookingScheduleReply(text) {
 function classifyLeadIntent(text, lineConfig) {
   const normalized = normalizeText(text);
 
-  // Source verification is handled separately. This function only classifies intent.
   if (isKnownAdStarter(normalized, lineConfig)) {
-    return {
-      matched: true,
-      intent: "new_lead",
-      reason: "known_ad_starter"
-    };
+    return { matched: true, intent: "new_lead", reason: "known_ad_starter" };
   }
 
   if (!normalized) {
@@ -354,7 +346,6 @@ async function loadLeadState(phoneNumberId, from, staffNumber) {
   }
 
   try {
-    // v2-line-key Apps Script requires BOTH phoneNumberId and customer phone.
     const data = await callObserverSheetApi("get_lead", {
       phoneNumberId,
       phone: from
@@ -385,7 +376,6 @@ async function loadLeadState(phoneNumberId, from, staffNumber) {
 }
 
 function shouldPersistTransition({ found, previousStatus, nextStatus, confirmedAdEntry }) {
-  // A confirmed Meta referral is the only way a new row may be created.
   if (!found) return confirmedAdEntry;
   return previousStatus !== nextStatus;
 }
@@ -461,7 +451,8 @@ async function processLeadMessage({
   customerName,
   lineConfig,
   textBody,
-  referral
+  referral,
+  strict = false
 }) {
   const staffNumber = lineConfig.staffNumber;
   const language = detectLanguage(textBody);
@@ -469,19 +460,18 @@ async function processLeadMessage({
   const intentResult = classifyLeadIntent(textBody, lineConfig);
   const loaded = await loadLeadState(phoneNumberId, from, staffNumber);
 
-  // If persistent state cannot be read, only a message carrying a confirmed
-  // Meta referral may attempt a safe upsert. Other messages are skipped.
   if (!loaded.ok && !confirmedAdEntry) {
+    const error = new Error("persistent_state_unavailable");
+
     console.log(`[${staffNumber} State Machine][SHEET] skipped: persistent state unavailable`, {
       from,
       intent: intentResult.intent
     });
-    return;
+
+    if (strict) throw error;
+    return { ok: false, skipped: true, reason: error.message };
   }
 
-  // Source verification and intent classification stay separate:
-  // referral/source_id proves ad acquisition; message content chooses the state.
-  // Once admitted, later messages continue the same branch timeline without referral.
   if (loaded.ok && !loaded.found && !confirmedAdEntry) {
     console.log(`[${staffNumber} State Machine][SHEET] ignored untracked conversation`, {
       from,
@@ -489,7 +479,8 @@ async function processLeadMessage({
       intent: intentResult.intent,
       reason: "no_confirmed_ad_entry"
     });
-    return;
+
+    return { ok: true, ignored: true, reason: "no_confirmed_ad_entry" };
   }
 
   const previousState = loaded.state || null;
@@ -533,7 +524,7 @@ async function processLeadMessage({
     };
 
     updateLeadCache(phoneNumberId, from, memoryState, loaded.found);
-    return;
+    return { ok: true, persisted: false, status: transition.status };
   }
 
   try {
@@ -558,6 +549,13 @@ async function processLeadMessage({
       status: saved.state.status,
       noReplyDueAt: saved.state.noReplyDueAt
     });
+
+    return {
+      ok: true,
+      persisted: true,
+      status: saved.state.status,
+      row: saved.result.row || ""
+    };
   } catch (error) {
     console.error(`[${staffNumber} Sheet] write failed`, {
       phoneNumberId,
@@ -565,6 +563,9 @@ async function processLeadMessage({
       status: transition.status,
       error: error.message
     });
+
+    if (strict) throw error;
+    return { ok: false, persisted: false, reason: error.message };
   }
 }
 
@@ -584,8 +585,14 @@ function enqueueLeadTask(key, task) {
   return next;
 }
 
-async function processWebhookBody(body) {
+async function processWebhookBody(body, options = {}) {
+  const waitForCompletion = Boolean(options.waitForCompletion);
+  const strict = Boolean(options.strict);
   const entries = Array.isArray(body?.entry) ? body.entry : [];
+  const tasks = [];
+  let messagesQueued = 0;
+  let statusesIgnored = 0;
+  let unknownLinesIgnored = 0;
 
   for (const entry of entries) {
     const changes = Array.isArray(entry?.changes) ? entry.changes : [];
@@ -597,6 +604,7 @@ async function processWebhookBody(body) {
       const lineConfig = OBSERVER_LINES.get(phoneNumberId);
 
       if (!lineConfig) {
+        unknownLinesIgnored++;
         console.log("[Observer] ignored unknown phone number", {
           phoneNumberId,
           displayPhoneNumber
@@ -608,6 +616,7 @@ async function processWebhookBody(body) {
       const statuses = Array.isArray(value.statuses) ? value.statuses : [];
 
       if (!messages.length && statuses.length) {
+        statusesIgnored += statuses.length;
         console.log("[Observer] status acknowledged", {
           branch: lineConfig.branch,
           phoneNumberId,
@@ -639,29 +648,75 @@ async function processWebhookBody(body) {
         });
 
         const key = getLeadKey(phoneNumberId, from);
-
-        enqueueLeadTask(key, () =>
+        const task = enqueueLeadTask(key, () =>
           processLeadMessage({
             phoneNumberId,
             from,
             customerName,
             lineConfig,
             textBody,
-            referral
+            referral,
+            strict
           })
-        ).catch((error) => {
-          console.error(`[${lineConfig.staffNumber} Processor] unexpected error`, {
-            phoneNumberId,
-            from,
-            error: error.message
+        );
+
+        messagesQueued++;
+
+        if (waitForCompletion) {
+          tasks.push(task);
+        } else {
+          task.catch((error) => {
+            console.error(`[${lineConfig.staffNumber} Processor] unexpected error`, {
+              phoneNumberId,
+              from,
+              error: error.message
+            });
           });
-        });
+        }
       }
     }
   }
+
+  if (waitForCompletion && tasks.length) {
+    const settled = await Promise.allSettled(tasks);
+    const failures = settled.filter((item) => item.status === "rejected");
+
+    if (failures.length) {
+      const reasons = failures
+        .map((item) => String(item.reason?.message || item.reason || "processing_failed"))
+        .slice(0, 5);
+
+      const error = new Error(`gateway_batch_failed:${failures.length}:${reasons.join("|")}`);
+      error.failures = failures.length;
+      throw error;
+    }
+  }
+
+  return {
+    ok: true,
+    messagesQueued,
+    statusesIgnored,
+    unknownLinesIgnored
+  };
 }
 
-const CLASSIFIER_VERSION = "811_616_state_machine_sheet_v1_5_line_key";
+function safeEqual(leftValue, rightValue) {
+  const left = String(leftValue || "");
+  const right = String(rightValue || "");
+
+  if (!left || !right || left.length !== right.length) {
+    return false;
+  }
+
+  let diff = 0;
+  for (let i = 0; i < left.length; i++) {
+    diff |= left.charCodeAt(i) ^ right.charCodeAt(i);
+  }
+
+  return diff === 0;
+}
+
+const CLASSIFIER_VERSION = "811_616_state_machine_sheet_v1_6_gateway_ack";
 
 app.get("/", (req, res) => {
   res.status(200).json({
@@ -670,6 +725,7 @@ app.get("/", (req, res) => {
     mode: "observer_only",
     classifier: CLASSIFIER_VERSION,
     sheetIntegration: sheetIntegrationConfigured() ? "configured" : "missing_env",
+    gatewayIngest: GATEWAY_SHARED_SECRET ? "configured" : "missing_env",
     lines: ["811", "616"]
   });
 });
@@ -681,6 +737,7 @@ app.get("/api/health", (req, res) => {
     mode: "observer_only",
     classifier: CLASSIFIER_VERSION,
     sheetIntegration: sheetIntegrationConfigured() ? "configured" : "missing_env",
+    gatewayIngest: GATEWAY_SHARED_SECRET ? "configured" : "missing_env",
     cachedLeads: leadStateCache.size,
     queuedLeads: leadQueues.size,
     time: new Date().toISOString()
@@ -699,10 +756,51 @@ app.get("/webhook", (req, res) => {
   return res.sendStatus(403);
 });
 
+app.post("/gateway-ingest", async (req, res) => {
+  if (!GATEWAY_SHARED_SECRET) {
+    return res.status(503).json({
+      ok: false,
+      error: "gateway_shared_secret_not_configured"
+    });
+  }
+
+  const suppliedSecret = String(req.get("X-Iconic-Gateway-Key") || "").trim();
+
+  if (!safeEqual(suppliedSecret, GATEWAY_SHARED_SECRET)) {
+    return res.status(401).json({
+      ok: false,
+      error: "unauthorized_gateway"
+    });
+  }
+
+  try {
+    const result = await processWebhookBody(req.body || {}, {
+      waitForCompletion: true,
+      strict: true
+    });
+
+    return res.status(200).json({
+      ok: true,
+      accepted: true,
+      ...result
+    });
+  } catch (error) {
+    console.error("[Gateway Ingest] processing failed", {
+      error: error.message
+    });
+
+    return res.status(503).json({
+      ok: false,
+      accepted: false,
+      error: "gateway_processing_failed",
+      detail: String(error.message || error).slice(0, 500)
+    });
+  }
+});
+
 app.post("/webhook", (req, res) => {
   const body = req.body || {};
 
-  // Acknowledge Meta immediately. Processing remains observer-only and async.
   res.sendStatus(200);
 
   setImmediate(() => {
@@ -717,4 +815,5 @@ app.listen(PORT, () => {
   console.log("Mode: observer_only");
   console.log(`Classifier: ${CLASSIFIER_VERSION}`);
   console.log(`Sheet integration: ${sheetIntegrationConfigured() ? "configured" : "missing_env"}`);
+  console.log(`Gateway ingest: ${GATEWAY_SHARED_SECRET ? "configured" : "missing_env"}`);
 });
